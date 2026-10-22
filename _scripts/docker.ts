@@ -14,4 +14,13 @@ export async function createMainDockerImage() {
             },
         },
     ).awaiter;
+    await ChildProcess.advancedExec(
+        `docker build . -f Dockerfile.storefront --platform linux/amd64 -t ghcr.io/bcms/cms-storefront:latest`,
+        {
+            cwd: process.cwd(),
+            onChunk(type, chunk) {
+                process[type].write(chunk);
+            },
+        },
+    ).awaiter;
 }

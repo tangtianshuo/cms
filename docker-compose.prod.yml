@@ -1,0 +1,75 @@
+# Production deployment.
+#
+# All configuration comes from the repo root ".env" file, which is gitignored.
+# Required keys:
+#
+#   DB_ADMIN_USERNAME / DB_ADMIN_PASSWORD  MongoDB root credentials
+#   JWT_SECRET                             CMS token signing secret
+#   JWT_SCOPE                              CMS public host, e.g. cms.example.com
+#   CMS_ORIGIN                             Public URL of the CMS, e.g. https://cms.example.com
+#   STOREFRONT_HOST                        Public host of the storefront, e.g. shop.example.com
+#   STOREFRONT_PORT                        Optional. Host port for the storefront. Default 3000.
+#   HTTP_PORT                              Optional. Host port for the CMS proxy. Default 80.
+#
+# Build and start:
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+    db:
+        hostname: db
+        image: mongo:7
+        restart: unless-stopped
+        environment:
+            - MONGO_INITDB_ROOT_USERNAME=${DB_ADMIN_USERNAME:?DB_ADMIN_USERNAME is required}
+            - MONGO_INITDB_ROOT_PASSWORD=${DB_ADMIN_PASSWORD:?DB_ADMIN_PASSWORD is required}
+        volumes:
+            - db-data:/data/db
+    backend:
+        depends_on:
+            - db
+        hostname: backend
+        image: ghcr.io/bcms/cms:latest
+        build:
+            context: ./
+            dockerfile: Dockerfile
+        restart: unless-stopped
+        env_file:
+            - ./.env
+        environment:
+            - DB_URL=mongodb://${DB_ADMIN_USERNAME}:${DB_ADMIN_PASSWORD}@db:27017/admin
+        volumes:
+            - uploads:/app/backend/uploads
+            - backups:/app/backend/backups
+    storefront:
+        depends_on:
+            - backend
+        hostname: storefront
+        image: ghcr.io/bcms/cms-storefront:latest
+        build:
+            context: ./
+            dockerfile: Dockerfile.storefront
+        restart: unless-stopped
+        environment:
+            - NUXT_CMS_INTERNAL_ORIGIN=http://backend:8080
+            - NUXT_PUBLIC_SITE_HOST=${STOREFRONT_HOST:?STOREFRONT_HOST is required}
+            - NUXT_PUBLIC_ADMIN_ORIGIN=${CMS_ORIGIN:?CMS_ORIGIN is required}
+        ports:
+            - '${STOREFRONT_PORT:-3000}:3000'
+    proxy:
+        depends_on:
+            - backend
+        hostname: proxy
+        image: nginx
+        restart: unless-stopped
+        ports:
+            - '${HTTP_PORT:-80}:80'
+        volumes:
+            - type: bind
+              source: ./proxy/nginx.prod.conf
+              target: /etc/nginx/nginx.conf
+              read_only: true
+
+volumes:
+    db-data:
+    uploads:
+    backups:
