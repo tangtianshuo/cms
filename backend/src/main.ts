@@ -55,6 +55,8 @@ import { PluginController } from '@bcms/selfhosted-backend/plugin/controller';
 import { openApiGetSchema } from '@bcms/selfhosted-backend/open-api/main';
 import { createCustomDependenciesInit } from '@bcms/selfhosted-backend/custom-dependencies-init';
 import { registerMcpEndpoint } from '@bcms/selfhosted-backend/mcp/main';
+import { StorefrontController } from '@bcms/selfhosted-backend/storefront/controller';
+import { ensureProductTemplate } from '@bcms/selfhosted-backend/storefront/setup';
 
 async function main() {
     await createServer({
@@ -73,6 +75,10 @@ async function main() {
 
         onReady({ config }) {
             async function init() {
+                await ensureProductTemplate(Config.storefrontEnabled, {
+                    findByName: (name) => Repo.template.methods.findByName(name),
+                    add: (template) => Repo.template.add(template),
+                });
                 const users = await Repo.user.findAll();
                 if (
                     users.length === 0 ||
@@ -153,6 +159,7 @@ async function main() {
             FunctionController,
             TypeGeneratorController,
             PluginController,
+            StorefrontController,
         ],
 
         middleware: [IPMiddleware, UIProxy],

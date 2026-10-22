@@ -1,6 +1,13 @@
 import { en } from '@bcms/selfhosted-ui/i18n/locales/en';
 
 export const zhCN: typeof en = {
+    storefrontPreview: {
+        title: '商品实时预览',
+        updating: '正在更新',
+        failed: '预览不可用',
+        draft: '草稿',
+        error: '无法加载商品预览。',
+    },
     common: {
         cancel: '取消',
         done: '完成',

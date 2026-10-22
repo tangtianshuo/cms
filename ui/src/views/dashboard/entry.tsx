@@ -23,6 +23,7 @@ import { EntryEditor } from '@bcms/selfhosted-ui/components/entry/editor';
 import { StringUtility } from '@bcms/selfhosted-utils/string-utility';
 import { Loader } from '@bcms/selfhosted-ui/components/loader';
 import { useI18n } from 'vue-i18n';
+import { ProductPreview } from '@bcms/selfhosted-ui/components/storefront/product-preview';
 
 export const EntryView = defineComponent({
     setup() {
@@ -295,7 +296,7 @@ export const EntryView = defineComponent({
                             </div>
                         </div>
                         {!loading.value && (
-                            <div>
+                            <div class={template.value.name === 'product' ? 'grid grid-cols-1 2xl:grid-cols-[minmax(0,600px)_minmax(360px,1fr)] gap-8 pr-8' : ''}>
                                 <EntryEditor
                                     entry={entry.value}
                                     propValidator={propValidator}
@@ -327,6 +328,9 @@ export const EntryView = defineComponent({
                                         }
                                     }}
                                 />
+                                {template.value.name === 'product' && (
+                                    <ProductPreview entry={entry.value} />
+                                )}
                             </div>
                         )}
                     </div>

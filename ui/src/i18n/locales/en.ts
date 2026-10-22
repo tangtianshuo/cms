@@ -1,4 +1,11 @@
 export const en = {
+    storefrontPreview: {
+        title: 'Live product preview',
+        updating: 'Updating',
+        failed: 'Preview unavailable',
+        draft: 'Draft',
+        error: 'The product preview could not be loaded.',
+    },
     common: {
         cancel: 'Cancel',
         done: 'Done',
