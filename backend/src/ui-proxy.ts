@@ -10,7 +10,7 @@ export const UIProxy = createMiddleware({
         const pluginFs = new FS(path.join(process.cwd(), 'plugins'));
         return async (req, res, next) => {
             const url = req.url + '';
-            if (url.startsWith('/api')) {
+            if (url.startsWith('/api') || url.startsWith('/mcp')) {
                 next();
                 return;
             } else if (url.startsWith('/__plugin')) {
