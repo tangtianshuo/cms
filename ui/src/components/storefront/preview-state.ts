@@ -1,3 +1,5 @@
+import { toRaw } from 'vue';
+
 export function createPreviewGate() {
     let current = 0;
     return {
@@ -11,5 +13,5 @@ export function sendPreview(
     origin: string,
     payload: unknown,
 ) {
-    frame.contentWindow?.postMessage({ type: 'storefront:preview', payload }, origin);
+    frame.contentWindow?.postMessage({ type: 'storefront:preview', payload: toRaw(payload) }, origin);
 }
