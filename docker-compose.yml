@@ -97,6 +97,35 @@ services:
             - type: bind
               source: ./ui/postcss.config.cjs
               target: /app/ui/postcss.config.cjs
+    storefront:
+        depends_on:
+            - backend
+        hostname: storefront
+        build:
+            context: ./
+            dockerfile: Dockerfile.storefront.dev
+        environment:
+            - NUXT_CMS_INTERNAL_ORIGIN=http://backend:8080
+            - NUXT_PUBLIC_SITE_HOST=localhost:3000
+            - NUXT_PUBLIC_ADMIN_ORIGIN=http://localhost:8080
+        ports:
+            - '3000:3000'
+        volumes:
+            - type: bind
+              source: ./storefront/app
+              target: /app/storefront/app
+            - type: bind
+              source: ./storefront/server
+              target: /app/storefront/server
+            - type: bind
+              source: ./storefront/utils
+              target: /app/storefront/utils
+            - type: bind
+              source: ./storefront/nuxt.config.ts
+              target: /app/storefront/nuxt.config.ts
+            - type: bind
+              source: ./storefront/tsconfig.json
+              target: /app/storefront/tsconfig.json
     proxy:
         depends_on:
             - backend

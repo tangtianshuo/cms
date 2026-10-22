@@ -9,3 +9,7 @@
 
 /ui/node_modules
 /ui/dist
+
+/storefront/node_modules
+/storefront/.nuxt
+/storefront/.output
