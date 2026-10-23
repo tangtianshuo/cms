@@ -1,6 +1,6 @@
 # 预制模版驱动的电商独立站解决方案
 
-> 状态：阶段 A、B、C 已实现，2026-10-23。阶段 C 的发布、正式路由、增量加页及回滚已通过本地验收；部署验收见 `docs/verification/storefront-phase-c.md`。
+> 状态：阶段 A、B、C 已实现，2026-10-24。阶段 C 的发布、正式路由、增量加页及回滚已通过本地与重建 Docker 端到端验收；部署验收见 `docs/verification/storefront-phase-c.md`。
 
 ## 阶段 A 落地范围
 

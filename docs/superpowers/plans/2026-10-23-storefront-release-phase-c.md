@@ -10,7 +10,7 @@
 
 **Spec:** `docs/architecture/storefront-preset-solution.md`, sections 6–7, stage C.
 
-## 交付进度（2026-10-23）
+## 交付进度（2026-10-24）
 
 按用户继续指令恢复开发。阶段 C 功能已实现，三项暂停时记录的问题已分别通过失败测试复现、修复并回归：固定集合页保留描述/封面；只校验参与当前快照的 Entry；删除绑定 Entry 后仍可下线固定页。
 
@@ -18,7 +18,7 @@
 
 浏览器已完成：导入示例站点、首发、选择蓝图新增页面、Entry 绑定、SEO/导航保存、差异校验、发布、公开页面和导航、改路径产生 301、历史回滚。HTTP 验证新增草稿发布前 404、改路径后的 sitemap。数据库测试另外覆盖保存 Entry 不改变线上快照、并发激活及错误域名。
 
-后续交付动作已获授权：合并 master、推送、Docker 重建，并使用重建镜像和独立测试数据库运行部署端到端验收。最终结果记录在 `docs/verification/storefront-phase-c.md`。
+已完成 master 合并推送、Docker 重建，最终镜像的隔离数据库端到端验收、浏览器交互及容器重启持久化检查通过。完整结果记录在 `docs/verification/storefront-phase-c.md`。
 
 集成验证入口：`backend/src/presets/release-integration.test.ts`。在 backend 目录运行：
 

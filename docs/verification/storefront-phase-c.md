@@ -27,7 +27,20 @@
 
 ## Docker 验收
 
-待 master 合并推送后执行重建，并对重建镜像运行隔离数据库端到端测试。结果将在本文件更新。
+已完成：实现提交 `d518158` 合并并推送 master；视觉验收补充提交 `0c45877` 修复发布页脚导航间距。
+
+执行 `docker compose -f docker-compose.prod.yml up -d --build` 重建部署。最后的 Storefront 样式修复从独立的 master 工作区重建镜像并重新创建服务，避免并行任务的 D 阶段代码进入镜像。运行中的正式服务和隔离测试容器使用相同镜像：
+
+- Backend：`sha256:bf4e48e706e1109c3dbc3ff2259580c316af10c5e204545c4876c245c114e476`
+- Storefront：`sha256:2aa80412f321b5434e8327272c8cc7cd05dd3d7a8ad69b46ec3972a27a3e3a34`
+
+最终镜像上的部署生命周期测试通过，浏览器确认发布历史恢复、导航点击、新增页面及页脚间距。重启隔离 Backend/Storefront 后，当前 Release JSON 与重启前完全一致，新增页面仍返回 200。
+
+现有部署只读检查通过：CMS 健康检查 200、后台入口 200、预制包演示 200；未发布首页仍为 404。保留现有 `cms_db-data`、`cms_uploads`、`cms_backups` 卷，测试发布未写入现有站点数据库。隔离测试容器和本轮创建的测试数据库在验收后清理。
+
+![重建镜像中的新增正式页面](assets/storefront-phase-c-docker.png)
+
+阶段 C 的实施清单与核心验收已全部完成。
 
 ## 边界
 
