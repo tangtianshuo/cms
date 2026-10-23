@@ -14,3 +14,20 @@ export async function publishedSite(host: string, expectedHost: string, source: 
     if (snapshot.schemaVersion !== 1 || snapshot.siteId !== site._id) return null;
     return { ...snapshot, releaseId: release._id };
 }
+
+export async function publishedDomainSite(host: string, source: {
+    resolve(host: string): Promise<import('../site-domains/model').DomainResolution | null>;
+    findSiteById(id: string): Promise<SiteInstallation | null>;
+    findRelease(id: string): Promise<ReleaseRecord | null>;
+}): Promise<(ReleaseSnapshot & { releaseId: string; primaryHostname: string; bindingRevision: number }) | null> {
+    const resolution = await source.resolve(host);
+    if (!resolution) return null;
+    const site = await source.findSiteById(resolution.siteId);
+    if (!site?.currentReleaseId || site._id !== resolution.siteId) return null;
+    const release = await source.findRelease(site.currentReleaseId);
+    if (!release || release.siteId !== site._id) return null;
+    let snapshot: ReleaseSnapshot;
+    try { snapshot = JSON.parse(release.payload) as ReleaseSnapshot; } catch { return null; }
+    if (snapshot.schemaVersion !== 1 || snapshot.siteId !== site._id) return null;
+    return { ...snapshot, releaseId: release._id, primaryHostname: resolution.primaryHostname, bindingRevision: resolution.bindingRevision };
+}

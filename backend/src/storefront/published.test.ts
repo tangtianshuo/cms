@@ -22,3 +22,17 @@ test('public lookup reads only the site-owned active snapshot and enforces host 
     snapshot.siteId = 'another-site';
     assert.equal(await publishedSite('shop.test', 'shop.test', source), null);
 });
+
+test('domain resolution selects site-owned release independently of caller site IDs', async () => {
+    const { publishedDomainSite } = await import('./published');
+    const source = { resolve: async (host: string) => host === 'alias.test' || host === 'shop.test' ? {
+        siteId: 'site', hostname: host, primaryHostname: 'shop.test', bindingRevision: 3,
+    } : null,
+        findSiteById: async (id: string) => ({ _id: id, currentReleaseId: 'release' } as SiteInstallation),
+        findRelease: async () => ({ _id: 'release', siteId: 'site', payload: JSON.stringify({ schemaVersion: 1, siteId: 'site', pages: [] }) } as ReleaseRecord),
+    };
+    assert.equal((await publishedDomainSite('alias.test', source))?.primaryHostname, 'shop.test');
+    assert.equal(await publishedDomainSite('unknown.test', source), null);
+    source.findRelease = async () => ({ _id: 'release', siteId: 'other', payload: '{}' } as ReleaseRecord);
+    assert.equal(await publishedDomainSite('shop.test', source), null);
+});

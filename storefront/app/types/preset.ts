@@ -29,6 +29,9 @@ export interface PresetPagePreview {
 }
 
 export interface PublishedPageResponse {
+    origin: string;
+    primaryHostname: string;
+    bindingRevision: number;
     releaseId: string;
     language: string;
     path: string;

@@ -8,7 +8,11 @@
 #   JWT_SCOPE                              CMS public host, e.g. cms.example.com
 #   CMS_ORIGIN                             Public URL of the CMS, e.g. https://cms.example.com
 #   STOREFRONT_HOST                        Public host of the storefront, e.g. shop.example.com
-#   STOREFRONT_PORT                        Optional. Host port for the storefront. Default 3000.
+#   STOREFRONT_GATEWAY_SECRET              Required. Random private routing secret (32-byte hex).
+#   STOREFRONT_DOMAIN_SECRET               Required. Different random HTTPS challenge secret.
+#   STOREFRONT_ENTRY_HOST                  Optional. Public entry hostname shown in domain guidance.
+#   STOREFRONT_ENTRY_IP                    Optional. Public root-domain A target.
+#   STOREFRONT_PORT                        Optional. Loopback port for the private gateway. Default 3000.
 #   HTTP_PORT                              Optional. Host port for the CMS proxy. Default 80.
 #
 # Build and start:
@@ -37,6 +41,9 @@ services:
             - ./.env
         environment:
             - DB_URL=mongodb://${DB_ADMIN_USERNAME}:${DB_ADMIN_PASSWORD}@db:27017/admin
+            - NODE_ENV=production
+            - STOREFRONT_GATEWAY_SECRET=${STOREFRONT_GATEWAY_SECRET:?Set a random gateway secret}
+            - STOREFRONT_DOMAIN_SECRET=${STOREFRONT_DOMAIN_SECRET:?Set a different random challenge secret}
         volumes:
             - uploads:/app/backend/uploads
             - backups:/app/backend/backups
@@ -53,8 +60,23 @@ services:
             - NUXT_CMS_INTERNAL_ORIGIN=http://backend:8080
             - NUXT_PUBLIC_SITE_HOST=${STOREFRONT_HOST:?STOREFRONT_HOST is required}
             - NUXT_PUBLIC_ADMIN_ORIGIN=${CMS_ORIGIN:?CMS_ORIGIN is required}
+            - NUXT_GATEWAY_SECRET=${STOREFRONT_GATEWAY_SECRET:?Set a random gateway secret}
+            - NUXT_DOMAIN_SECRET=${STOREFRONT_DOMAIN_SECRET:?Set a different random challenge secret}
+            - NUXT_DOMAIN_PRODUCTION=true
+        expose:
+            - '3000'
+    storefront-gateway:
+        depends_on:
+            - storefront
+        image: nginx:alpine
+        restart: unless-stopped
+        environment:
+            - STOREFRONT_GATEWAY_SECRET=${STOREFRONT_GATEWAY_SECRET:?Set a random gateway secret}
+            - NGINX_ENVSUBST_FILTER=STOREFRONT_GATEWAY_SECRET
         ports:
-            - '${STOREFRONT_PORT:-3000}:3000'
+            - '127.0.0.1:${STOREFRONT_PORT:-3000}:80'
+        volumes:
+            - ./proxy/storefront.nginx.template:/etc/nginx/templates/default.conf.template:ro
     proxy:
         depends_on:
             - backend

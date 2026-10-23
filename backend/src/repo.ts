@@ -1,3 +1,4 @@
+import { SiteDomainRepo, SiteDomainAuditRepo } from './site-domains/repo';
 import { UserRepo } from '@bcms/selfhosted-backend/user/repo';
 import { ApiKeyRepo } from '@bcms/selfhosted-backend/api-key/repo';
 import { MediaRepo } from '@bcms/selfhosted-backend/media/repo';
@@ -13,6 +14,8 @@ import { SiteInstallationRepo } from '@bcms/selfhosted-backend/presets/site-repo
 import { ReleaseRepo, ReleaseAuditRepo } from '@bcms/selfhosted-backend/presets/release-repo';
 
 export class Repo {
+    static readonly siteDomain = SiteDomainRepo;
+    static readonly siteDomainAudit = SiteDomainAuditRepo;
     static readonly user = UserRepo;
     static readonly apiKey = ApiKeyRepo;
     static readonly media = MediaRepo;

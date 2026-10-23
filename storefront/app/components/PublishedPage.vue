@@ -2,7 +2,6 @@
 import type { PublishedPageResponse } from '../types/preset';
 
 const props = defineProps<{ page: PublishedPageResponse }>();
-const origin = useRequestURL().origin;
 useHead(() => ({
     htmlAttrs: { lang: props.page.language },
     title: props.page.content?.seo.title,
@@ -10,7 +9,7 @@ useHead(() => ({
         { name: 'description', content: props.page.content?.seo.description || '' },
         { property: 'og:title', content: props.page.content?.seo.title || '' },
     ],
-    link: [{ rel: 'canonical', href: new URL(props.page.path, origin).href }],
+    link: [{ rel: 'canonical', href: new URL(props.page.path, props.page.origin).href }],
 }));
 </script>
 

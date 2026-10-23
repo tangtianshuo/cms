@@ -23,6 +23,10 @@ export interface SiteInstallation extends MongoDBEntry {
         fields: Array<{ key: string; propId: string }>;
     }>;
     pages: SitePage[];
+    primaryDomainId?: string;
+    domainRevision?: number;
+    domainMutationToken?: string;
+    domainMutationUntil?: number;
     currentReleaseId?: string;
     publishedReleaseIds?: string[];
 }
@@ -55,6 +59,10 @@ export const SiteInstallationSchema: ObjectSchema = {
     importError: { __type: 'string', __required: true },
     includeDemo: { __type: 'boolean', __required: true },
     demoSeeded: { __type: 'boolean', __required: true },
+    primaryDomainId: { __type: 'string', __required: false },
+    domainRevision: { __type: 'number', __required: false },
+    domainMutationToken: { __type: 'string', __required: false },
+    domainMutationUntil: { __type: 'number', __required: false },
     currentReleaseId: { __type: 'string', __required: false },
     publishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
     theme: {

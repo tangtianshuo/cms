@@ -98,6 +98,7 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
         const port = new URL(`http://${Config.storefrontHost}`).port;
         storefront = spawn(process.execPath, [path.resolve('../storefront/.output/server/index.mjs')], {
             env: { ...process.env, HOST: '127.0.0.1', PORT: port,
+                NUXT_DOMAIN_PRODUCTION: 'false', NUXT_GATEWAY_SECRET: '',
                 NUXT_CMS_INTERNAL_ORIGIN: address, NUXT_PUBLIC_SITE_HOST: Config.storefrontHost },
             stdio: ['ignore', 'pipe', 'pipe'],
         });

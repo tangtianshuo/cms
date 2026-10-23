@@ -1,0 +1,17 @@
+# External TLS/CDN ingress forwards to this private gateway, preserving Host.
+# envsubst is limited to STOREFRONT_GATEWAY_SECRET by docker-compose.prod.yml.
+server {
+    listen 80 default_server;
+    server_name _;
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Storefront-Host $host;
+        proxy_set_header X-Storefront-Key "${STOREFRONT_GATEWAY_SECRET}";
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Proto "";
+        proxy_pass http://storefront:3000;
+        proxy_cache off;
+        proxy_no_cache 1;
+        add_header Cache-Control "no-store" always;
+    }
+}

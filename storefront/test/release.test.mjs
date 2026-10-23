@@ -25,3 +25,16 @@ test('sitemap lists concrete release paths with XML escaping', () => {
     assert.equal(xml.includes(':slug'), false);
     assert.ok(sitemapXml(['/page?a=1&b=2'], 'https://shop.test').includes('&amp;'));
 });
+
+test('custom host calls carry internal credentials and reject unsafe redirect paths', async () => {
+    const { trustedGatewayHost, aliasRedirect } = await import('../server/utils/release.mjs');
+    assert.equal(trustedGatewayHost({ host: 'shop.test', forwardedHost: 'evil.test', key: '', secret: 'secret', expectedHost: 'localhost:3000', production: true }), null);
+    assert.equal(trustedGatewayHost({ host: 'SHOP.test', forwardedHost: 'alias.test', key: 'secret', secret: 'secret', production: true }), null);
+    assert.equal(trustedGatewayHost({ host: 'shop.test', forwardedHost: 'shop.test', key: 'secret', secret: 'secret', production: true }), 'shop.test');
+    assert.equal(trustedGatewayHost({ host: 'localhost:3000', expectedHost: 'localhost:3000', production: false }), 'localhost:3000');
+    const result = await fetchPublishedSite({ host: 'alias.test', gatewaySecret: 'secret', cmsOrigin: 'http://cms.test', path: '/', fetcher: async (_url, options) => ({ hostname: options.headers['x-storefront-host'], key: options.headers['x-storefront-key'] }) });
+    assert.deepEqual(result, { hostname: 'alias.test', key: 'secret' });
+    assert.equal(aliasRedirect('alias.test', 'shop.test', '/a?x=1'), 'https://shop.test/a?x=1');
+    assert.equal(aliasRedirect('shop.test', 'shop.test', '/a'), null);
+    for (const path of ['//evil.test/a', '/\\evil.test/a', '/%2fevil.test', '/a\r\nLocation: x']) assert.equal(aliasRedirect('alias.test', 'shop.test', path), null);
+});

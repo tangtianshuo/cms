@@ -58,6 +58,7 @@ import { registerMcpEndpoint } from '@bcms/selfhosted-backend/mcp/main';
 import { StorefrontController } from '@bcms/selfhosted-backend/storefront/controller';
 import { ensureProductTemplate } from '@bcms/selfhosted-backend/storefront/setup';
 import { PresetController } from '@bcms/selfhosted-backend/presets/controller';
+import { SiteDomainController } from './site-domains/controller';
 import { ReleaseController } from '@bcms/selfhosted-backend/presets/release-controller';
 
 async function main() {
@@ -164,6 +165,7 @@ async function main() {
             StorefrontController,
             PresetController,
             ReleaseController,
+            SiteDomainController,
         ],
 
         middleware: [IPMiddleware, UIProxy],
@@ -335,6 +337,8 @@ async function main() {
             Repo.siteInstallation.init(),
             Repo.storefrontRelease.init(),
             Repo.storefrontReleaseAudit.init(),
+            Repo.siteDomain.init(),
+            Repo.siteDomainAudit.init(),
             MigrationRepo.init(),
             // @inject-repo
 
