@@ -96,6 +96,7 @@ a { color: inherit; }
 .preset-demo__story img { display: block; width: 100%; aspect-ratio: 1.2; object-fit: cover; }
 .preset-demo__footer { min-height: 190px; display: flex; align-items: center; justify-content: space-between; gap: 30px; padding: 40px 8%; background: var(--demo-fg); color: var(--demo-bg); font: 13px Arial, sans-serif; }
 .preset-demo__footer strong { font: 700 20px var(--demo-font); }
+.preset-demo__footer nav { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 .preset-demo--market .preset-demo__hero { min-height: min(62vh, 600px); }
 .preset-demo--market .preset-demo__hero-content { max-width: 650px; }
 .preset-demo--market .preset-demo__hero h1, .preset-demo--market .preset-demo__feature h2 { font-weight: 750; }
