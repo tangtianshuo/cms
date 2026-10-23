@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { ProductPage } from '../types/product';
+import type { PresetPagePreview } from '../types/preset';
+import { isPresetPreviewPayload } from '../utils/preview.mjs';
 
 const config = useRuntimeConfig();
-const page = shallowRef<ProductPage | null>(null);
+const productPage = shallowRef<ProductPage | null>(null);
+const presetPage = shallowRef<PresetPagePreview | null>(null);
 useHead({
-    title: 'Product preview',
+    title: 'Page preview',
     meta: [{ name: 'robots', content: 'noindex, nofollow' }],
 });
 
@@ -13,10 +16,14 @@ function onPreviewMessage(event: MessageEvent) {
         return;
     }
     const message = event.data;
-    if (message?.type !== 'storefront:preview' || message.payload?.config?.pageType !== 'product-detail') {
-        return;
+    if (message?.type !== 'storefront:preview') return;
+    if (isPresetPreviewPayload(message.payload)) {
+        presetPage.value = message.payload as PresetPagePreview;
+        productPage.value = null;
+    } else if (message.payload?.config?.pageType === 'product-detail') {
+        productPage.value = message.payload as ProductPage;
+        presetPage.value = null;
     }
-    page.value = message.payload as ProductPage;
 }
 
 onMounted(() => window.addEventListener('message', onPreviewMessage));
@@ -24,6 +31,8 @@ onBeforeUnmount(() => window.removeEventListener('message', onPreviewMessage));
 </script>
 
 <template>
-    <ThemeProductPage v-if="page" :page="page" />
-    <div v-else class="preview-waiting">Waiting for product preview</div>
+    <PresetDemoPage v-if="presetPage" :preset="presetPage.preset" :view="presetPage.view"
+        :sections="presetPage.sections" mode="draft" />
+    <ThemeProductPage v-else-if="productPage" :page="productPage" />
+    <div v-else class="preview-waiting">Waiting for page preview</div>
 </template>

@@ -5,11 +5,21 @@ import { RP } from '../security/route-protection/main';
 import { buildChecklist } from './checklist';
 import { getPreset, listPresets } from './catalog';
 import { importPreset, planImport, type ImportSource } from './import';
+import { pageDraft, pageSectionOptions, updatePageDraft } from './pages';
 
 const importBody = z.object({
     presetId: z.string().min(1),
     siteName: z.string().trim().min(1).max(80),
     includeDemo: z.boolean(),
+}).strict();
+
+const pageBody = z.object({
+    title: z.string().min(1).max(120),
+    path: z.string().min(1).max(160),
+    seoTitle: z.string().max(120),
+    seoDescription: z.string().max(320),
+    sections: z.array(z.string()).min(1),
+    entryId: z.string(),
 }).strict();
 
 function importSource(): ImportSource {
@@ -28,14 +38,18 @@ function importSource(): ImportSource {
 
 async function siteView() {
     const site = await Repo.siteInstallation.methods.findDefault();
-    if (!site) return { site: null, checklist: [] };
+    if (!site) return { site: null, checklist: [], pageOptions: {} };
     const templates: Parameters<typeof buildChecklist>[1] = {};
     const entries: Parameters<typeof buildChecklist>[2] = {};
     for (const model of site.models) {
         templates[model.key] = (await Repo.template.findById(model.templateId)) || undefined;
         entries[model.key] = await Repo.entry.methods.findAllByTemplateId(model.templateId);
     }
-    return { site, checklist: buildChecklist(site, templates, entries) };
+    return {
+        site: { ...site, pages: site.pages.map((page) => pageDraft(site, page.key)) },
+        checklist: buildChecklist(site, templates, entries),
+        pageOptions: Object.fromEntries(site.pages.map((page) => [page.key, pageSectionOptions(page.layout)])),
+    };
 }
 
 export const PresetController = createController({
@@ -73,6 +87,54 @@ export const PresetController = createController({
                 path: '/site', type: 'get',
                 preRequestHandler: RP.createJwtCheck(['ADMIN']),
                 async handler() { return siteView(); },
+            }),
+            previewContext: createControllerMethod({
+                path: '/preview-context/:templateId', type: 'get',
+                preRequestHandler: RP.createJwtCheck(['USER']),
+                async handler({ request, errorHandler, token }) {
+                    const { templateId } = request.params as { templateId: string };
+                    const elevated = token.payload.rls.includes('ADMIN') || token.payload.rls.includes('SUDO');
+                    const canRead = elevated || Boolean(token.payload.props?.policy?.templates
+                        .find((item) => item._id === templateId)?.get);
+                    if (!canRead) throw errorHandler(HttpStatus.Forbidden, 'Template access denied');
+                    const site = await Repo.siteInstallation.methods.findDefault();
+                    if (!site || site.status !== 'ready') return { site: null };
+                    const model = site.models.find((item) => item.templateId === templateId);
+                    if (!model) return { site: null };
+                    const pages = model.key === 'site-settings' ? site.pages :
+                        site.pages.filter((page) => page.modelKey === model.key);
+                    return {
+                        site: {
+                            status: site.status,
+                            models: [{ key: model.key, templateId: model.templateId }],
+                            pages: pages.map((page) => ({ key: page.key, title: page.title,
+                                modelKey: page.modelKey })),
+                        },
+                    };
+                },
+            }),
+            pages: createControllerMethod({
+                path: '/pages/:pageKey', type: 'post',
+                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                async handler({ request, errorHandler }) {
+                    const { pageKey } = request.params as { pageKey: string };
+                    const parsed = pageBody.safeParse(request.body);
+                    if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid page draft');
+                    const site = await Repo.siteInstallation.methods.findDefault();
+                    if (!site || site.status !== 'ready' || !pageDraft(site, pageKey)) {
+                        throw errorHandler(HttpStatus.NotFound, 'Page draft not found');
+                    }
+                    const boundEntry = parsed.data.entryId
+                        ? await Repo.entry.findById(parsed.data.entryId) : null;
+                    try {
+                        const updated = updatePageDraft(site, pageKey, parsed.data, boundEntry);
+                        await Repo.siteInstallation.update(updated);
+                        return pageDraft(updated, pageKey);
+                    } catch (cause) {
+                        throw errorHandler(HttpStatus.BadRequest,
+                            cause instanceof Error ? cause.message : 'Invalid page draft');
+                    }
+                },
             }),
             import: createControllerMethod({
                 path: '/import', type: 'post',

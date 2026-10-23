@@ -14,7 +14,7 @@ test('public catalog lists selectable presets without CMS credentials', async ()
 test('site import and preflight require an admin token', async () => {
     const controller = await PresetController({} as never);
     const methods = await controller.methods(controller);
-    for (const name of ['plan', 'site', 'import']) {
+    for (const name of ['plan', 'site', 'import', 'pages']) {
         const method = methods.find((item) => item.name === name);
         assert.ok(method);
         await assert.rejects(
@@ -22,4 +22,15 @@ test('site import and preflight require an admin token', async () => {
             (error: unknown) => Boolean(error && typeof error === 'object' && 'status' in error && error.status === 403),
         );
     }
+});
+
+test('preview context requires a user token', async () => {
+    const controller = await PresetController({} as never);
+    const methods = await controller.methods(controller);
+    const method = methods.find((item) => item.name === 'previewContext');
+    assert.ok(method);
+    await assert.rejects(
+        () => method.handler({ headers: {}, query: {}, params: { templateId: 'template' } } as never, {} as never),
+        (error: unknown) => Boolean(error && typeof error === 'object' && 'status' in error && error.status === 403),
+    );
 });

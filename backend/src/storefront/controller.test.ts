@@ -73,10 +73,12 @@ test('preview maps unsaved entry without mutating the saved entry', async () => 
 test('preview endpoint rejects requests without a CMS access token', async () => {
     const controller = await StorefrontController({} as never);
     const methods = await controller.methods(controller);
-    const preview = methods.find((method) => method.name === 'preview');
-    assert.ok(preview);
-    await assert.rejects(
-        () => preview.handler({ headers: {}, query: {}, body: { entry: saved } } as never, {} as never),
-        (error: unknown) => Boolean(error && typeof error === 'object' && 'status' in error && error.status === 403),
-    );
+    for (const name of ['preview', 'pagePreview']) {
+        const preview = methods.find((method) => method.name === name);
+        assert.ok(preview);
+        await assert.rejects(
+            () => preview.handler({ headers: {}, query: {}, body: { entry: saved } } as never, {} as never),
+            (error: unknown) => Boolean(error && typeof error === 'object' && 'status' in error && error.status === 403),
+        );
+    }
 });

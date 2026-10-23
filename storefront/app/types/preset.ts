@@ -18,3 +18,11 @@ export interface PresetDemo {
         page: { title: string; body: string; image: string };
     };
 }
+
+export interface PresetPagePreview {
+    kind: 'preset-page';
+    view: 'home' | 'collection' | 'product' | 'page';
+    preset: PresetDemo;
+    sections: string[];
+    seo: { title: string; description: string };
+}

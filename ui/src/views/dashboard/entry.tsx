@@ -25,7 +25,10 @@ import { StringUtility } from '@bcms/selfhosted-utils/string-utility';
 import { Loader } from '@bcms/selfhosted-ui/components/loader';
 import { useI18n } from 'vue-i18n';
 import { ProductPreview } from '@bcms/selfhosted-ui/components/storefront/product-preview';
+import { PagePreview } from '@bcms/selfhosted-ui/components/storefront/page-preview';
 import { buildEntryCreateBody } from '@bcms/selfhosted-ui/util/entry-create';
+import { availablePreviewPages } from '@bcms/selfhosted-ui/util/page-preview';
+import type { PreviewSiteContext } from '@bcms/selfhosted-ui/util/page-preview';
 
 export const EntryView = defineComponent({
     setup() {
@@ -49,6 +52,9 @@ export const EntryView = defineComponent({
             sdk.store.template.find((e) => e._id === route.params.templateId),
         );
         const entry = ref<Entry>();
+        const installedSite = ref<PreviewSiteContext | null>(null);
+        const hasPagePreview = computed(() => Boolean(entry.value &&
+            availablePreviewPages(installedSite.value, entry.value.templateId).length));
         const lngIdx = computed(() => {
             const idx = entry.value?.meta.findIndex(
                 (e) => e.lng === lngCode.value,
@@ -121,6 +127,15 @@ export const EntryView = defineComponent({
                 await sdk.template.getAll();
                 if (!template.value) {
                     throw Error(t('views.entry.templateMissing'));
+                }
+                try {
+                    const result = await sdk.send<{ site: PreviewSiteContext | null }>({
+                        url: `/api/v4/presets/preview-context/${encodeURIComponent(template.value._id)}`,
+                        method: 'GET',
+                    });
+                    installedSite.value = result.site;
+                } catch {
+                    installedSite.value = null;
                 }
                 await sdk.widget.getAll();
                 await sdk.group.getAll();
@@ -323,6 +338,8 @@ export const EntryView = defineComponent({
                                         }
                                     }}
                                 />
+                                {installedSite.value && entry.value && hasPagePreview.value &&
+                                    <PagePreview entry={entry.value} site={installedSite.value} language={lngCode.value} />}
                                 <Button
                                     disabled={
                                         saving.value ||
@@ -342,7 +359,7 @@ export const EntryView = defineComponent({
                         {!loading.value && (
                             <div
                                 class={
-                                    template.value.name === 'product'
+                                    template.value.name === 'product' && !hasPagePreview.value
                                         ? 'grid grid-cols-1 2xl:grid-cols-[minmax(0,600px)_minmax(360px,1fr)] gap-8 pr-8'
                                         : ''
                                 }
@@ -379,7 +396,7 @@ export const EntryView = defineComponent({
                                         }
                                     }}
                                 />
-                                {template.value.name === 'product' && (
+                                {template.value.name === 'product' && !hasPagePreview.value && (
                                     <ProductPreview entry={entry.value} />
                                 )}
                             </div>

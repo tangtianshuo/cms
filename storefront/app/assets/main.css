@@ -59,6 +59,8 @@ a { color: inherit; }
 .preset-demo__header nav a:hover, .preset-demo__feature a:hover { color: var(--demo-accent); }
 .preset-demo__header-end { font-size: 31px; line-height: 1; }
 .preset-demo__hero { min-height: min(70vh, 650px); display: flex; align-items: flex-end; padding: 6% 8%; background-position: center; background-size: cover; position: relative; color: white; }
+.preset-demo__hero--empty { background: var(--demo-accent); }
+.preset-demo--draft .preset-demo__header a, .preset-demo--draft .preset-demo__product-tile { pointer-events: none; }
 .preset-demo__hero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.56), rgba(0,0,0,.08)); }
 .preset-demo__hero-content { max-width: 580px; position: relative; z-index: 1; }
 .preset-demo__hero-content > p, .preset-demo__feature p, .preset-demo__collection-heading p, .preset-demo__product-detail > p:first-child, .preset-demo__story p { margin: 0 0 12px; font: 700 12px Arial, sans-serif; }

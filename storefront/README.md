@@ -52,10 +52,14 @@ For an isolated backend test, `SERVER_PORT` overrides its default port 8080;
 `DB_URL` and `STORAGE_SCOPE` can select a separate MongoDB database. Existing
 CMS data does not need to be modified to preview a preset.
 
-Imported page definitions remain drafts in phase A. They are not public Nuxt
-routes yet. The existing product route and product Entry preview remain the
-only saved-content storefront flow. General page editing/preview and releases,
-including adding pages to a published site, are planned for phases B and C.
+Imported page definitions remain drafts. Administrators can edit their titles,
+paths, SEO, visible sections, and the homepage Entry binding in `/d/presets`.
+Entry editors can preview unsaved changes with the installed theme using the
+Preview Page button and desktop/mobile widths. This authenticated preview does
+not save the Entry. Draft pages are not public Nuxt routes, and their paths
+return 404. The existing product route remains the only saved-content
+storefront flow. Release-backed public pages, adding pages after publication,
+and rollback belong to phase C.
 
 ## Behavior and limits
 

@@ -22,14 +22,20 @@ export interface SiteInstallation extends MongoDBEntry {
         templateId: string;
         fields: Array<{ key: string; propId: string }>;
     }>;
-    pages: Array<{
-        key: string;
-        title: string;
-        path: string;
-        modelKey: string;
-        layout: string;
-        status: 'draft';
-    }>;
+    pages: SitePage[];
+}
+
+export interface SitePage {
+    key: string;
+    title: string;
+    path: string;
+    modelKey: string;
+    layout: string;
+    status: 'draft';
+    seoTitle?: string;
+    seoDescription?: string;
+    sections?: string[];
+    entryId?: string;
 }
 
 export const SiteInstallationSchema: ObjectSchema = {
@@ -85,6 +91,10 @@ export const SiteInstallationSchema: ObjectSchema = {
                 modelKey: { __type: 'string', __required: true },
                 layout: { __type: 'string', __required: true },
                 status: { __type: 'string', __required: true },
+                seoTitle: { __type: 'string', __required: false },
+                seoDescription: { __type: 'string', __required: false },
+                sections: { __type: 'array', __required: false, __child: { __type: 'string' } },
+                entryId: { __type: 'string', __required: false },
             },
         },
     },

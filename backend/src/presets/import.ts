@@ -10,6 +10,7 @@ import type { Template } from '../template/models/main';
 import { TemplateFactory } from '../template/factory';
 import { getPreset, type PresetField, type PresetManifest, type PresetModel } from './catalog';
 import type { SiteInstallation } from './site-model';
+import { pageDraft } from './pages';
 
 export interface ImportSource {
     findSite(): Promise<SiteInstallation | null>;
@@ -143,6 +144,7 @@ export async function importPreset(
         theme: { ...preset.theme }, models: [],
         pages: preset.pages.map((page) => ({ ...page, status: 'draft' as const })),
     };
+    if (!current) site.pages = site.pages.map((page) => pageDraft(site, page.key) as NonNullable<ReturnType<typeof pageDraft>>);
     if (current) {
         site = { ...current, status: 'importing', importError: '', updatedAt: Date.now() };
         site = await source.updateSite(site);

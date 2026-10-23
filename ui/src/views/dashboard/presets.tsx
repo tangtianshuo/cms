@@ -4,6 +4,7 @@ import type { ChecklistStep } from '@bcms/selfhosted-backend/presets/checklist';
 import type { ImportPlan } from '@bcms/selfhosted-backend/presets/import';
 import type { SiteInstallation } from '@bcms/selfhosted-backend/presets/site-model';
 import { Button } from '@bcms/selfhosted-ui/components/button';
+import { PageDraftEditor } from '@bcms/selfhosted-ui/components/storefront/page-draft-editor';
 
 interface PresetSummary {
     id: string;
@@ -23,6 +24,7 @@ export const PresetsView = defineComponent({
         const catalog = ref<PresetSummary[]>([]);
         const selectedId = ref('');
         const site = ref<SiteInstallation | null>(null);
+        const pageOptions = ref<Record<string, { allowed: string[]; required: string }>>({});
         const checklist = ref<ChecklistStep[]>([]);
         const plan = ref<ImportPlan | null>(null);
         const name = ref('');
@@ -47,11 +49,13 @@ export const PresetsView = defineComponent({
             ? `${origin}/presets/${encodeURIComponent(selected.value.id)}?view=${view.value}` : '');
 
         async function refreshSite() {
-            const result = await sdk.send<{ site: SiteInstallation | null; checklist: ChecklistStep[] }>({
+            const result = await sdk.send<{ site: SiteInstallation | null; checklist: ChecklistStep[];
+                pageOptions: Record<string, { allowed: string[]; required: string }> }>({
                 url: '/api/v4/presets/site', method: 'GET',
             });
             site.value = result.site;
             checklist.value = result.checklist;
+            pageOptions.value = result.pageOptions;
             if (result.site) name.value = result.site.name;
         }
 
@@ -66,7 +70,7 @@ export const PresetsView = defineComponent({
                 });
                 if (selectedId.value === id) {
                     plan.value = result.plan;
-                    if (result.installedSite) site.value = result.installedSite;
+                    if (result.installedSite && !site.value) site.value = result.installedSite;
                 }
             } catch (cause) {
                 error.value = (cause as { message?: string }).message || t('presets.loadError');
@@ -229,6 +233,9 @@ export const PresetsView = defineComponent({
                                 )}
                             </section>
                         )}
+
+                        {site.value?.status === 'ready' && site.value.presetId === selectedId.value &&
+                            <PageDraftEditor site={site.value} pageOptions={pageOptions.value} onSaved={refreshSite} />}
 
                         {site.value && (
                             <section class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">
