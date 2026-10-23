@@ -30,6 +30,17 @@ STOREFRONT_ENABLED=true STOREFRONT_LANGUAGE=en STOREFRONT_HOST=127.0.0.1:3199 ST
 
 同一 Entry 可同时被默认动态蓝图和新增固定页面引用；停用一个页面定义仅移除其 URL。快照保存 CMS 图片 URL，媒体文件保留与备份由运营保障。
 
+## 后续阶段衔接（仅规划）
+
+阶段 C 完成验收后依次执行：
+
+- D1：`docs/superpowers/plans/2026-10-23-storefront-domains-phase-d1.md`。Cloudflare 等外部平台维护 DNS、HTTPS 和 CDN，CMS 管理站点域名绑定、验证、主域名与 Release 访问解析。
+- D2：`docs/superpowers/plans/2026-10-23-storefront-analytics-phase-d2.md`。正式网站浏览事件采集、PV/UV/访问次数、渠道及页面统计、后台报表和隐私保留策略。
+- D3：`docs/superpowers/plans/2026-10-23-storefront-workspaces-phase-d3.md`。多独立站、多工作区、多模板安装共存、Entry 分组同名约束及 Entry/媒体/组件共享；用户本次要求在 D1 后、D2 前实施。
+- D4：主题迁移、CDN 缓存清理适配器及其他运营能力。
+
+上述阶段为后续独立规划，不属于本次阶段 C 交付。
+
 ## Global Constraints（阶段 C）
 
 - Preserve existing imports, draft previews and template/field ID mappings.
