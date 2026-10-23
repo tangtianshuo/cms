@@ -52,6 +52,15 @@ test('public lookup returns saved data only for the configured host and slug', a
     assert.equal(await getProductPage('saved-product', 'other.test', site, sources), null);
 });
 
+test('demo entries from a preset import stay off the public product route', async () => {
+    const source = {
+        findTemplate: async () => template,
+        findEntries: async () => [{ ...saved, userId: '__preset' }],
+        findMedia: async () => [],
+    };
+    assert.equal(await getProductPage('saved-product', 'localhost:3000', site, source), null);
+});
+
 test('preview maps unsaved entry without mutating the saved entry', async () => {
     const draft = structuredClone(saved);
     (draft.meta[0].props[0].data as string[])[0] = 'Unsaved title';

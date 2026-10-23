@@ -14,5 +14,10 @@ export default defineNuxtConfig({
                 'cache-control': 'no-store',
             },
         },
+        '/presets/**': {
+            headers: {
+                'x-robots-tag': 'noindex, nofollow',
+            },
+        },
     },
 });

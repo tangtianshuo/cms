@@ -15,6 +15,7 @@ import ApiKeyView from './dashboard/api-key';
 import EntriesView from './dashboard/entries';
 import EntryView from './dashboard/entry';
 import PluginView from '@bcms/selfhosted-ui/views/dashboard/plugin';
+import PresetsView from './dashboard/presets';
 
 export const views = {
     LoginView,
@@ -22,6 +23,7 @@ export const views = {
     HomeView,
 
     TemplatesView,
+    PresetsView,
     TemplateView,
 
     GroupsView,

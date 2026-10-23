@@ -9,6 +9,7 @@ import { LanguageRepo } from '@bcms/selfhosted-backend/language/repo';
 import { EntryStatusRepo } from '@bcms/selfhosted-backend/entry-status/repo';
 import { TemplateOrganizerRepo } from '@bcms/selfhosted-backend/template-organizer/repo';
 import { BackupRepo } from '@bcms/selfhosted-backend/backup/repo';
+import { SiteInstallationRepo } from '@bcms/selfhosted-backend/presets/site-repo';
 
 export class Repo {
     static readonly user = UserRepo;
@@ -22,4 +23,5 @@ export class Repo {
     static readonly language = LanguageRepo;
     static readonly entryStatus = EntryStatusRepo;
     static readonly backup = BackupRepo;
+    static readonly siteInstallation = SiteInstallationRepo;
 }

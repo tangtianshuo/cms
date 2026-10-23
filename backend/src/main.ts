@@ -57,12 +57,13 @@ import { createCustomDependenciesInit } from '@bcms/selfhosted-backend/custom-de
 import { registerMcpEndpoint } from '@bcms/selfhosted-backend/mcp/main';
 import { StorefrontController } from '@bcms/selfhosted-backend/storefront/controller';
 import { ensureProductTemplate } from '@bcms/selfhosted-backend/storefront/setup';
+import { PresetController } from '@bcms/selfhosted-backend/presets/controller';
 
 async function main() {
     await createServer({
         server: {
             host: '0.0.0.0',
-            port: 8080,
+            port: process.env.SERVER_PORT ? Number(process.env.SERVER_PORT) : 8080,
         },
 
         logs: {
@@ -160,6 +161,7 @@ async function main() {
             TypeGeneratorController,
             PluginController,
             StorefrontController,
+            PresetController,
         ],
 
         middleware: [IPMiddleware, UIProxy],
@@ -328,6 +330,7 @@ async function main() {
             Repo.language.init(),
             Repo.entryStatus.init(),
             Repo.backup.init(),
+            Repo.siteInstallation.init(),
             MigrationRepo.init(),
             // @inject-repo
 

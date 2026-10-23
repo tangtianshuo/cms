@@ -31,6 +31,32 @@ product Entry in the CMS, add its values for the configured language, and
 open `http://localhost:3000/products/<slug>`. The product editor shows a live
 preview before changes are saved.
 
+## Phase A storefront presets
+
+The CMS dashboard now has a **Storefront presets** page at `/d/presets`.
+Administrators can compare the Atelier and Market presets, switch among home,
+collection, product, and content-page demos, inspect generated model changes,
+and import one preset. The import creates five CMS Templates (product,
+collection, home, content page, and site settings), four draft page definitions,
+and a setup checklist. Optional example Entries contain text and references;
+the demo images belong to the preview and are not copied into CMS media.
+
+Run the backend and UI as usual, then run the Nuxt storefront with
+`NUXT_CMS_INTERNAL_ORIGIN` pointing to the backend. Set
+`VITE_STOREFRONT_ORIGIN` in `ui/.env` to the Nuxt origin and rebuild or restart
+the UI. Visit `/d/presets` on the backend origin. The same public demos are at
+`/presets/atelier` and `/presets/market`; use the `view` query parameter with
+`home`, `collection`, `product`, or `page`.
+
+For an isolated backend test, `SERVER_PORT` overrides its default port 8080;
+`DB_URL` and `STORAGE_SCOPE` can select a separate MongoDB database. Existing
+CMS data does not need to be modified to preview a preset.
+
+Imported page definitions remain drafts in phase A. They are not public Nuxt
+routes yet. The existing product route and product Entry preview remain the
+only saved-content storefront flow. General page editing/preview and releases,
+including adding pages to a published site, are planned for phases B and C.
+
 ## Behavior and limits
 
 - The theme accepts schema version 1 and three platform sections: gallery,

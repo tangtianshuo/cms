@@ -1,6 +1,44 @@
 import { en } from '@bcms/selfhosted-ui/i18n/locales/en';
 
 export const zhCN: typeof en = {
+    presets: {
+        title: '独立站预制模版',
+        subtitle: '选择整站设计，并生成建站所需的内容模型。',
+        colors: '主题颜色',
+        viewport: '预览设备',
+        desktop: '桌面端',
+        mobile: '移动端',
+        previewTitle: '{name} 独立站预览',
+        views: { home: '首页', collection: '集合页', product: '商品页', page: '内容页' },
+        importTitle: '创建独立站',
+        importSummary: '导入后将创建页面草稿和对应的 CMS 内容字段。',
+        draftPages: '页面草稿',
+        siteName: '站点名称',
+        includeDemo: '导入示例文本条目',
+        import: '导入模版',
+        importing: '正在导入...',
+        retry: '重试导入',
+        installed: '已安装 {name}',
+        alreadyInstalled: '已安装这套模版。',
+        otherSite: '当前 CMS 实例已有一套独立站模版。',
+        conflict: '现有模型名称或字段冲突，请先处理后再导入。',
+        loadError: '无法加载独立站模版。',
+        importError: '无法导入模版。',
+        checklistTitle: '建站清单',
+        checklistSubtitle: '在自动生成的内容编辑器中完善站点内容。',
+        entryCount: '已完成 {count} 项',
+        later: '后续阶段开放',
+        openEditor: '打开编辑器',
+        models: {
+            product: '商品', collection: '商品集合', home: '首页',
+            'content-page': '内容页', 'site-settings': '站点设置',
+        },
+        actions: { create: '新建', reuse: '复用', update: '补充字段', conflict: '冲突' },
+        steps: {
+            theme: '安装主题', brand: '品牌信息', product: '商品',
+            collection: '商品集合', home: '首页', content: '内容页', publish: '发布站点',
+        },
+    },
     storefrontPreview: {
         title: '商品实时预览',
         updating: '正在更新',
@@ -50,6 +88,7 @@ export const zhCN: typeof en = {
         signupAdmin: '管理员注册',
         home: '首页',
         templates: '模板',
+        presets: '独立站模版',
         template: '模板',
         groups: '分组',
         group: '分组',
@@ -70,6 +109,7 @@ export const zhCN: typeof en = {
         plugins: '插件',
         entries: '条目',
         templates: '模板',
+        presets: '独立站模版',
         groups: '分组',
         widgets: '组件',
         media: '媒体',
@@ -205,6 +245,7 @@ export const zhCN: typeof en = {
         entry: {
             templateMissing: '此条目的模板不存在',
             errors: '条目中存在错误，请修正后重试',
+            created: '条目创建成功',
             updated: '语言“{language}”的条目更新成功',
         },
         settings: {

@@ -25,6 +25,7 @@ export async function entryNewFromTemplate(
               updatedAt: Date.now(),
               templateId: template._id,
               userId: sdk.accessToken?.payload.userId || '_none',
+              statuses: [],
               meta: [],
               content: [],
           };

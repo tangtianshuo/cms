@@ -36,7 +36,8 @@ export async function getProductPage(
         return null;
     }
     const entries = await sources.findEntries(template._id);
-    const entry = entries.find((item) => productEntrySlug(item, template, site.language) === slug);
+    const entry = entries.find((item) => item.userId !== '__preset' &&
+        productEntrySlug(item, template, site.language) === slug);
     if (!entry) {
         return null;
     }

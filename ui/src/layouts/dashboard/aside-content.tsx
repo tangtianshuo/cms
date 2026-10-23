@@ -44,6 +44,7 @@ export const DashboardLayoutAsideContent = defineComponent({
                 activeOnViews: [
                     'HomeView',
                     'TemplatesView',
+                    'PresetsView',
                     'TemplateView',
                     'GroupsView',
                     'GroupView',
@@ -55,6 +56,14 @@ export const DashboardLayoutAsideContent = defineComponent({
                 ],
                 visible: true,
                 children: [
+                    {
+                        title: t('nav.presets'),
+                        href: '/d/presets',
+                        activeOnViews: ['PresetsView'],
+                        visible: isAdmin,
+                        onClick() { ctx.emit('closeNav'); },
+                        titleSlot: () => navItemSlot(t('nav.presets'), '/administration/template'),
+                    },
                     {
                         title: t('nav.templates'),
                         href: `/d/template`,

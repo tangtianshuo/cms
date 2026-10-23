@@ -82,7 +82,7 @@ export function propsValueCheck(
                             );
                         }
                         for (let j = 0; j < valueData.length; j++) {
-                            if (valueData[i] === '') {
+                            if (valueData[j] === '') {
                                 return Error(
                                     `[${level}.${prop.name}.data.${j}] -> Property is required and must contain a value`,
                                 );

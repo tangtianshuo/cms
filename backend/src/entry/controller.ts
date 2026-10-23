@@ -36,6 +36,7 @@ import { SocketManager } from '@bcms/selfhosted-backend/socket/manager';
 import { propsValueCheck } from '@bcms/selfhosted-backend/prop/values';
 import { entryContentNodeToHtml } from '@bcms/selfhosted-backend/entry/content';
 import { EventManager } from '@bcms/selfhosted-backend/event/manager';
+import { prepareEntryCreate } from '@bcms/selfhosted-backend/entry/create';
 
 export const EntryController = createController({
     name: 'Entry',
@@ -585,6 +586,18 @@ export const EntryController = createController({
                             `Template with ID "${params.templateId}" does not exist`,
                         );
                     }
+                    let prepared: EntryCreateBody;
+                    try {
+                        const [languages, statuses, widgets, groups, medias] = await Promise.all([
+                            Repo.language.findAll(), Repo.entryStatus.findAll(), Repo.widget.findAll(),
+                            Repo.group.findAll(), Repo.media.findAll(),
+                        ]);
+                        prepared = prepareEntryCreate(body, template.props, languages.map((lng) => lng.code),
+                            statuses.map((status) => status._id), widgets, groups, templates, medias);
+                    } catch (cause) {
+                        throw errorHandler(HttpStatus.BadRequest,
+                            cause instanceof Error ? cause.message : 'Invalid entry content');
+                    }
                     let entry = EntryFactory.create({
                         templateId: template._id,
                         userId: token
@@ -592,9 +605,7 @@ export const EntryController = createController({
                             : apiKey
                             ? apiKey.userId
                             : '__unknown',
-                        statuses: body.statuses,
-                        meta: [],
-                        content: [],
+                        ...prepared,
                     });
                     entry = await Repo.entry.add(entry);
                     SocketManager.channelEmit(

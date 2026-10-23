@@ -71,6 +71,15 @@ const routes: Array<RouteRecordRawExtended> = [
             import(/* webpackChunkName: "home" */ './views/dashboard/home'),
     },
     {
+        path: '/d/presets',
+        name: 'PresetsView',
+        meta: {
+            titleKey: 'routes.presets',
+            layout: 'DashboardLayout',
+        },
+        component: () => import('./views/dashboard/presets'),
+    },
+    {
         path: '/d/template',
         name: 'TemplatesView',
         meta: {
