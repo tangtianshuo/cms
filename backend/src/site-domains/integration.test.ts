@@ -25,7 +25,7 @@ test('real Mongo unique domain ownership, primary concurrency, HTTP trust and im
     await fastify.register(fastifyMongo, { url: process.env.STOREFRONT_TEST_MONGO!, database, forceClose: true });
     let storefront: ChildProcess | undefined;
     context.after(async () => { storefront?.kill(); await fastify.mongo.db?.dropDatabase(); await fastify.close(); });
-    for (const repo of [Repo.siteInstallation, Repo.siteDomain, Repo.siteDomainAudit, Repo.storefrontRelease]) {
+    for (const repo of [Repo.workspace, Repo.siteInstallation, Repo.siteDomain, Repo.siteDomainAudit, Repo.storefrontRelease]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify, next: (error?: Error) => error ? reject(error) : resolve() } as never));
     }
     JWTManager.setScopes([{ issuer: Config.jwtIssuer, secret: Config.jwtSecret, alg: 'HS256', expIn: 60000 }]);

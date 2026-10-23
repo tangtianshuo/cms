@@ -1,3 +1,4 @@
+import { ownerWorkspace } from '../workspaces/context';
 import { randomUUID } from 'node:crypto';
 import type { MongoDBEntry } from '../_server/modules/mongodb';
 import type { Entry } from '../entry/models/main';
@@ -20,6 +21,7 @@ export interface ReleasePage {
 }
 export interface ReleaseSnapshot {
     schemaVersion: 1;
+    workspaceId?: string;
     siteId: string;
     language: string;
     pages: ReleasePage[];
@@ -27,12 +29,14 @@ export interface ReleaseSnapshot {
     redirects: Array<{ from: string; to: string }>;
 }
 export interface ReleaseRecord extends MongoDBEntry {
+    workspaceId?: string;
     siteId: string;
     createdBy: string;
     previousReleaseId: string;
     payload: string;
 }
 export interface ReleaseAudit extends MongoDBEntry {
+    workspaceId?: string;
     siteId: string;
     actorId: string;
     operation: 'publish' | 'rollback';
@@ -255,7 +259,7 @@ export function buildRelease(input: ReleaseInput): ReleaseSnapshot {
         Object.values(object).forEach(validateLinks);
     };
     entries.forEach((entry) => validateLinks(entry.meta.find((meta) => meta.lng === language)?.props));
-    return structuredClone({ schemaVersion: 1, siteId: site._id, language, pages, navigation,
+    return structuredClone({ schemaVersion: 1, workspaceId: ownerWorkspace(site), siteId: site._id, language, pages, navigation,
         redirects: [...redirects].map(([from, to]) => ({ from, to })) });
 }
 
@@ -288,19 +292,20 @@ export async function publishRelease(source: ReleaseSource, actorId: string, exp
     const releaseId = randomUUID();
     try {
         const previous = site.currentReleaseId ? await source.findRelease(site.currentReleaseId) : null;
-        if (previous && previous.siteId !== site._id) throw new Error('Release belongs to another site');
-        const snapshot = buildRelease({ ...await source.loadContent(site), site,
-            previous: previous ? JSON.parse(previous.payload) : undefined });
-        const record: ReleaseRecord = { _id: releaseId, siteId: site._id, createdAt: now, updatedAt: now,
+        if (previous && (previous.siteId !== site._id || ownerWorkspace(previous) !== ownerWorkspace(site))) throw new Error('Release belongs to another site');
+        const prior = previous ? JSON.parse(previous.payload) as ReleaseSnapshot : undefined;
+        if (prior && (prior.siteId !== site._id || ownerWorkspace(prior) !== ownerWorkspace(site))) throw new Error('Release snapshot belongs to another site');
+        const snapshot = buildRelease({ ...await source.loadContent(site), site, previous: prior });
+        const record: ReleaseRecord = { _id: releaseId, workspaceId: ownerWorkspace(site), siteId: site._id, createdAt: now, updatedAt: now,
             createdBy: actorId, previousReleaseId: site.currentReleaseId || '', payload: JSON.stringify(snapshot) };
         await source.insertRelease(record);
         if (!await source.activate(site, releaseId)) throw new Error('Site changed during publication; refresh and retry');
         await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            siteId: site._id, actorId, operation: 'publish', releaseId, error: '' });
+            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'publish', releaseId, error: '' });
         return record;
     } catch (cause) {
         await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            siteId: site._id, actorId, operation: 'publish', releaseId,
+            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'publish', releaseId,
             error: cause instanceof Error ? cause.message : 'Publication failed' });
         throw cause;
     }
@@ -311,16 +316,16 @@ export async function rollbackRelease(source: ReleaseSource, actorId: string, re
     const now = Date.now();
     try {
         const target = await source.findRelease(releaseId);
-        if (!target || target.siteId !== site._id) throw new Error('Release does not belong to this site');
+        if (!target || (target.siteId !== site._id || ownerWorkspace(target) !== ownerWorkspace(site))) throw new Error('Release does not belong to this site');
         if (!(site.publishedReleaseIds || [site.currentReleaseId]).includes(releaseId)) throw new Error('Release was never published');
         const snapshot = JSON.parse(target.payload) as ReleaseSnapshot;
-        if (snapshot.schemaVersion !== 1 || snapshot.siteId !== site._id) throw new Error('Unsupported release snapshot');
+        if (snapshot.schemaVersion !== 1 || (snapshot.siteId !== site._id || ownerWorkspace(snapshot) !== ownerWorkspace(site))) throw new Error('Unsupported release snapshot');
         if (!await source.activate(site, target._id)) throw new Error('Site changed during rollback; refresh and retry');
         await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            siteId: site._id, actorId, operation: 'rollback', releaseId, error: '' });
+            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'rollback', releaseId, error: '' });
     } catch (cause) {
         await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            siteId: site._id, actorId, operation: 'rollback', releaseId,
+            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'rollback', releaseId,
             error: cause instanceof Error ? cause.message : 'Rollback failed' });
         throw cause;
     }

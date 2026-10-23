@@ -27,7 +27,7 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
         await fastify.close();
     });
     await fastify.register(fastifyMongo, { url: process.env.STOREFRONT_TEST_MONGO!, database, forceClose: true });
-    for (const repo of [Repo.siteInstallation, Repo.storefrontRelease, Repo.storefrontReleaseAudit,
+    for (const repo of [Repo.workspace, Repo.siteInstallation, Repo.storefrontRelease, Repo.storefrontReleaseAudit,
         Repo.template, Repo.entry, Repo.language, Repo.media]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify,
             next: (error?: Error) => error ? reject(error) : resolve() } as never));

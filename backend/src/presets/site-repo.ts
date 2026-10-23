@@ -1,3 +1,5 @@
+import { workspaceFilter, workspaceContext, ownerWorkspace, workspaceId } from '../workspaces/context';
+import { migrateSiteIndex } from '../workspaces/migration';
 import type { DomainPrimaryAudit } from '../site-domains/model';
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -8,11 +10,13 @@ import { type SiteInstallation, SiteInstallationSchema } from './site-model';
 
 function installationDraft(site: SiteInstallation) {
     const { currentReleaseId: _release, publishedReleaseIds: _history, primaryDomainId: _primary, domainRevision: _revision,
-        domainMutationToken: _token, domainMutationUntil: _until, domainAuditOutbox: _outbox, ...draft } = site;
+        domainMutationToken: _token, domainMutationUntil: _until, domainAuditOutbox: _outbox, workspaceId: _workspace, slot: _slot, templateNamespace: _namespace, contentGroupId: _group, ...draft } = site;
     return draft;
 }
 
 export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
+    listWorkspace(id: string): Promise<SiteInstallation[]>;
+    findSelected(): Promise<SiteInstallation | null>;
     findFresh(id: string): Promise<SiteInstallation | null>;
     withDomainLock<T>(siteId: string, action: () => Promise<T>): Promise<T>;
     setPrimaryDomain(siteId: string, id: string, audit: DomainPrimaryAudit): Promise<void>;
@@ -28,9 +32,15 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
     name: 'SiteInstallation',
     collection: `${Config.storageScope}_site_installations`,
     schema: SiteInstallationSchema,
-    indexes: [{ key: { slot: 1 }, name: 'site_slot_unique', unique: true }],
+    beforeIndexes: migrateSiteIndex,
+    indexes: [{ key: { workspaceId: 1, slot: 1 }, name: 'workspace_site_slot_unique', unique: true }],
     methods({ mdb, cache }) {
         return {
+            async listWorkspace(id) { return mdb.find(workspaceFilter(id)).toArray(); },
+            async findSelected() {
+                const context = workspaceContext();
+                return mdb.findOne({ ...workspaceFilter(), ...(context?.siteId ? { _id: context.siteId } : { slot: 'default' }) });
+            },
             async findFresh(_id) { return mdb.findOne({ _id }); },
             async withDomainLock(siteId, action) {
                 const token = randomUUID();
@@ -66,26 +76,29 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                 cache.remove(siteId);
             },
             async findDefaultFresh() {
-                return mdb.findOne({ slot: 'default' });
+                return mdb.findOne({ ...workspaceFilter('default'), slot: 'default' });
             },
             async updateImport(site) {
+                if (ownerWorkspace(site) !== workspaceId() || (workspaceContext()?.siteId && workspaceContext()?.siteId !== site._id)) throw new Error('Site access denied');
                 const draft = installationDraft(site);
                 const updatedAt = Math.max(Date.now(), site.updatedAt + 1);
-                await mdb.updateOne({ _id: site._id }, { $set: { ...draft, updatedAt } });
+                const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id }, { $set: { ...draft, updatedAt } });
+                if (result.matchedCount !== 1) throw new Error('Site not found in workspace');
                 site.updatedAt = updatedAt;
                 cache.remove(site._id);
-                return site;
+                return (await mdb.findOne({ ...workspaceFilter(), _id: site._id }))!;
             },
             async saveDraft(site, expectedUpdatedAt) {
+                if (ownerWorkspace(site) !== workspaceId() || (workspaceContext()?.siteId && workspaceContext()?.siteId !== site._id)) throw new Error('Site access denied');
                 const draft = installationDraft(site);
-                const result = await mdb.updateOne({ _id: site._id, updatedAt: expectedUpdatedAt }, {
+                const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id, updatedAt: expectedUpdatedAt }, {
                     $set: { ...draft, updatedAt: Math.max(Date.now(), expectedUpdatedAt + 1) },
                 });
                 cache.remove(site._id);
                 return result.matchedCount === 1;
             },
             async activate(site, releaseId) {
-                const result = await mdb.updateOne({ _id: site._id, updatedAt: site.updatedAt,
+                const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id, updatedAt: site.updatedAt,
                     currentReleaseId: site.currentReleaseId || { $exists: false } }, {
                     $set: { currentReleaseId: releaseId, updatedAt: Math.max(Date.now(), site.updatedAt + 1) },
                     $addToSet: { publishedReleaseIds: releaseId },
@@ -94,9 +107,9 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                 return result.matchedCount === 1;
             },
             async findDefault() {
-                const cached = cache.find((item) => item.slot === 'default');
+                const cached = cache.find((item) => item.slot === 'default' && ownerWorkspace(item) === 'default');
                 if (cached) return cached;
-                const site = await mdb.findOne({ slot: 'default' });
+                const site = await mdb.findOne({ ...workspaceFilter('default'), slot: 'default' });
                 if (site) cache.set(site);
                 return site;
             },

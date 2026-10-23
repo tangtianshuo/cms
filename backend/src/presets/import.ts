@@ -15,6 +15,7 @@ import { pageDraft } from './pages';
 export interface ImportSource {
     findSite(): Promise<SiteInstallation | null>;
     addSite(site: SiteInstallation): Promise<SiteInstallation>;
+    claimSite?(site: SiteInstallation, expectedUpdatedAt: number): Promise<boolean>;
     updateSite(site: SiteInstallation): Promise<SiteInstallation>;
     findTemplate(name: string): Promise<Template | null>;
     addTemplate(template: Template): Promise<Template>;
@@ -31,7 +32,8 @@ export interface ImportPlan {
     pages: PresetManifest['pages'];
 }
 
-export function templateName(key: string): string {
+export function templateName(key: string, namespace?: string): string {
+    if (namespace) return `site-${namespace}-${key}`;
     return key === 'product' ? 'product' : `storefront-${key}`;
 }
 
@@ -55,8 +57,9 @@ function compatibility(model: PresetModel, existing: Template): { action: 'reuse
 
 export async function planImport(preset: PresetManifest, source: ImportSource): Promise<ImportPlan> {
     const models: ImportPlan['models'] = [];
+    const site = await source.findSite();
     for (const model of preset.models) {
-        const name = templateName(model.key);
+        const name = templateName(model.key, site?.templateNamespace);
         const existing = await source.findTemplate(name);
         models.push({ key: model.key, name, ...(existing ? compatibility(model, existing) : { action: 'create' as const }) });
     }
@@ -120,6 +123,9 @@ async function seedDemo(site: SiteInstallation, preset: PresetManifest, source: 
             meta: [{ lng: language, props }], content: [{ lng: language, nodes: [], plainText: '' }],
         });
         entry._id = id;
+        entry.workspaceId = site.workspaceId || 'default';
+        entry.siteId = site._id;
+        entry.groupId = site.contentGroupId || site._id;
         await source.addEntry(entry);
     }
 }
@@ -132,22 +138,31 @@ export async function importPreset(
     const siteName = input.siteName.trim();
     if (!siteName || siteName.length > 80) throw new Error('Site name must be 1-80 characters');
     const current = await source.findSite();
-    if (current && current.presetId !== preset.id) throw new Error('Another preset is already installed');
+    if (current?.presetId && current.presetId !== preset.id) throw new Error('Another preset is already installed');
     if (current?.status === 'ready') return current;
     if (current?.status === 'importing' && Date.now() - current.updatedAt < 120000) return current;
     const plan = await planImport(preset, source);
     if (plan.models.some((model) => model.action === 'conflict')) throw new Error('Template conflict prevents import');
     let site: SiteInstallation = current || {
-        _id: new ObjectId().toString(), createdAt: Date.now(), updatedAt: Date.now(), slot: 'default',
+        workspaceId: 'default', _id: new ObjectId().toString(), createdAt: Date.now(), updatedAt: Date.now(), slot: 'default',
         name: siteName, presetId: preset.id, presetVersion: preset.version, status: 'importing',
         importError: '', includeDemo: input.includeDemo, demoSeeded: false,
         theme: { ...preset.theme }, models: [],
         pages: preset.pages.map((page) => ({ ...page, status: 'draft' as const })),
     };
+    site.contentGroupId ||= site._id;
     if (!current) site.pages = site.pages.map((page) => pageDraft(site, page.key) as NonNullable<ReturnType<typeof pageDraft>>);
     if (current) {
-        site = { ...current, status: 'importing', importError: '', updatedAt: Date.now() };
-        site = await source.updateSite(site);
+        site = { ...current, ...(current.status === 'empty' ? { name: siteName, presetId: preset.id, presetVersion: preset.version, includeDemo: input.includeDemo, theme: { ...preset.theme }, pages: preset.pages.map(page => ({ ...page, status: 'draft' as const })) } : {}), status: 'importing', importError: '', updatedAt: Date.now() };
+        site.pages = site.pages.map(page => pageDraft(site, page.key)!);
+        if (source.claimSite) {
+            if (!await source.claimSite(site, current.updatedAt)) {
+                const winner = await source.findSite();
+                if (winner?.presetId === preset.id) return winner;
+                throw new Error('Site changed during installation; refresh');
+            }
+            site = (await source.findSite())!;
+        } else site = await source.updateSite(site);
     } else {
         try {
             site = await source.addSite(site);
@@ -162,9 +177,9 @@ export async function importPreset(
     try {
         const templates = new Map<string, Template>();
         for (const model of preset.models) {
-            const existing = await source.findTemplate(templateName(model.key));
+            const existing = await source.findTemplate(templateName(model.key, site.templateNamespace));
             templates.set(model.key, existing ? structuredClone(existing) : TemplateFactory.create({
-                name: templateName(model.key), label: model.label, desc: model.description,
+                name: templateName(model.key, site.templateNamespace), label: model.label, desc: model.description,
                 userId: '__preset', singleEntry: model.singleEntry, props: [],
             }));
         }
@@ -177,6 +192,8 @@ export async function importPreset(
         }
         for (const model of preset.models) {
             const template = templates.get(model.key) as Template;
+            template.workspaceId = site.workspaceId || 'default';
+            template.siteId = site._id;
             const existed = await source.findTemplate(template.name);
             for (const field of model.fields) {
                 if (!template.props.some((prop) => prop.name === field.key)) {

@@ -1,3 +1,4 @@
+import { workspaceContext } from '../workspaces/context';
 import { z } from 'zod';
 import {
     createController,
@@ -115,13 +116,15 @@ export const StorefrontController = createController({
                     if (!parsed.success) {
                         throw errorHandler(HttpStatus.BadRequest, 'Invalid preview request');
                     }
-                    const template = await Repo.template.methods.findByName('product');
+                    const selectedSite = await Repo.siteInstallation.methods.findSelected();
+                    const productId = selectedSite?.models.find(model => model.key === 'product')?.templateId;
+                    const template = productId ? await Repo.template.findById(productId) : await Repo.template.methods.findByName('product');
                     if (!template || parsed.data.entry.templateId !== template._id) {
                         throw errorHandler(HttpStatus.BadRequest, 'Entry is not a product');
                     }
                     const roles = token.payload.rls;
                     const policy = token.payload.props?.policy?.templates.find((item) => item._id === template._id);
-                    if (!roles.includes('ADMIN') && !roles.includes('SUDO') && !policy?.get) {
+                    if (!workspaceContext()?.admin && !roles.includes('ADMIN') && !roles.includes('SUDO') && !policy?.get) {
                         throw errorHandler(HttpStatus.Forbidden, 'Product access denied');
                     }
                     try {
@@ -150,14 +153,14 @@ export const StorefrontController = createController({
                     }
                     const parsed = pagePreviewBodySchema.safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid page preview request');
-                    const site = await Repo.siteInstallation.methods.findDefault();
+                    const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site || site.status !== 'ready') {
                         throw errorHandler(HttpStatus.NotFound, 'No installed site');
                     }
                     const entry = parsed.data.entry as unknown as Entry;
                     const selectedModel = site.models.find((model) => model.templateId === entry.templateId);
                     if (!selectedModel) throw errorHandler(HttpStatus.BadRequest, 'Entry is outside the installed site');
-                    const elevated = token.payload.rls.includes('ADMIN') || token.payload.rls.includes('SUDO');
+                    const elevated = !!workspaceContext()?.admin;
                     const canRead = (templateId: string) => elevated || Boolean(
                         token.payload.props?.policy?.templates.find((item) => item._id === templateId)?.get,
                     );

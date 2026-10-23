@@ -1,3 +1,4 @@
+import { runWithWorkspace, verifiedWorkspace, type WorkspaceContext } from '../../workspaces/context';
 import type {
     FastifyInstance,
     FastifyReply,
@@ -239,7 +240,7 @@ function wrapControllerMethod<
                     reply,
                 });
             }
-            const res = await config.handler({
+            const res = await runWithWorkspace((preRequestHandlerResult as { [verifiedWorkspace]?: WorkspaceContext })[verifiedWorkspace], () => config.handler({
                 controllerName: controller.name,
                 logger,
                 errorHandler,
@@ -247,7 +248,7 @@ function wrapControllerMethod<
                 reply,
                 name,
                 ...preRequestHandlerResult,
-            });
+            }));
             if (typeof res === 'object') {
                 reply.header('Content-Type', 'application/json');
                 return JSON.stringify(res);

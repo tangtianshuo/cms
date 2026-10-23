@@ -13,7 +13,7 @@ export async function flushDomainAudits(siteId: string): Promise<void> {
 }
 export function domainSource(): DomainSource {
     return {
-        findSite: () => Repo.siteInstallation.methods.findDefaultFresh(),
+        findSite: () => Repo.siteInstallation.methods.findSelected(),
         findSiteById: (id) => Repo.siteInstallation.methods.findFresh(id),
         async list(id) { await flushDomainAudits(id); return Repo.siteDomain.methods.list(id); },
         findHost: (host) => Repo.siteDomain.methods.findHost(host),

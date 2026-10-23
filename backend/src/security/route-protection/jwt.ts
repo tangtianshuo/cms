@@ -16,14 +16,10 @@ export class RPJwt {
         tokenAsString?: string | string[],
         roles?: UserRoleName[],
     ): UserJwt {
-        if (roles) {
-            roles.push('ADMIN');
-        } else if (!roles) {
-            roles = ['USER', 'ADMIN'];
-        }
+        const allowedRoles = [...new Set([...(roles || ['USER']), 'ADMIN', 'SUDO'])];
         const token = JWTManager.get<UserCustomPool>({
             token: (tokenAsString + '').replace('Bearer ', ''),
-            roles,
+            roles: allowedRoles,
         });
         if (token instanceof JWTError) {
             throw errorHandler(HttpStatus.Forbidden, token.message);

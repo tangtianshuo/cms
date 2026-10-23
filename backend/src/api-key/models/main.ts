@@ -9,6 +9,7 @@ import {
 import type { ObjectSchema } from '@bcms/selfhosted-utils/object-utility';
 
 export interface ApiKey extends MongoDBEntry {
+    workspaceId?: string;
     userId: string;
     name: string;
     desc: string;
@@ -19,6 +20,7 @@ export interface ApiKey extends MongoDBEntry {
 
 export const ApiKeySchema: ObjectSchema = {
     ...MongoDBEntrySchema,
+    workspaceId: { __type: 'string', __required: false },
     userId: {
         __type: 'string',
         __required: true,

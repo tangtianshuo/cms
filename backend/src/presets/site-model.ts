@@ -3,11 +3,14 @@ import type { MongoDBEntry } from '../_server/modules/mongodb';
 import type { ObjectSchema } from '../_utils/object-utility';
 
 export interface SiteInstallation extends MongoDBEntry {
-    slot: 'default';
+    workspaceId?: string;
+    contentGroupId?: string;
+    templateNamespace?: string;
+    slot: string;
     name: string;
     presetId: string;
     presetVersion: string;
-    status: 'importing' | 'ready' | 'failed';
+    status: 'empty' | 'importing' | 'ready' | 'failed';
     importError: string;
     includeDemo: boolean;
     demoSeeded: boolean;
@@ -53,6 +56,9 @@ export const SiteInstallationSchema: ObjectSchema = {
     _id: { __type: 'string', __required: true },
     createdAt: { __type: 'number', __required: true },
     updatedAt: { __type: 'number', __required: true },
+    workspaceId: { __type: 'string', __required: false },
+    contentGroupId: { __type: 'string', __required: false },
+    templateNamespace: { __type: 'string', __required: false },
     slot: { __type: 'string', __required: true },
     name: { __type: 'string', __required: true },
     presetId: { __type: 'string', __required: true },

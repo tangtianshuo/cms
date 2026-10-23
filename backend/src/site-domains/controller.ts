@@ -10,7 +10,7 @@ export const SiteDomainController = createController({
     methods() {
         const action = (type: 'get' | 'post' | 'delete', path: string,
             execute: (id: string, actor: string, body: unknown) => Promise<unknown>) => createControllerMethod({
-                type, path: `/site-domains${path}`, preRequestHandler: async (args) => { args.reply.header('Cache-Control', 'no-store'); return RP.createJwtCheck(['ADMIN'])(args); },
+                type, path: `/site-domains${path}`, preRequestHandler: async (args) => { args.reply.header('Cache-Control', 'no-store'); return RP.createWorkspaceAdminCheck()(args); },
                 async handler({ request, reply, token, errorHandler }) {
                     reply.header('Cache-Control', 'no-store');
                     try { return await execute((request.params as { id?: string }).id || '', token.payload.userId, request.body); }

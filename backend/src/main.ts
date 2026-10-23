@@ -1,3 +1,4 @@
+import { WorkspaceController } from './workspaces/controller';
 import path from 'path';
 import {
     createController,
@@ -146,6 +147,7 @@ async function main() {
                     };
                 },
             }),
+            WorkspaceController,
             ApiKeyController,
             AuthController,
             EntryController,
@@ -323,6 +325,7 @@ async function main() {
              * Init repos
              * ----------
              */
+            Repo.workspace.init(),
             Repo.user.init(),
             Repo.apiKey.init(),
             Repo.media.init(),

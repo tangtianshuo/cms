@@ -1,3 +1,4 @@
+import { workspaceContext, workspaceId } from '../workspaces/context';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { createController, createControllerMethod, HttpStatus } from '../_server';
@@ -25,9 +26,10 @@ const pageBody = z.object({
     navigation: z.boolean().optional(),
 }).strict();
 
-function importSource(): ImportSource {
+export function importSource(): ImportSource {
     return {
-        findSite: () => Repo.siteInstallation.methods.findDefault(),
+        findSite: () => Repo.siteInstallation.methods.findSelected(),
+        claimSite: (site, expected) => Repo.siteInstallation.methods.saveDraft(site, expected),
         addSite: (site) => Repo.siteInstallation.add(site),
         updateSite: (site) => Repo.siteInstallation.methods.updateImport(site),
         findTemplate: (name) => Repo.template.methods.findByName(name),
@@ -40,7 +42,7 @@ function importSource(): ImportSource {
 }
 
 async function siteView() {
-    const site = await Repo.siteInstallation.methods.findDefaultFresh();
+    const site = await Repo.siteInstallation.methods.findSelected();
     if (!site) return { site: null, checklist: [], pageOptions: {} };
     const templates: Parameters<typeof buildChecklist>[1] = {};
     const entries: Parameters<typeof buildChecklist>[2] = {};
@@ -75,20 +77,20 @@ export const PresetController = createController({
             }),
             plan: createControllerMethod({
                 path: '/plan/:presetId', type: 'get',
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, errorHandler }) {
                     const { presetId } = request.params as { presetId: string };
                     const preset = getPreset(presetId);
                     if (!preset) throw errorHandler(HttpStatus.NotFound, 'Preset not found');
                     return {
                         plan: await planImport(preset, importSource()),
-                        installedSite: await Repo.siteInstallation.methods.findDefault(),
+                        installedSite: await Repo.siteInstallation.methods.findSelected(),
                     };
                 },
             }),
             site: createControllerMethod({
                 path: '/site', type: 'get',
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler() { return siteView(); },
             }),
             previewContext: createControllerMethod({
@@ -96,11 +98,11 @@ export const PresetController = createController({
                 preRequestHandler: RP.createJwtCheck(['USER']),
                 async handler({ request, errorHandler, token }) {
                     const { templateId } = request.params as { templateId: string };
-                    const elevated = token.payload.rls.includes('ADMIN') || token.payload.rls.includes('SUDO');
+                    const elevated = !!workspaceContext()?.admin;
                     const canRead = elevated || Boolean(token.payload.props?.policy?.templates
                         .find((item) => item._id === templateId)?.get);
                     if (!canRead) throw errorHandler(HttpStatus.Forbidden, 'Template access denied');
-                    const site = await Repo.siteInstallation.methods.findDefault();
+                    const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site || site.status !== 'ready') return { site: null };
                     const model = site.models.find((item) => item.templateId === templateId);
                     if (!model) return { site: null };
@@ -118,12 +120,12 @@ export const PresetController = createController({
             }),
             pages: createControllerMethod({
                 path: '/pages/:pageKey', type: 'post',
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, errorHandler }) {
                     const { pageKey } = request.params as { pageKey: string };
                     const parsed = pageBody.safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid page draft');
-                    const site = await Repo.siteInstallation.methods.findDefaultFresh();
+                    const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site || site.status !== 'ready' || !pageDraft(site, pageKey)) {
                         throw errorHandler(HttpStatus.NotFound, 'Page draft not found');
                     }
@@ -143,11 +145,11 @@ export const PresetController = createController({
             }),
             addPage: createControllerMethod({
                 path: '/pages', type: 'post',
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, errorHandler }) {
                     const parsed = pageBody.extend({ blueprintKey: z.string().min(1) }).safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid new page');
-                    const site = await Repo.siteInstallation.methods.findDefaultFresh();
+                    const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site || site.status !== 'ready') throw errorHandler(HttpStatus.NotFound, 'Site not found');
                     try {
                         const key = randomUUID();
@@ -164,10 +166,11 @@ export const PresetController = createController({
             }),
             import: createControllerMethod({
                 path: '/import', type: 'post',
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, errorHandler }) {
                     const parsed = importBody.safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid import request');
+                    if (workspaceId() !== 'default' && !workspaceContext()?.siteId) throw errorHandler(HttpStatus.BadRequest, 'Create and select a site before installation');
                     try {
                         return await importPreset(parsed.data, importSource());
                     } catch (cause) {

@@ -107,6 +107,7 @@ export interface MongoDBRepositoryConfig<Entry extends MongoDBEntry, Methods> {
      * Indexes to create before the repository is ready.
      */
     indexes?: IndexDescription[];
+    beforeIndexes?(collection: Collection<Entry>): Promise<void>;
     /**
      * Custom repository methods.
      */
@@ -176,13 +177,10 @@ export function createMongoDBRepository<
                             cache: self.cache,
                         });
                     }
-                    if (config.indexes?.length) {
-                        intf.createIndexes(config.indexes)
-                            .then(() => next())
-                            .catch((error) => next(error));
-                    } else {
-                        next();
-                    }
+                    (async () => {
+                        await config.beforeIndexes?.(intf);
+                        if (config.indexes?.length) await intf.createIndexes(config.indexes);
+                    })().then(() => next()).catch(error => next(error));
                 },
             };
         },

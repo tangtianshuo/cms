@@ -1,0 +1,113 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { randomUUID } from 'node:crypto';
+import Fastify from 'fastify';
+import fastifyMongo from '@fastify/mongodb';
+import { Repo } from '../repo';
+import { Config } from '../config';
+import { JWTManager, JWTEncode, JWTError } from '../_server/modules/jwt';
+import { createController, createControllerMethod } from '../_server';
+import { RP } from '../security/route-protection/main';
+import { WorkspaceController } from './controller';
+import { PresetController } from '../presets/controller';
+import { ReleaseController } from '../presets/release-controller';
+import { SiteDomainController } from '../site-domains/controller';
+import { domainService } from '../site-domains/source';
+import { publishedDomainSite } from '../storefront/published';
+import { workspaceContext, resolveWorkspaceContext, runWithWorkspace } from './context';
+import type { SiteInstallation } from '../presets/site-model';
+
+test('real Mongo and HTTP workspace membership, independent installations, releases and domain ownership', { skip: !process.env.STOREFRONT_TEST_MONGO, timeout: 30000 }, async context => {
+    const app = Fastify();
+    const database = `cms_workspace_test_${randomUUID().replaceAll('-', '')}`;
+    await app.register(fastifyMongo, { url: process.env.STOREFRONT_TEST_MONGO!, database, forceClose: true });
+    context.after(async () => { await app.mongo.db?.dropDatabase(); await app.close(); });
+    const sites = app.mongo.db!.collection(Repo.siteInstallation.collection);
+    const templates = app.mongo.db!.collection(Repo.template.collection);
+    await sites.createIndex({ slot: 1 }, { name: 'site_slot_unique', unique: true });
+    await templates.createIndex({ name: 1 }, { name: 'template_name_unique', unique: true });
+    await sites.insertOne({ _id: 'legacy-site' as never, slot: 'default', name: 'Legacy', status: 'empty', presetId: '', createdAt: 1, updatedAt: 1, models: [], pages: [] });
+    await templates.insertOne({ _id: 'legacy-template' as never, name: 'custom-legacy', props: [{ id: 'original-prop' }] });
+    for (const repo of [Repo.workspace, Repo.user, Repo.apiKey, Repo.widget, Repo.group, Repo.entryStatus, Repo.templateOrganizer, Repo.siteInstallation, Repo.template, Repo.entry, Repo.language, Repo.media, Repo.storefrontRelease, Repo.storefrontReleaseAudit, Repo.siteDomain, Repo.siteDomainAudit]) {
+        await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify: app, next: (error?: Error) => error ? reject(error) : resolve() } as never));
+    }
+    assert.equal((await templates.findOne({ _id: 'legacy-template' as never }))?.props[0].id, 'original-prop');
+    assert.ok(!(await templates.indexes()).some(index => index.name === 'template_name_unique'));
+    assert.ok(!(await sites.indexes()).some(index => index.name === 'site_slot_unique'));
+    // New compound constraints permit the same model name only across workspaces.
+    await templates.insertOne({ _id: 'other-template' as never, workspaceId: 'other', name: 'custom-legacy' });
+    await assert.rejects(templates.insertOne({ _id: 'duplicate' as never, workspaceId: 'default', name: 'custom-legacy' }), (error: any) => error.code === 11000);
+    JWTManager.setScopes([{ issuer: Config.jwtIssuer, secret: Config.jwtSecret, alg: 'HS256', expIn: 60000 }]);
+    const jwt = (userId: string, roles: string[]) => { const token = JWTManager.create({ issuer: Config.jwtIssuer, userId, roles }); assert.ok(!(token instanceof JWTError)); return `Bearer ${JWTEncode.encode(token)}`; };
+    const admin = jwt('admin', ['ADMIN']); const member = jwt('member', ['USER']); const stranger = jwt('stranger', ['USER']); const viewer = jwt('viewer', ['USER']);
+    app.setErrorHandler((error, _req, reply) => reply.code((error as any).status || 500).send({ message: error.message }));
+    const Echo = createController({ name: 'ScopeTest', path: '/scope', methods: () => ({ read: createControllerMethod({ type: 'get', preRequestHandler: RP.createApiKeyJwtCheck(['USER']), async handler() { await new Promise(r => setTimeout(r, 3)); return workspaceContext(); } }) }) });
+    for (const factory of [WorkspaceController, PresetController, ReleaseController, SiteDomainController, Echo]) { const controller = await factory({} as never); for (const method of await controller.methods(controller)) app.route({ method: method.type.toUpperCase() as any, url: `${controller.path}${method.path}`, handler: method.handler }); }
+    async function request(url: string, authorization = admin, workspace?: string, site?: string, payload?: any, method?: string) {
+        return app.inject({ method: (method || (payload === undefined ? 'GET' : 'POST')) as any, url, headers: { authorization, ...(workspace ? { 'x-bcms-workspace': workspace } : {}), ...(site ? { 'x-bcms-site': site } : {}) }, payload });
+    }
+    async function ok(...args: Parameters<typeof request>) { const result = await request(...args); assert.equal(result.statusCode, 200, result.body); return result.json(); }
+    const empty = await ok('/api/v4/workspaces', admin, undefined, undefined, { name: 'Temporary' });
+    await ok('/api/v4/workspaces/current', admin, empty._id, undefined, { name: 'Renamed' }, 'PUT');
+    assert.equal((await ok('/api/v4/workspaces/current', admin, empty._id)).workspace.name, 'Renamed');
+    await ok('/api/v4/workspaces/current', admin, empty._id, undefined, undefined, 'DELETE');
+    assert.equal((await request('/api/v4/workspaces/current', admin, empty._id)).statusCode, 403);
+    const a = await ok('/api/v4/workspaces', admin, undefined, undefined, { name: 'A' });
+    const b = await ok('/api/v4/workspaces', admin, undefined, undefined, { name: 'B' });
+    await Repo.user.add({ _id: 'member', createdAt: 1, updatedAt: 1 } as never);
+    await Repo.user.add({ _id: 'viewer', createdAt: 1, updatedAt: 1 } as never);
+    await ok('/api/v4/workspaces/current/members/member', admin, a._id, undefined, { role: 'admin' }, 'PUT');
+    await ok('/api/v4/workspaces/current/members/viewer', admin, a._id, undefined, { role: 'viewer' }, 'PUT');
+    assert.equal((await request('/api/v4/workspaces/current/sites', stranger, a._id)).statusCode, 403);
+    assert.equal((await request('/api/v4/workspaces', member, a._id, undefined, { name: 'forbidden' })).statusCode, 403);
+    assert.equal((await request('/api/v4/workspaces/current/sites', viewer, a._id, undefined, { name: 'forbidden' })).statusCode, 403);
+    const one = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'One' });
+    const two = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'Two' });
+    const three = await ok('/api/v4/workspaces/current/sites', admin, b._id, undefined, { name: 'Three' });
+    assert.equal((await request('/api/v4/presets/site', member, a._id, three._id)).statusCode, 403);
+    assert.equal((await request('/api/v4/presets/site', member, b._id, three._id)).statusCode, 403);
+    assert.equal((await request('/api/v4/presets/site', admin, undefined, one._id)).statusCode, 403);
+    const install = (workspace: string, site: string, presetId: string) => ok('/api/v4/presets/import', workspace === a._id ? member : admin, workspace, site, { presetId, siteName: site, includeDemo: true });
+    const installed = await Promise.all([install(a._id, one._id, 'atelier'), install(a._id, two._id, 'market'), install(b._id, three._id, 'atelier')]) as SiteInstallation[];
+    assert.equal(new Set(installed.flatMap(site => site.models.map(model => model.templateId))).size, 15);
+    assert.equal((await Repo.entry.findAll()).length, 15);
+    assert.equal((await ok('/api/v4/presets/import', admin, undefined, undefined, { presetId: 'atelier', siteName: 'Legacy', includeDemo: true }))._id, 'legacy-site');
+    assert.equal((await ok('/api/v4/presets/site')).site._id, 'legacy-site');
+    const publish = (workspace: string, site: string, expectedReleaseId = '') => ok('/api/v4/presets/releases/publish', workspace === a._id ? member : admin, workspace, site, { expectedReleaseId });
+    const concurrentSite = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'Concurrent' });
+    const races = await Promise.all([install(a._id, concurrentSite._id, 'atelier'), install(a._id, concurrentSite._id, 'atelier')]);
+    assert.ok(races.every(site => site._id === concurrentSite._id));
+    assert.equal((await Repo.siteInstallation.methods.findFresh(concurrentSite._id))?.status, 'ready');
+    const first = await publish(a._id, one._id); const second = await publish(a._id, two._id); const third = await publish(b._id, three._id);
+    const next = await publish(a._id, one._id, first.releaseId);
+    await ok('/api/v4/presets/releases/rollback', member, a._id, one._id, { releaseId: first.releaseId, expectedReleaseId: next.releaseId });
+    assert.equal((await Repo.siteInstallation.methods.findFresh(two._id))?.currentReleaseId, second.releaseId);
+    assert.equal((await Repo.siteInstallation.methods.findFresh(three._id))?.currentReleaseId, third.releaseId);
+    assert.equal((await request('/api/v4/presets/releases/rollback', member, a._id, one._id, { releaseId: second.releaseId, expectedReleaseId: first.releaseId })).statusCode, 400);
+    const source = { workspace: Repo.workspace.methods.fresh, site: Repo.siteInstallation.methods.findFresh };
+    const ctxA = await resolveWorkspaceContext({ userId: 'member', roles: ['USER'] }, { workspaceId: a._id, siteId: one._id }, source);
+    const domain = await ok('/api/v4/site-domains', member, a._id, one._id, { hostname: 'workspace-a.test' });
+    await runWithWorkspace(ctxA, async () => { await domainService().check(domain.domain._id, 'member', async () => ({ ownership: true, dns: true, https: true })); await domainService().primary(domain.domain._id, 'member'); });
+    assert.equal((await request(`/api/v4/site-domains/${domain.domain._id}/state`, member, a._id, two._id, { enabled: false })).statusCode, 404);
+    const resolution = await domainService().resolve('workspace-a.test'); assert.equal(resolution?.workspaceId, a._id);
+    const publicSource = { resolve: (host: string) => domainService().resolve(host), findSiteById: Repo.siteInstallation.methods.findFresh, findRelease: (id: string) => Repo.storefrontRelease.findById(id) };
+    assert.equal((await publishedDomainSite('workspace-a.test', publicSource))?.siteId, one._id);
+    const record = (await Repo.storefrontRelease.findById(first.releaseId))!;
+    assert.equal(await publishedDomainSite('workspace-a.test', { ...publicSource, findRelease: async () => ({ ...record, workspaceId: b._id }) }), null);
+    // Verify the durable outbox and publication pointers survive stale editor/import objects.
+    const stale = { ...installed[0], domainAuditOutbox: [], currentReleaseId: undefined, primaryDomainId: undefined };
+    const fresh = (await Repo.siteInstallation.methods.findFresh(one._id))!;
+    await runWithWorkspace(ctxA, async () => { await Repo.siteInstallation.methods.updateImport(stale); const current = (await Repo.siteInstallation.methods.findFresh(one._id))!; assert.equal(await Repo.siteInstallation.methods.saveDraft(stale, current.updatedAt), true); });
+    const retained = (await Repo.siteInstallation.methods.findFresh(one._id))!; assert.equal(retained.currentReleaseId, fresh.currentReleaseId); assert.equal(retained.primaryDomainId, fresh.primaryDomainId);
+    await Repo.apiKey.add({ _id: 'scoped', workspaceId: a._id, secret: 'secret', blocked: false, access: { templates: [], functions: [] } } as never);
+    await Repo.apiKey.add({ _id: 'legacy', secret: 'secret', blocked: false, access: { templates: [], functions: [] } } as never);
+    assert.equal((await ok('/scope/', 'ApiKey scoped.secret', a._id)).workspaceId, a._id);
+    assert.equal((await request('/scope/', 'ApiKey scoped.secret', b._id)).statusCode, 403);
+    assert.equal((await request('/scope/', 'ApiKey scoped.secret')).statusCode, 403);
+    assert.equal((await ok('/scope/', 'ApiKey legacy.secret')).workspaceId, 'default');
+    const parallel = await Promise.all(Array.from({ length: 12 }, (_, i) => ok('/scope/', admin, i % 2 ? a._id : b._id)));
+    assert.ok(parallel.every((scope, i) => scope.workspaceId === (i % 2 ? a._id : b._id)));
+    const listed = await ok('/api/v4/workspaces', member); assert.deepEqual(new Set(listed.items.map((workspace: any) => workspace._id)), new Set(['default', a._id]));
+    await ok('/api/v4/workspaces/current/members/member', admin, a._id, undefined, undefined, 'DELETE');
+    assert.equal((await request('/api/v4/workspaces/current/sites', member, a._id)).statusCode, 403);
+});

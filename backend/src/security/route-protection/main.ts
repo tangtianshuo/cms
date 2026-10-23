@@ -1,3 +1,6 @@
+import { verifyRequestWorkspace } from '../../workspaces/auth';
+import { verifiedWorkspace } from '../../workspaces/context';
+import { HttpStatus } from '../../_server';
 import type { UserJwt } from '@bcms/selfhosted-backend/user/models/main';
 import type { ApiKey } from '@bcms/selfhosted-backend/api-key/models/main';
 import type { ObjectSchema } from '@bcms/selfhosted-utils/object-utility';
@@ -67,14 +70,17 @@ export class RP {
         roles?: UserRoleName[],
     ): ControllerMethodPreRequestHandler<RPJwtCheckResult> {
         return async (data) => {
-            return {
-                token: this.jwt.verify(
-                    data.errorHandler,
-                    data.request.headers.authorization ||
-                        (data.request.query as any).at,
-                    roles,
-                ),
-            };
+            const token = this.jwt.verify(data.errorHandler, data.request.headers.authorization || (data.request.query as any).at, roles);
+            return { token, ...await verifyRequestWorkspace(data, { userId: token.payload.userId, roles: token.payload.rls }) };
+        };
+    }
+
+    static createWorkspaceAdminCheck(): ControllerMethodPreRequestHandler<RPJwtCheckResult> {
+        return async (data) => {
+            const result = await this.createJwtCheck(['USER'])(data);
+            const context = (result as RPJwtCheckResult & { [verifiedWorkspace]: import('../../workspaces/context').WorkspaceContext })[verifiedWorkspace];
+            if (!context.admin) throw data.errorHandler(HttpStatus.Forbidden, 'Workspace administrator required');
+            return result;
         };
     }
 
@@ -103,14 +109,9 @@ export class RP {
             const query = data.request.query as {
                 apiKey?: string;
             };
-            return {
-                apiKey: await this.apiKey.verify(
-                    data.errorHandler,
-                    data.request.method,
-                    data.request.headers.authorization || query.apiKey,
-                    params.instanceId,
-                ),
-            };
+            const apiKey = await this.apiKey.verify(data.errorHandler, data.request.method,
+                data.request.headers.authorization || query.apiKey, params.instanceId);
+            return { apiKey, ...await verifyRequestWorkspace(data, { apiKeyId: apiKey._id, workspaceId: apiKey.workspaceId }) };
         };
     }
 

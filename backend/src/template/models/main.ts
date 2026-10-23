@@ -9,6 +9,8 @@ import {
 import type { ObjectSchema } from '@bcms/selfhosted-utils/object-utility';
 
 export interface Template extends MongoDBEntry {
+    workspaceId?: string;
+    siteId?: string;
     name: string;
     label: string;
     desc: string;
@@ -19,6 +21,8 @@ export interface Template extends MongoDBEntry {
 
 export const TemplateSchema: ObjectSchema = {
     ...MongoDBEntrySchema,
+    workspaceId: { __type: 'string', __required: false },
+    siteId: { __type: 'string', __required: false },
     name: {
         __type: 'string',
         __required: true,

@@ -1,3 +1,5 @@
+import { workspaceFilter, workspaceId, ownerWorkspace } from '../workspaces/context';
+import { migrateTemplateIndex } from '../workspaces/migration';
 import { createMongoDBRepository } from '@bcms/selfhosted-backend/_server/modules/mongodb';
 import {
     type Template,
@@ -24,10 +26,11 @@ export const TemplateRepo = createMongoDBRepository<
     name: 'Template',
     collection: `${Config.storageScope}_templates`,
     schema: TemplateSchema,
+    beforeIndexes: migrateTemplateIndex,
     indexes: [
         {
-            key: { name: 1 },
-            name: 'template_name_unique',
+            key: { workspaceId: 1, name: 1 },
+            name: 'workspace_template_name_unique',
             unique: true,
         },
     ],
@@ -112,11 +115,11 @@ export const TemplateRepo = createMongoDBRepository<
             },
 
             async findByName(name) {
-                const cacheHit = cache.find((e) => e.name === name);
+                const cacheHit = cache.find((e) => e.name === name && ownerWorkspace(e) === workspaceId());
                 if (cacheHit) {
                     return cacheHit;
                 }
-                const result = await mdb.findOne({ name });
+                const result = await mdb.findOne({ ...workspaceFilter(), name });
                 if (result) {
                     cache.set(result);
                 }

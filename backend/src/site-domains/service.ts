@@ -1,3 +1,4 @@
+import { ownerWorkspace } from '../workspaces/context';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 import { isIP } from 'node:net';
@@ -38,7 +39,7 @@ export class DomainService {
     }
     async owned(id: string, site: DomainSite) {
         const record = await this.source.findId(id);
-        if (!record || record.siteId !== site._id) throw new Error('Domain not found');
+        if (!record || (record.siteId !== site._id || ownerWorkspace(record) !== ownerWorkspace(site))) throw new Error('Domain not found');
         return record;
     }
     async audit(siteId: string, domainId: string, actorId: string, operation: string, error = '') {
@@ -57,7 +58,7 @@ export class DomainService {
         const hostname = normalizeHostname(host);
         const txtValue = `cms-verify=${randomBytes(32).toString('hex')}`;
         const now = Date.now();
-        const record: SiteDomain = { _id: randomUUID(), siteId: site._id, hostname, enabled: true,
+        const record: SiteDomain = { _id: randomUUID(), workspaceId: ownerWorkspace(site), siteId: site._id, hostname, enabled: true,
             ownershipStatus: 'pending', connectionStatus: 'unchecked', verificationTokenHash: tokenDigest(txtValue),
             verificationExpiresAt: now + 86400000, verifiedAt: 0, lastCheckedAt: 0, lastSuccessAt: 0,
             dnsReady: false, lastError: '', createdAt: now, updatedAt: now };
@@ -138,9 +139,9 @@ export class DomainService {
         const record = await this.source.findHost(hostname);
         if (!record?.enabled || record.ownershipStatus !== 'verified' || !record.lastSuccessAt) return null;
         const site = await this.source.findSiteById(record.siteId);
-        if (!site?.primaryDomainId) return null;
+        if (!site?.primaryDomainId || ownerWorkspace(record) !== ownerWorkspace(site)) return null;
         const primary = await this.source.findId(site.primaryDomainId);
-        if (!primary?.enabled || primary.siteId !== site._id || primary.ownershipStatus !== 'verified' || !primary.lastSuccessAt) return null;
-        return { siteId: site._id, hostname, primaryHostname: primary.hostname, bindingRevision: site.domainRevision || 0 };
+        if (!primary?.enabled || (primary.siteId !== site._id || ownerWorkspace(primary) !== ownerWorkspace(site)) || primary.ownershipStatus !== 'verified' || !primary.lastSuccessAt) return null;
+        return { workspaceId: ownerWorkspace(site), siteId: site._id, hostname, primaryHostname: primary.hostname, bindingRevision: site.domainRevision || 0 };
     }
 }

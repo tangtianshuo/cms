@@ -1,3 +1,4 @@
+import { workspaceId } from '../workspaces/context';
 import { ObjectId } from 'mongodb';
 import type { Template } from '@bcms/selfhosted-backend/template/models/main';
 
@@ -10,6 +11,7 @@ export class TemplateFactory {
             createdAt: Date.now(),
             updatedAt: Date.now(),
             ...data,
+            workspaceId: workspaceId(),
         };
     }
 }
