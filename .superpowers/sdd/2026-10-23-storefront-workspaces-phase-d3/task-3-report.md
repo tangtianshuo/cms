@@ -98,3 +98,54 @@ Integration exercises old index migration and unchanged legacy site/template/pro
 New `backend/src/workspaces/`: context.ts, auth.ts, repo.ts, controller.ts, migration.ts, context.test.ts, integration.test.ts. Modified central controller/RP/repository initialization hooks; main/Repo registration; API-key schema/factory; Template schema/factory/findByName/index migration; Entry ownership metadata; preset site schema/repo/import/controllers/releases; domain model/service/source/controller/repo ownership; storefront preview/public resolution. Existing integration setup now initializes WorkspaceRepo.
 
 Self-review checked that all preserved D1 operational fields stay excluded, ownership identity cannot be edited by draft data, namespace remains stable across display-name changes, migration builds replacement constraints first, role selectors cannot elevate, raw lookups are limited to documented server identity/public resolution hooks, and default compatibility does not choose a site in another workspace. Added the import claim CAS and empty-workspace resource check during review. No subagents, deployments, pushes, merges, DNS changes, or Docker/service changes were made. UI/types regeneration remains Task 6; comprehensive end-to-end security validation follows Task 4–7.
+
+## Review fix round 1 — durable workspace creation/deletion coordination
+
+The review identified a valid lifecycle race in delete-empty: earlier request authorization did not prevent site insertion after the emptiness checks or deletion. The fix now coordinates those operations through atomic writes on the same Workspace document, without a cross-collection transaction or an expiring lock.
+
+`Workspace` adds optional `lifecycleRevision:number` and `pendingCreations:WorkspaceCreationReservation[]`. A reservation records `{id,kind,resourceId,actorId,createdAt}`. `Repo.workspace.methods.reserveCreation(workspaceId,reservation)` atomically increments the revision and pushes the reservation only if the workspace exists. Site creation holds that durable reservation through the acknowledged insert. `completeCreation(workspaceId,reservationId)` atomically pulls only that reservation and increments the revision; repeated completion is idempotent. Missing fields on old workspace documents remain supported.
+
+Deletion reads an idle workspace/revision, performs the existing emptiness checks, and finishes with `deleteIfIdle(workspaceId,observedRevision)`: a single Mongo deletion matching the exact revision and no pending creation reservations. Default workspace deletion is rejected inside this method as well as at the route. Any reservation acquired after the observed revision invalidates the delete CAS, even if that creation finishes and clears its reservation before the CAS. If deletion commits first, a later reservation cannot match the removed workspace and creation fails before writing the site. Thus only one operation can win the race; deletion conflicts use HTTP409.
+
+### New mandatory Task 4 / Task 5 lifecycle interface
+
+`backend/src/workspaces/lifecycle.ts` exports:
+
+```ts
+withWorkspaceCreation<T>(
+    resource: { kind: string; resourceId: string },
+    action: () => Promise<T>,
+): Promise<T>
+```
+
+Call this **inside the destination's verified workspace context**, after authorization/validation and before the first persisted resource. Await all persistence and cleanup inside `action`; no detached/background writes may continue after the promise settles. New nondefault site creation already uses it. The default workspace bypasses reservations because it can never be deleted. The helper itself does not establish membership authorization.
+
+Task 4 must use this same protocol for all resource creation/movement paths: generic add/addMany, custom Mongo writers, EntryGroup creation, resource import/copy, filesystem-backed resource creation and destination moves. A multi-write operation needs an outer reservation across the whole operation, even when inner repository adds also reserve individually. Task 5 copy acceptance must hold a destination reservation across all staged writes/cleanup. Add their new resource collections to workspace emptiness checks. Do not use the generic Workspace `deleteById` in user-facing deletion or allow callers to replace lifecycle fields.
+
+### Interrupted-write recovery semantics
+
+Reservations **never expire** and are not cleared in `finally`. If `action` rejects, the reservation remains, because a timed-out/rejected client operation does not prove its database/storage write cannot still commit. Failed acquisition never runs the action. If action succeeds but acknowledgement fails, the helper retains the reservation, logs deferred acknowledgement and returns the successful creation result; it does not misreport an already committed resource as failed.
+
+Recovery is an explicit privileged operator/server operation using the recorded workspace/reservation ID and the idempotent `completeCreation` method. There is no new public recovery endpoint or background expiry job. **Before clearing an interrupted reservation, stop/fence the original writer and establish that every already-issued database/storage operation has completed or been cancelled and cannot later commit.** Merely waiting, checking `createdAt`, observing an HTTP error, or seeing a process exit is insufficient if a previously issued write may remain pending on the server. Inspect the recorded resource ID and finish required persistence/cleanup under the retained reservation, then acknowledge it. If safety cannot be established, leave the reservation and deletion blocked. Normal successful acknowledgements can be retried when the caller knows its full write operation completed.
+
+### Evidence
+
+Applied receiving-code-review workflow and first added three deterministic Mongo+HTTP barrier regressions against the previous implementation. After correcting the test fixture's Node type annotation, the actual RED run showed **3/3 failures**, all unsafe HTTP200 where HTTP409 was required:
+
+1. Site creation pauses at insert after acquiring permission; deletion runs while creation is pending.
+2. Creation pauses after reading an existing workspace during authorization; deletion commits before creation reaches reservation/persistence.
+3. Deletion pauses after reading an empty site list; creation fully commits before deletion resumes and attempts its final removal.
+
+All three became GREEN after the durable reservation/revision implementation. Added a fourth real-Mongo regression proving failed creation leaves a durable reservation, aged timestamps and repository restart do not remove it, and explicit repeated recovery allows idle deletion once the test writer is known to have stopped without issuing any insert.
+
+Final focused command from backend:
+
+```sh
+STOREFRONT_ENABLED=true STOREFRONT_DOMAIN_SECRET=test-secret \
+STOREFRONT_TEST_MONGO=mongodb://127.0.0.1:27028 \
+node -r ts-node/register -r tsconfig-paths/register --test \
+src/workspaces/context.test.ts src/workspaces/lifecycle.test.ts src/workspaces/integration.test.ts
+npm run build:noEmit
+```
+
+Result: **7/7 pass, 0 failures, 0 skipped**; backend typecheck passed, `git diff --check` passed. No broad rerun, external DNS or service changes. The existing 64-test baseline remains the prior full-suite evidence. Controller, resolver and Workspace repository were reformatted to normal multiline style as requested by the minor review finding. Self-review confirmed that completion increments the revision, stale authorization cannot bypass reservation acquisition, failure paths retain durable guards, and no TTL/lease can release a still-active writer.
