@@ -43,6 +43,7 @@ export function buildChecklist(
             href: model ? `/d/template/${model.templateId}/entry/${validEntries[0]?._id || 'create'}` : '',
         });
     }
-    steps.push({ key: 'publish', complete: false, available: false, count: 0, href: '' });
+    steps.push({ key: 'publish', complete: !!site.currentReleaseId, available: true,
+        count: site.currentReleaseId ? 1 : 0, href: '/d/presets#releases' });
     return steps;
 }

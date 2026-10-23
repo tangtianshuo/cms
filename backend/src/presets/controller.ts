@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import { createController, createControllerMethod, HttpStatus } from '../_server';
 import { Repo } from '../repo';
 import { RP } from '../security/route-protection/main';
 import { buildChecklist } from './checklist';
 import { getPreset, listPresets } from './catalog';
 import { importPreset, planImport, type ImportSource } from './import';
-import { pageDraft, pageSectionOptions, updatePageDraft } from './pages';
+import { createPageDraft, pageDraft, pageSectionOptions, updatePageDraft } from './pages';
 
 const importBody = z.object({
     presetId: z.string().min(1),
@@ -20,6 +21,8 @@ const pageBody = z.object({
     seoDescription: z.string().max(320),
     sections: z.array(z.string()).min(1),
     entryId: z.string(),
+    enabled: z.boolean().optional(),
+    navigation: z.boolean().optional(),
 }).strict();
 
 function importSource(): ImportSource {
@@ -37,7 +40,7 @@ function importSource(): ImportSource {
 }
 
 async function siteView() {
-    const site = await Repo.siteInstallation.methods.findDefault();
+    const site = await Repo.siteInstallation.methods.findDefaultFresh();
     if (!site) return { site: null, checklist: [], pageOptions: {} };
     const templates: Parameters<typeof buildChecklist>[1] = {};
     const entries: Parameters<typeof buildChecklist>[2] = {};
@@ -120,7 +123,7 @@ export const PresetController = createController({
                     const { pageKey } = request.params as { pageKey: string };
                     const parsed = pageBody.safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid page draft');
-                    const site = await Repo.siteInstallation.methods.findDefault();
+                    const site = await Repo.siteInstallation.methods.findDefaultFresh();
                     if (!site || site.status !== 'ready' || !pageDraft(site, pageKey)) {
                         throw errorHandler(HttpStatus.NotFound, 'Page draft not found');
                     }
@@ -128,11 +131,34 @@ export const PresetController = createController({
                         ? await Repo.entry.findById(parsed.data.entryId) : null;
                     try {
                         const updated = updatePageDraft(site, pageKey, parsed.data, boundEntry);
-                        await Repo.siteInstallation.update(updated);
+                        if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) {
+                            throw new Error('Site changed; refresh before saving');
+                        }
                         return pageDraft(updated, pageKey);
                     } catch (cause) {
                         throw errorHandler(HttpStatus.BadRequest,
                             cause instanceof Error ? cause.message : 'Invalid page draft');
+                    }
+                },
+            }),
+            addPage: createControllerMethod({
+                path: '/pages', type: 'post',
+                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                async handler({ request, errorHandler }) {
+                    const parsed = pageBody.extend({ blueprintKey: z.string().min(1) }).safeParse(request.body);
+                    if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid new page');
+                    const site = await Repo.siteInstallation.methods.findDefaultFresh();
+                    if (!site || site.status !== 'ready') throw errorHandler(HttpStatus.NotFound, 'Site not found');
+                    try {
+                        const key = randomUUID();
+                        const bound = await Repo.entry.findById(parsed.data.entryId);
+                        const updated = createPageDraft(site, key, parsed.data, bound);
+                        if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) {
+                            throw new Error('Site changed; refresh before saving');
+                        }
+                        return pageDraft(updated, key);
+                    } catch (cause) {
+                        throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Could not add page');
                     }
                 },
             }),

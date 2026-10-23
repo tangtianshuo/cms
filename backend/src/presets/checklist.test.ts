@@ -37,5 +37,8 @@ test('checklist links to generated editors and counts only valid entries', () =>
     assert.equal(second.find((step) => step.key === 'product')?.complete, true);
     assert.equal(second.find((step) => step.key === 'product')?.count, 1);
     assert.equal(second.find((step) => step.key === 'product')?.href, '/d/template/product-id/entry/entry-id');
-    assert.equal(second.find((step) => step.key === 'publish')?.available, false);
+    assert.equal(second.find((step) => step.key === 'publish')?.available, true);
+    assert.equal(second.find((step) => step.key === 'publish')?.complete, false);
+    site.currentReleaseId = 'release';
+    assert.equal(buildChecklist(site, {}, {}).find((step) => step.key === 'publish')?.complete, true);
 });

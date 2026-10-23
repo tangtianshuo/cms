@@ -23,6 +23,8 @@ export interface SiteInstallation extends MongoDBEntry {
         fields: Array<{ key: string; propId: string }>;
     }>;
     pages: SitePage[];
+    currentReleaseId?: string;
+    publishedReleaseIds?: string[];
 }
 
 export interface SitePage {
@@ -36,6 +38,9 @@ export interface SitePage {
     seoDescription?: string;
     sections?: string[];
     entryId?: string;
+    blueprintKey?: string;
+    enabled?: boolean;
+    navigation?: boolean;
 }
 
 export const SiteInstallationSchema: ObjectSchema = {
@@ -50,6 +55,8 @@ export const SiteInstallationSchema: ObjectSchema = {
     importError: { __type: 'string', __required: true },
     includeDemo: { __type: 'boolean', __required: true },
     demoSeeded: { __type: 'boolean', __required: true },
+    currentReleaseId: { __type: 'string', __required: false },
+    publishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
     theme: {
         __type: 'object', __required: true,
         __child: {
@@ -95,6 +102,9 @@ export const SiteInstallationSchema: ObjectSchema = {
                 seoDescription: { __type: 'string', __required: false },
                 sections: { __type: 'array', __required: false, __child: { __type: 'string' } },
                 entryId: { __type: 'string', __required: false },
+                blueprintKey: { __type: 'string', __required: false },
+                enabled: { __type: 'boolean', __required: false },
+                navigation: { __type: 'boolean', __required: false },
             },
         },
     },

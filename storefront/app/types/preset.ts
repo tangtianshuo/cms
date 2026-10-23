@@ -25,4 +25,14 @@ export interface PresetPagePreview {
     preset: PresetDemo;
     sections: string[];
     seo: { title: string; description: string };
+    items?: Array<{ label: string; path: string; image: string; description: string; price: string }>;
+}
+
+export interface PublishedPageResponse {
+    releaseId: string;
+    language: string;
+    path: string;
+    content?: PresetPagePreview;
+    redirect?: string;
+    navigation: Array<{ label: string; path: string }>;
 }

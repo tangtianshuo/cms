@@ -14,7 +14,7 @@ test('public catalog lists selectable presets without CMS credentials', async ()
 test('site import and preflight require an admin token', async () => {
     const controller = await PresetController({} as never);
     const methods = await controller.methods(controller);
-    for (const name of ['plan', 'site', 'import', 'pages']) {
+    for (const name of ['plan', 'site', 'import', 'pages', 'addPage']) {
         const method = methods.find((item) => item.name === name);
         assert.ok(method);
         await assert.rejects(

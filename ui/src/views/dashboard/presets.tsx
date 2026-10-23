@@ -5,6 +5,7 @@ import type { ImportPlan } from '@bcms/selfhosted-backend/presets/import';
 import type { SiteInstallation } from '@bcms/selfhosted-backend/presets/site-model';
 import { Button } from '@bcms/selfhosted-ui/components/button';
 import { PageDraftEditor } from '@bcms/selfhosted-ui/components/storefront/page-draft-editor';
+import { ReleaseManager } from '@bcms/selfhosted-ui/components/storefront/release-manager';
 
 interface PresetSummary {
     id: string;
@@ -236,6 +237,7 @@ export const PresetsView = defineComponent({
 
                         {site.value?.status === 'ready' && site.value.presetId === selectedId.value &&
                             <PageDraftEditor site={site.value} pageOptions={pageOptions.value} onSaved={refreshSite} />}
+                        {installed.value && <ReleaseManager onSaved={refreshSite} />}
 
                         {site.value && (
                             <section class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">

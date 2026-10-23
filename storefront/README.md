@@ -1,9 +1,8 @@
 # Storefront phase one
 
-This is the Nuxt product detail storefront for the first delivery phase of
-`docs/architecture/storefront-platform.md`. It serves one development site,
-one language, and `/products/:slug` pages from saved CMS Entries. The CMS
-product editor previews unsaved changes in an iframe at `/preview`.
+This Nuxt storefront supports installed presets, immutable published Releases,
+incremental pages and rollback. It serves one configured site, language and
+host. The CMS previews unsaved changes in an iframe at `/preview`.
 
 ## Setup
 
@@ -28,7 +27,8 @@ With `STOREFRONT_ENABLED=true`, the backend creates the `product` content
 Template on startup if absent. Its fields are `title` (product name), `slug`,
 `price` (number), `description` (text), and `images` (media array). Create a
 product Entry in the CMS, add its values for the configured language, and
-open `http://localhost:3000/products/<slug>`. The product editor shows a live
+open `http://localhost:3000/products/<slug>` if no preset is installed. An
+installed preset requires a published Release. The product editor shows a live
 preview before changes are saved.
 
 ## Phase A storefront presets
@@ -52,23 +52,35 @@ For an isolated backend test, `SERVER_PORT` overrides its default port 8080;
 `DB_URL` and `STORAGE_SCOPE` can select a separate MongoDB database. Existing
 CMS data does not need to be modified to preview a preset.
 
-Imported page definitions remain drafts. Administrators can edit their titles,
-paths, SEO, visible sections, and the homepage Entry binding in `/d/presets`.
-Entry editors can preview unsaved changes with the installed theme using the
-Preview Page button and desktop/mobile widths. This authenticated preview does
-not save the Entry. Draft pages are not public Nuxt routes, and their paths
-return 404. The existing product route remains the only saved-content
-storefront flow. Release-backed public pages, adding pages after publication,
-and rollback belong to phase C.
+## Phase C publication
+
+Imported pages remain drafts until an administrator uses **Check publication
+differences** and **Publish release** in `/d/presets`. Each Release stores rendered
+content, theme, navigation, SEO and routes independently of mutable Entries.
+Saving content does not change the live site. Validation or activation failure
+keeps the previous Release active. History supports rollback and records actors
+and failures; rollback changes public content while retaining current drafts.
+
+Use **Add page** to select an installed blueprint, bind a matching Entry and set
+a path, SEO, sections and navigation. Publish to activate the new URL and sitemap
+entry. Renaming a fixed page produces a 301 from its earlier path. Unchecking
+**Include in next release** retires its URL on publication; navigation and internal
+links must remain valid. An Entry may be shared by dynamic and fixed pages.
+
+Public routes and `/sitemap.xml` read only the active snapshot. Installed sites
+return 404 before first publication and disable the legacy direct product API.
+HTML and publication queries use `Cache-Control: no-store`; external CDN caching
+must respect this policy. Release media retain CMS URLs, so referenced files
+must remain available and be included in operational backups.
 
 ## Behavior and limits
 
 - The theme accepts schema version 1 and three platform sections: gallery,
   information, and description. Field bindings use Template prop IDs. Unknown
   sections and invalid bindings fail validation.
-- Saved Entries are public immediately in phase one. Release snapshots,
-  publish controls, rollback, theme selection, multiple languages/sites, and
-  custom domains belong to later phases.
+- Installed presets use Release publication. The legacy saved-product route is
+  available only without an installation. Multiple sites/languages/domains, theme
+  migration and CDN cache-purge adapters remain later phases.
 - `/preview` has no draft data of its own. An authenticated CMS preview API
   maps the unsaved Entry; the editor posts that result to the iframe using the
   configured origin. The preview route has `noindex` and `no-store` headers.
@@ -81,3 +93,9 @@ and rollback belong to phase C.
 Run `npm test --prefix storefront`, `npm run typecheck --prefix storefront`,
 and `npm run build --prefix storefront`. Backend and UI checks are
 `npm run build:noEmit --prefix backend` and `npm run type-check --prefix ui`.
+
+Database/SSR coverage: `backend/src/presets/release-integration.test.ts`.
+Deployment lifecycle coverage: `backend/test/storefront-deployment.test.mjs`,
+using `STOREFRONT_E2E_CMS`, `STOREFRONT_E2E_ORIGIN`, `STOREFRONT_E2E_EMAIL` and
+`STOREFRONT_E2E_PASSWORD`. Use a fresh disposable database with an English language
+and test administrator. See `docs/verification/storefront-phase-c.md` for results.

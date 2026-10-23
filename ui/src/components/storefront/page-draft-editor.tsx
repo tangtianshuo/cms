@@ -1,7 +1,7 @@
 import { computed, defineComponent, onMounted, ref, watch, type PropType } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { EntryLite } from '@bcms/selfhosted-backend/entry/models/main';
-import type { SiteInstallation } from '@bcms/selfhosted-backend/presets/site-model';
+import type { SiteInstallation, SitePage } from '@bcms/selfhosted-backend/presets/site-model';
 import { Button } from '@bcms/selfhosted-ui/components/button';
 
 interface PageOptions { allowed: string[]; required: string }
@@ -12,6 +12,8 @@ interface PageForm {
     seoDescription: string;
     sections: string[];
     entryId: string;
+    enabled: boolean;
+    navigation: boolean;
 }
 
 export const PageDraftEditor = defineComponent({
@@ -24,34 +26,45 @@ export const PageDraftEditor = defineComponent({
         const { t } = useI18n();
         const sdk = window.bcms.sdk;
         const selectedKey = ref(props.site.pages[0]?.key || '');
-        const currentPage = computed(() => props.site.pages.find((page) => page.key === selectedKey.value));
-        const options = computed(() => props.pageOptions[selectedKey.value]);
-        const form = ref<PageForm>({ title: '', path: '', seoTitle: '', seoDescription: '', sections: [], entryId: '' });
-        const homeEntries = ref<EntryLite[]>([]);
+        const creating = ref(false);
+        const blueprintKey = ref('content');
+        const blueprints = computed(() => props.site.pages.filter((page) => !page.blueprintKey && page.layout !== 'home'));
+        const currentPage = computed(() => props.site.pages.find((page) =>
+            page.key === (creating.value ? blueprintKey.value : selectedKey.value)));
+        const options = computed(() => props.pageOptions[currentPage.value?.key || '']);
+        const form = ref<PageForm>({ title: '', path: '', seoTitle: '', seoDescription: '', sections: [],
+            entryId: '', enabled: true, navigation: true });
+        const entries = ref<EntryLite[]>([]);
+        const bindingEntries = computed(() => {
+            const model = props.site.models.find((item) => item.key === currentPage.value?.modelKey);
+            return entries.value.filter((entry) => entry.templateId === model?.templateId);
+        });
         const saving = ref(false);
         const error = ref('');
 
-        watch([() => props.site, selectedKey], () => {
+        watch([() => props.site, selectedKey, creating, blueprintKey], () => {
             const page = currentPage.value;
             if (!page) return;
             form.value = {
-                title: page.title, path: page.path,
-                seoTitle: page.seoTitle ?? page.title,
-                seoDescription: page.seoDescription ?? '',
+                title: creating.value ? '' : page.title, path: creating.value ? '' : page.path,
+                seoTitle: creating.value ? '' : page.seoTitle ?? page.title,
+                seoDescription: creating.value ? '' : page.seoDescription ?? '',
                 sections: [...(page.sections ?? options.value?.allowed ?? [])],
-                entryId: page.entryId ?? '',
+                entryId: creating.value ? '' : page.entryId ?? '',
+                enabled: creating.value ? true : page.enabled ?? true,
+                navigation: creating.value ? true : page.navigation ?? !page.path.includes(':'),
             };
             error.value = '';
         }, { immediate: true });
 
         onMounted(async () => {
-            const home = props.site.models.find((model) => model.key === 'home');
-            if (!home) return;
             try {
-                await sdk.entry.getAllLiteByTemplateId({ templateId: home.templateId });
-                homeEntries.value = sdk.store.entryLite.findMany((entry) => entry.templateId === home.templateId);
+                for (const model of props.site.models) {
+                    await sdk.entry.getAllLiteByTemplateId({ templateId: model.templateId });
+                }
+                entries.value = sdk.store.entryLite.findMany((entry) => props.site.models.some((model) => model.templateId === entry.templateId));
             } catch {
-                homeEntries.value = [];
+                entries.value = [];
             }
         });
 
@@ -66,11 +79,13 @@ export const PageDraftEditor = defineComponent({
             saving.value = true;
             error.value = '';
             try {
-                await sdk.send({
-                    url: `/api/v4/presets/pages/${encodeURIComponent(currentPage.value.key)}`,
-                    method: 'POST', data: form.value,
+                const result = await sdk.send<SitePage>({
+                    url: creating.value ? '/api/v4/presets/pages' : `/api/v4/presets/pages/${encodeURIComponent(currentPage.value.key)}`,
+                    method: 'POST', data: creating.value ? { ...form.value, blueprintKey: blueprintKey.value } : form.value,
                 });
                 await props.onSaved();
+                creating.value = false;
+                selectedKey.value = result.key;
                 window.bcms.notification.success(t('presets.pageSaved'));
             } catch (cause) {
                 error.value = (cause as Error).message || t('presets.pageSaveError');
@@ -82,17 +97,26 @@ export const PageDraftEditor = defineComponent({
         const inputClass = 'mt-1 w-full border border-gray bg-white px-3 py-2 text-sm text-dark dark:bg-darkGray dark:text-white';
         return () => <section class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">
             <h2 class="text-lg font-semibold">{t('presets.pagesTitle')}</h2>
+            <p class="mt-2 text-sm opacity-70">{t('presets.pageDraftHint')}</p>
+            <Button class="mt-4" disabled={saving.value} onClick={() => { creating.value = true; }}>{t('presets.addPage')}</Button>
             <div class="mt-5 grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
                 <div class="border-y border-gray/60 dark:border-gray">
                     {props.site.pages.map((page) => <button type="button"
                         aria-current={selectedKey.value === page.key ? 'page' : undefined}
-                        onClick={() => { selectedKey.value = page.key; }}
+                        onClick={() => { creating.value = false; selectedKey.value = page.key; }}
                         class={`block w-full border-b border-gray/40 px-3 py-3 text-left text-sm last:border-b-0 ${selectedKey.value === page.key ? 'bg-green/10 font-semibold dark:bg-yellow/10' : ''}`}>
                         <span class="block">{page.title}</span>
                         <span class="block truncate text-xs opacity-60">{page.path}</span>
                     </button>)}
                 </div>
                 {currentPage.value && <div class="grid max-w-3xl gap-4 sm:grid-cols-2">
+                    {creating.value && <label class="text-sm sm:col-span-2">
+                        {t('presets.blueprint')}
+                        <select class={inputClass} value={blueprintKey.value}
+                            onChange={(event) => { blueprintKey.value = (event.target as HTMLSelectElement).value; }}>
+                            {blueprints.value.map((page) => <option value={page.key}>{page.title}</option>)}
+                        </select>
+                    </label>}
                     <label class="text-sm">
                         {t('presets.pageTitle')}
                         <input class={inputClass} value={form.value.title} maxlength={120}
@@ -101,7 +125,7 @@ export const PageDraftEditor = defineComponent({
                     <label class="text-sm">
                         {t('presets.pagePath')}
                         <input class={inputClass} value={form.value.path} maxlength={160}
-                            disabled={currentPage.value.path === '/' || currentPage.value.path.includes(':')}
+                            disabled={!creating.value && (currentPage.value.path === '/' || currentPage.value.path.includes(':'))}
                             onInput={(event) => { form.value.path = (event.target as HTMLInputElement).value; }} />
                     </label>
                     <label class="text-sm">
@@ -109,16 +133,28 @@ export const PageDraftEditor = defineComponent({
                         <input class={inputClass} value={form.value.seoTitle} maxlength={120}
                             onInput={(event) => { form.value.seoTitle = (event.target as HTMLInputElement).value; }} />
                     </label>
-                    {currentPage.value.key === 'home' && <label class="text-sm">
-                        {t('presets.homeEntry')}
+                    {(creating.value || currentPage.value.key === 'home' || currentPage.value.blueprintKey) && <label class="text-sm">
+                        {t('presets.boundEntry')}
                         <select class={inputClass} value={form.value.entryId}
                             onChange={(event) => { form.value.entryId = (event.target as HTMLSelectElement).value; }}>
                             <option value="">{t('presets.noEntry')}</option>
-                            {homeEntries.value.map((entry) => <option value={entry._id}>
+                            {bindingEntries.value.map((entry) => <option value={entry._id}>
                                 {entry.info[0]?.title || entry._id}
                             </option>)}
                         </select>
                     </label>}
+                    <div class="flex flex-wrap gap-5 text-sm sm:col-span-2">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" checked={form.value.enabled} disabled={currentPage.value.layout === 'home'}
+                                onChange={(event) => { form.value.enabled = (event.target as HTMLInputElement).checked; }} />
+                            {t('presets.pageEnabled')}
+                        </label>
+                        {(creating.value || !currentPage.value.path.includes(':')) && <label class="flex items-center gap-2">
+                            <input type="checkbox" checked={form.value.navigation}
+                                onChange={(event) => { form.value.navigation = (event.target as HTMLInputElement).checked; }} />
+                            {t('presets.inNavigation')}
+                        </label>}
+                    </div>
                     <label class="text-sm sm:col-span-2">
                         {t('presets.seoDescription')}
                         <textarea class={`${inputClass} min-h-[85px]`} value={form.value.seoDescription} maxlength={320}

@@ -3,7 +3,7 @@ import test from 'node:test';
 import type { Entry } from '../entry/models/main';
 import { getPreset } from './catalog';
 import type { SiteInstallation } from './site-model';
-import { pageDraft, updatePageDraft } from './pages';
+import { createPageDraft, pageDraft, updatePageDraft } from './pages';
 
 function site(): SiteInstallation {
     const preset = getPreset('atelier');
@@ -71,4 +71,26 @@ test('fixed product route still allows SEO and section edits', () => {
     });
     assert.equal(pageDraft(updated, 'product')?.seoTitle, 'Product details');
     assert.deepEqual(pageDraft(updated, 'product')?.sections, ['information', 'description']);
+});
+
+test('additional pages reuse installed blueprints and bind only their own model', () => {
+    const installed = site();
+    installed.models.push({ key: 'content-page', templateId: 'content-template', fields: [] });
+    const bound = { _id: 'delivery', templateId: 'content-template' } as Entry;
+    const input = { blueprintKey: 'content', title: 'Delivery', path: '/delivery',
+        seoTitle: 'Delivery information', seoDescription: 'Shipping details',
+        sections: ['story'], entryId: 'delivery' };
+    const updated = createPageDraft(installed, 'delivery-page', input, bound);
+    assert.equal(updated.pages.length, installed.pages.length + 1);
+    assert.equal(pageDraft(updated, 'delivery-page')?.entryId, 'delivery');
+    const edited = updatePageDraft(updated, 'delivery-page', {
+        ...input, title: 'Shipping', path: '/shipping', enabled: false, navigation: false,
+    }, bound);
+    assert.equal(pageDraft(edited, 'delivery-page')?.enabled, false);
+    assert.equal(pageDraft(edited, 'delivery-page')?.status, 'draft');
+    assert.throws(() => createPageDraft(installed, 'wrong', input,
+        { ...bound, templateId: 'outside-site' }), /binding/i);
+    assert.throws(() => createPageDraft(updated, 'delivery-page', input, bound), /key/i);
+    assert.throws(() => createPageDraft(installed, 'reserved', { ...input, path: '/sitemap.xml' }, bound), /reserved/i);
+    assert.throws(() => createPageDraft(installed, 'collision', { ...input, path: '/pages/test' }, bound), /conflict/i);
 });

@@ -58,6 +58,7 @@ import { registerMcpEndpoint } from '@bcms/selfhosted-backend/mcp/main';
 import { StorefrontController } from '@bcms/selfhosted-backend/storefront/controller';
 import { ensureProductTemplate } from '@bcms/selfhosted-backend/storefront/setup';
 import { PresetController } from '@bcms/selfhosted-backend/presets/controller';
+import { ReleaseController } from '@bcms/selfhosted-backend/presets/release-controller';
 
 async function main() {
     await createServer({
@@ -162,6 +163,7 @@ async function main() {
             PluginController,
             StorefrontController,
             PresetController,
+            ReleaseController,
         ],
 
         middleware: [IPMiddleware, UIProxy],
@@ -331,6 +333,8 @@ async function main() {
             Repo.entryStatus.init(),
             Repo.backup.init(),
             Repo.siteInstallation.init(),
+            Repo.storefrontRelease.init(),
+            Repo.storefrontReleaseAudit.init(),
             MigrationRepo.init(),
             // @inject-repo
 

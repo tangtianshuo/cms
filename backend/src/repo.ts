@@ -10,6 +10,7 @@ import { EntryStatusRepo } from '@bcms/selfhosted-backend/entry-status/repo';
 import { TemplateOrganizerRepo } from '@bcms/selfhosted-backend/template-organizer/repo';
 import { BackupRepo } from '@bcms/selfhosted-backend/backup/repo';
 import { SiteInstallationRepo } from '@bcms/selfhosted-backend/presets/site-repo';
+import { ReleaseRepo, ReleaseAuditRepo } from '@bcms/selfhosted-backend/presets/release-repo';
 
 export class Repo {
     static readonly user = UserRepo;
@@ -24,4 +25,6 @@ export class Repo {
     static readonly entryStatus = EntryStatusRepo;
     static readonly backup = BackupRepo;
     static readonly siteInstallation = SiteInstallationRepo;
+    static readonly storefrontRelease = ReleaseRepo;
+    static readonly storefrontReleaseAudit = ReleaseAuditRepo;
 }

@@ -10,6 +10,7 @@ import { Config } from '../config';
 import type { Entry } from '../entry/models/main';
 import { getProductPage, previewProductPage, type DevelopmentSite } from './service';
 import { previewPresetPage } from './preset-preview';
+import { publishedSite } from './published';
 
 const previewBodySchema = z.object({
     entry: z.object({
@@ -43,12 +44,37 @@ export const StorefrontController = createController({
     path: '/api/v4/storefront',
     methods() {
         return {
+            published: createControllerMethod({
+                type: 'get', path: '/published',
+                async handler({ request, reply, errorHandler }) {
+                    reply.header('Cache-Control', 'no-store');
+                    if (!Config.storefrontEnabled) throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
+                    const host = request.headers['x-storefront-host'];
+                    const snapshot = await publishedSite(typeof host === 'string' ? host : '', Config.storefrontHost, {
+                        findSite: () => Repo.siteInstallation.methods.findDefaultFresh(),
+                        findRelease: (id) => Repo.storefrontRelease.findById(id),
+                    });
+                    if (!snapshot) throw errorHandler(HttpStatus.NotFound, 'Published site not found');
+                    const path = (request.query as { path?: unknown }).path;
+                    if (path === undefined) return { releaseId: snapshot.releaseId, language: snapshot.language,
+                        paths: snapshot.pages.map((page) => page.path) };
+                    if (typeof path !== 'string') throw errorHandler(HttpStatus.BadRequest, 'Invalid path');
+                    const page = snapshot.pages.find((item) => item.path === path);
+                    const redirect = snapshot.redirects.find((item) => item.from === path);
+                    if (!page && !redirect) throw errorHandler(HttpStatus.NotFound, 'Published page not found');
+                    return { releaseId: snapshot.releaseId, language: snapshot.language,
+                        path, content: page?.content, redirect: redirect?.to, navigation: snapshot.navigation };
+                },
+            }),
             product: createControllerMethod({
                 type: 'get',
                 path: '/products/:slug',
                 async handler({ request, reply, errorHandler }) {
                     if (!Config.storefrontEnabled) {
                         throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
+                    }
+                    if (await Repo.siteInstallation.methods.findDefaultFresh()) {
+                        throw errorHandler(HttpStatus.NotFound, 'Use the published storefront route');
                     }
                     const { slug } = request.params as { slug: string };
                     const host = request.headers['x-storefront-host'];
