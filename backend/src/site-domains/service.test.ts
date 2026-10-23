@@ -8,6 +8,7 @@ function memory() {
     const records = new Map<string, SiteDomain>();
     const audit: unknown[] = [];
     let locked = false;
+    let failPrimaryCommit = false;
     const source: DomainSource = {
         findSite: async () => ({ ...site }), findSiteById: async (id) => id === site._id ? { ...site } : null,
         list: async (id) => [...records.values()].filter((item) => item.siteId === id),
@@ -16,13 +17,13 @@ function memory() {
         insert: async (record) => { if ([...records.values()].some((item) => item.hostname === record.hostname)) throw Object.assign(new Error('duplicate'), { code: 11000 }); records.set(record._id, structuredClone(record)); },
         replace: async (record, expected) => { if (records.get(record._id)?.updatedAt !== expected) return false; records.set(record._id, structuredClone(record)); return true; },
         remove: async (id) => { records.delete(id); },
-        setPrimary: async (_site, id) => { site.primaryDomainId = id; site.domainRevision++; },
+        setPrimary: async (_site, id, event) => { if (failPrimaryCommit) throw new Error('Mandatory audit storage unavailable'); audit.push(structuredClone(event)); site.primaryDomainId = id; site.domainRevision++; },
         touch: async () => { site.domainRevision++; },
         audit: async (event) => { audit.push(event); },
         withSiteLock: async (_id, action) => { if (locked) throw new Error('Domain changed; reload'); locked = true; try { return await action(); } finally { locked = false; } },
     };
     const service = new DomainService(source, { secret: 'test-secret', entryHost: 'edge.example.com', entryIp: '', localHost: 'localhost:3000' });
-    return { service, source, records, site, audit };
+    return { service, source, records, site, audit, failPrimaryAudit: () => { failPrimaryCommit = true; } };
 }
 
 test('normalizes IDNA, case and trailing dot, rejects URLs, ports, IPs and invalid labels', () => {
@@ -105,4 +106,49 @@ test('failed recheck keeps established domain routing and last success while ret
     assert.equal(failed.lastSuccessAt, lastSuccessAt);
     assert.equal((await service.resolve('live.test'))?.hostname, 'live.test');
     await assert.rejects(() => service.check(record._id, 'admin', async () => ({ ownership: true, dns: true, https: true })), /rate limited/);
+});
+
+test('a failed mandatory primary audit leaves the established primary unchanged', async () => {
+    const { service, site, failPrimaryAudit } = memory();
+    const first = await service.add('first.test', 'admin');
+    const replacement = await service.add('replacement.test', 'admin');
+    for (const item of [first, replacement]) await service.check(item.domain._id, 'admin', async () => ({ ownership: true, dns: true, https: true }));
+    await service.primary(first.domain._id, 'admin');
+    const revision = site.domainRevision;
+    failPrimaryAudit();
+    await assert.rejects(() => service.primary(replacement.domain._id, 'admin'), /audit/i);
+    assert.equal(site.primaryDomainId, first.domain._id);
+    assert.equal(site.domainRevision, revision);
+});
+
+test('migration retry completes an interrupted initial promotion and preserves an established primary', async () => {
+    const { migrateConfiguredDomain } = await import('./migration');
+    const { service, source, site } = memory();
+    const ready = await service.add('existing.test', 'operator');
+    await service.check(ready.domain._id, 'operator', async () => ({ ownership: true, dns: true, https: true }));
+    assert.equal(site.primaryDomainId, '');
+    await migrateConfiguredDomain(service, 'existing.test', 'operator');
+    assert.equal(site.primaryDomainId, ready.domain._id);
+    const other = await service.add('other.test', 'operator');
+    await service.check(other.domain._id, 'operator', async () => ({ ownership: true, dns: true, https: true }));
+    await migrateConfiguredDomain(service, 'other.test', 'operator');
+    assert.equal(site.primaryDomainId, ready.domain._id);
+    assert.equal((await source.findId(other.domain._id))?.ownershipStatus, 'verified');
+});
+
+test('initial-only migration promotion preserves a primary established during its earlier reads', async () => {
+    const { migrateConfiguredDomain } = await import('./migration');
+    const { service, source, site } = memory();
+    const first = await service.add('first.test', 'admin');
+    const candidate = await service.add('candidate.test', 'admin');
+    for (const item of [first, candidate]) await service.check(item.domain._id, 'admin', async () => ({ ownership: true, dns: true, https: true }));
+    const find = source.findSite;
+    let reads = 0;
+    source.findSite = async () => {
+        const snapshot = await find();
+        if (reads++ === 0) site.primaryDomainId = first.domain._id;
+        return snapshot;
+    };
+    await migrateConfiguredDomain(service, candidate.domain.hostname, 'operator');
+    assert.equal(site.primaryDomainId, first.domain._id);
 });

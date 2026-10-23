@@ -1,3 +1,4 @@
+import type { DomainPrimaryAudit } from '../site-domains/model';
 import type { MongoDBEntry } from '../_server/modules/mongodb';
 import type { ObjectSchema } from '../_utils/object-utility';
 
@@ -23,6 +24,7 @@ export interface SiteInstallation extends MongoDBEntry {
         fields: Array<{ key: string; propId: string }>;
     }>;
     pages: SitePage[];
+    domainAuditOutbox?: DomainPrimaryAudit[];
     primaryDomainId?: string;
     domainRevision?: number;
     domainMutationToken?: string;
@@ -59,6 +61,11 @@ export const SiteInstallationSchema: ObjectSchema = {
     importError: { __type: 'string', __required: true },
     includeDemo: { __type: 'boolean', __required: true },
     demoSeeded: { __type: 'boolean', __required: true },
+    domainAuditOutbox: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
+        _id: { __type: 'string', __required: true }, createdAt: { __type: 'number', __required: true }, updatedAt: { __type: 'number', __required: true },
+        siteId: { __type: 'string', __required: true }, domainId: { __type: 'string', __required: true }, actorId: { __type: 'string', __required: true },
+        operation: { __type: 'string', __required: true }, outcome: { __type: 'string', __required: true }, error: { __type: 'string', __required: true }, bindingRevision: { __type: 'number', __required: true },
+    } } },
     primaryDomainId: { __type: 'string', __required: false },
     domainRevision: { __type: 'number', __required: false },
     domainMutationToken: { __type: 'string', __required: false },

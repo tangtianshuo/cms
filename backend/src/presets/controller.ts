@@ -29,7 +29,7 @@ function importSource(): ImportSource {
     return {
         findSite: () => Repo.siteInstallation.methods.findDefault(),
         addSite: (site) => Repo.siteInstallation.add(site),
-        updateSite: (site) => Repo.siteInstallation.update(site),
+        updateSite: (site) => Repo.siteInstallation.methods.updateImport(site),
         findTemplate: (name) => Repo.template.methods.findByName(name),
         addTemplate: (template) => Repo.template.add(template),
         updateTemplate: (template) => Repo.template.update(template),

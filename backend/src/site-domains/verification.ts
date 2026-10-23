@@ -4,6 +4,13 @@ import { isIP, BlockList } from 'node:net';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { challengeSignature, normalizeHostname, tokenDigest, type CheckResult } from './service';
 
+const specialV4 = new BlockList();
+for (const [address, prefix] of [
+    ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+    ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+    ['192.88.99.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24],
+    ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
+] as const) specialV4.addSubnet(address, prefix, 'ipv4');
 const globalV6 = new BlockList();
 globalV6.addSubnet('2000::', 3, 'ipv6');
 const specialV6 = new BlockList();
@@ -12,13 +19,7 @@ for (const [address, prefix] of [['2001::', 23], ['2001:db8::', 32], ['2002::', 
 // Accept only global unicast destinations. DNS is resolved once and the selected
 // validated IP is pinned to the TLS socket; SNI and certificate checks use hostname.
 export function publicAddress(ip: string): boolean {
-    if (isIP(ip) === 4) {
-        const [a, b, c] = ip.split('.').map(Number);
-        return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
-            (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
-            (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 168 || b === 0 || (b === 88 && c === 99))) ||
-            (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) || (a === 203 && b === 0 && c === 113));
-    }
+    if (isIP(ip) === 4) return !specialV4.check(ip, 'ipv4');
     if (isIP(ip) !== 6) return false;
     // All special IPv6 ranges (including mapped IPv4, NAT64, ULA and link local)
     // lie outside 2000::/3; additionally exclude documentation and Teredo/6to4.

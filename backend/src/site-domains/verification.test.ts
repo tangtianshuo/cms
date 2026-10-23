@@ -40,3 +40,8 @@ test('DNS timeout is bounded and keeps ownership independent of connection', { t
     assert.match(result.error!, /timed out/i);
     assert.ok(Date.now() - started < 5500);
 });
+
+test('IPv4 exclusions are precise CIDRs and retain adjacent public addresses', () => {
+    for (const ip of ['192.0.0.1', '192.0.0.255', '192.0.2.1', '192.0.2.255', '192.88.99.1', '198.18.0.1', '198.19.255.255']) assert.equal(publicAddress(ip), false, ip);
+    for (const ip of ['192.0.1.1', '192.0.3.1', '192.0.255.255', '192.1.0.1', '192.88.98.1', '192.88.100.1', '198.17.255.255', '198.20.0.1']) assert.equal(publicAddress(ip), true, ip);
+});

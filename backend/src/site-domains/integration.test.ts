@@ -14,7 +14,7 @@ import { JWTManager, JWTEncode, JWTError } from '../_server/modules/jwt';
 import { Config } from '../config';
 import { SiteDomainController } from './controller';
 import { StorefrontController } from '../storefront/controller';
-import { domainService } from './source';
+import { domainService, flushDomainAudits } from './source';
 import type { SiteInstallation } from '../presets/site-model';
 
 test('real Mongo unique domain ownership, primary concurrency, HTTP trust and immutable publication', {
@@ -130,6 +130,47 @@ test('real Mongo unique domain ownership, primary concurrency, HTTP trust and im
         assert.equal((await gatewayFetch(`${origin}/sitemap.xml`, { headers: gatewayHeaders(primary.hostname) })).status, 301);
         await service.primary(primary._id, 'admin');
     }
+    // Mongo validators reject the actual durable audit write, exercising the
+    // same single-document commit as the pointer without replica-set transactions.
+    const beforeFailedAudit = (await Repo.siteInstallation.methods.findFresh('site'))!;
+    await fastify.mongo.db!.command({ collMod: Repo.siteInstallation.collection,
+        validator: { $nor: [{ 'domainAuditOutbox.domainId': alias._id }] }, validationAction: 'error' });
+    const failedPromotion = await fastify.inject({ method: 'POST', url: `/api/v4/site-domains/${alias._id}/primary`, headers: { authorization }, payload: {} });
+    assert.equal(failedPromotion.statusCode, 400, failedPromotion.body);
+    const afterFailedAudit = (await Repo.siteInstallation.methods.findFresh('site'))!;
+    assert.equal(afterFailedAudit.primaryDomainId, primary._id);
+    assert.equal(afterFailedAudit.domainRevision, beforeFailedAudit.domainRevision);
+    assert.deepEqual(afterFailedAudit.domainAuditOutbox, beforeFailedAudit.domainAuditOutbox);
+    await fastify.mongo.db!.command({ collMod: Repo.siteInstallation.collection, validator: {} });
+
+    await fastify.mongo.db!.command({ collMod: Repo.siteDomainAudit.collection,
+        validator: { $nor: [{ operation: 'primary', domainId: alias._id }] }, validationAction: 'error' });
+    const projectionLog = context.mock.method(console, 'error', () => undefined);
+    const committedPromotion = await fastify.inject({ method: 'POST', url: `/api/v4/site-domains/${alias._id}/primary`, headers: { authorization }, payload: {} });
+    assert.equal(committedPromotion.statusCode, 200, committedPromotion.body);
+    const durableSite = (await Repo.siteInstallation.methods.findFresh('site'))!;
+    assert.equal(durableSite.primaryDomainId, alias._id);
+    assert.equal(durableSite.domainAuditOutbox?.length, 1);
+    const durableEvent = durableSite.domainAuditOutbox![0];
+    assert.equal(durableEvent.domainId, alias._id);
+    assert.equal(durableEvent.siteId, 'site');
+    assert.equal(durableEvent.actorId, 'domain-admin');
+    assert.equal(durableEvent.operation, 'primary');
+    assert.equal(durableEvent.outcome, 'committed');
+    assert.equal(durableEvent.bindingRevision, durableSite.domainRevision);
+    assert.equal((await Repo.siteDomainAudit.findAll()).filter((event) => event._id === durableEvent._id).length, 0);
+    assert.equal(await Repo.siteInstallation.methods.saveDraft({ ...durableSite, name: 'Edit with stale outbox', domainAuditOutbox: [] }, durableSite.updatedAt), true);
+    assert.equal((await Repo.siteInstallation.methods.findFresh('site'))?.domainAuditOutbox?.[0]._id, durableEvent._id);
+    await Repo.siteInstallation.methods.updateImport({ ...durableSite, name: 'Import resume with stale outbox', domainAuditOutbox: [] });
+    assert.equal((await Repo.siteInstallation.methods.findFresh('site'))?.domainAuditOutbox?.[0]._id, durableEvent._id);
+    assert.equal((await Repo.siteInstallation.methods.findFresh('site'))?.primaryDomainId, alias._id);
+    await fastify.mongo.db!.command({ collMod: Repo.siteDomainAudit.collection, validator: {} });
+    await Promise.all([flushDomainAudits('site'), flushDomainAudits('site')]);
+    await flushDomainAudits('site');
+    assert.equal((await Repo.siteInstallation.methods.findFresh('site'))?.domainAuditOutbox?.length, 0);
+    assert.equal((await Repo.siteDomainAudit.findAll()).filter((event) => event._id === durableEvent._id).length, 1);
+    projectionLog.mock.restore();
+    await service.primary(primary._id, 'admin');
     await service.remove(alias._id, 'admin');
     assert.equal((await publicPage(alias.hostname, Config.storefrontGatewaySecret)).statusCode, 404);
     const rebound = await service.add(alias.hostname, 'admin');
@@ -149,7 +190,10 @@ test('real Mongo unique domain ownership, primary concurrency, HTTP trust and im
     assert.equal(await Repo.siteDomain.methods.remove(primary._id, beforePromotion.updatedAt), false);
     await assert.rejects(() => Repo.siteInstallation.methods.withDomainLock('site', async () => {
         await sites.updateOne({ _id: 'site' }, { $set: { domainMutationToken: 'replacement-owner' } });
-        await Repo.siteInstallation.methods.setPrimaryDomain('site', 'stale-writer');
+        await Repo.siteInstallation.methods.setPrimaryDomain('site', 'stale-writer', {
+            _id: 'stale-event', createdAt: Date.now(), updatedAt: Date.now(), siteId: 'site', domainId: 'stale-writer', actorId: 'admin',
+            operation: 'primary', outcome: 'committed', error: '', bindingRevision: ((await Repo.siteInstallation.methods.findFresh('site'))?.domainRevision || 0) + 1,
+        });
     }), /changed/i);
     assert.equal((await Repo.siteInstallation.methods.findDefaultFresh())?.primaryDomainId, primary._id);
 });

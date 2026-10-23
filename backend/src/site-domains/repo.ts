@@ -37,8 +37,9 @@ export const SiteDomainRepo = createMongoDBRepository<SiteDomain, {
         };
     },
 });
-export const SiteDomainAuditRepo = createMongoDBRepository<DomainAudit>({
+export const SiteDomainAuditRepo = createMongoDBRepository<DomainAudit, { record(event: DomainAudit): Promise<void> }>({
     name: 'SiteDomainAudit', collection: `${Config.storageScope}_site_domain_audit`,
     schema: { ...MongoDBEntrySchema, ...Object.fromEntries(['siteId', 'domainId', 'actorId', 'operation', 'error'].map((key) => [key, { __type: 'string', __required: true }])) },
     indexes: [{ key: { siteId: 1, createdAt: -1 }, name: 'domain_audit_history' }],
+    methods({ mdb }) { return { async record(event) { await mdb.updateOne({ _id: event._id }, { $setOnInsert: event }, { upsert: true }); } }; },
 });

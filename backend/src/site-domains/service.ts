@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { domainToASCII } from 'node:url';
 import { isIP } from 'node:net';
-import type { SiteDomain, DomainAudit, DomainSite, DomainResolution } from './model';
+import type { SiteDomain, DomainAudit, DomainSite, DomainResolution, DomainPrimaryAudit } from './model';
 export interface CheckResult { ownership: boolean; dns: boolean; https: boolean; error?: string }
 export interface DomainOptions { secret: string; entryHost: string; entryIp: string; localHost: string }
 export interface DomainSource {
@@ -13,7 +13,7 @@ export interface DomainSource {
     insert(record: SiteDomain): Promise<void>;
     replace(record: SiteDomain, expectedUpdatedAt: number): Promise<boolean>;
     remove(id: string, expectedUpdatedAt: number): Promise<void>;
-    setPrimary(site: DomainSite, id: string): Promise<void>;
+    setPrimary(site: DomainSite, id: string, audit: DomainPrimaryAudit): Promise<void>;
     touch(siteId: string): Promise<void>;
     audit(event: DomainAudit): Promise<void>;
     withSiteLock<T>(siteId: string, action: () => Promise<T>): Promise<T>;
@@ -94,17 +94,20 @@ export class DomainService {
             return updated;
         });
     }
-    async primary(id: string, actor: string): Promise<void> {
+    async primary(id: string, actor: string, options: { onlyIfMissing?: boolean } = {}): Promise<void> {
         const site = await this.site();
         await this.source.withSiteLock(site._id, async () => {
             const currentSite = await this.site();
+            if (options.onlyIfMissing && currentSite.primaryDomainId) return;
             if ((site.domainRevision || 0) !== (currentSite.domainRevision || 0)) throw new Error('Domain changed; reload');
             const record = await this.owned(id, currentSite);
             if (!record.enabled || record.ownershipStatus !== 'verified' || record.connectionStatus !== 'ready') throw new Error('Domain must be enabled, verified and ready');
             // Fence stale state/delete operations against promoting this binding.
             if (!await this.source.replace({ ...record, updatedAt: Math.max(Date.now(), record.updatedAt + 1) }, record.updatedAt)) throw new Error('Domain changed; reload');
-            await this.source.setPrimary(currentSite, id);
-            await this.audit(site._id, id, actor, 'primary');
+            const now = Date.now();
+            await this.source.setPrimary(currentSite, id, { _id: randomUUID(), siteId: site._id, domainId: id,
+                actorId: actor, operation: 'primary', outcome: 'committed', error: '', createdAt: now, updatedAt: now,
+                bindingRevision: (currentSite.domainRevision || 0) + 1 });
         });
     }
     async state(id: string, enabled: boolean, actor: string): Promise<void> {
