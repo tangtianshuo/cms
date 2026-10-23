@@ -31,9 +31,9 @@
 
 **Files:** `backend/src/presets/releases.ts`、`releases.test.ts`、`pages.ts`、`pages.test.ts`，阶段 C 计划的进度记录。
 
-- [ ] 复核 d518158 与 `docs/verification/storefront-phase-c.md` 中的验收证据，确认固定集合页、下线内容内链校验及删除绑定 Entry 后停用的回归测试已经覆盖。
-- [ ] 如发现新的基线问题，先补失败测试再修复，保留同一 Entry 可绑定多个页面的行为和快照隔离；不重复已经完成的修复。
-- [ ] 运行 preset/storefront 后端测试与类型检查，记录实际结果并进行任务审查。
+- [x] 复核 d518158 与 `docs/verification/storefront-phase-c.md` 中的验收证据，确认固定集合页、下线内容内链校验及删除绑定 Entry 后停用的回归测试已经覆盖。
+- [x] 如发现新的基线问题，先补失败测试再修复，保留同一 Entry 可绑定多个页面的行为和快照隔离；不重复已经完成的修复。
+- [x] 运行 preset/storefront 后端测试与类型检查，记录实际结果并进行任务审查。
 
 ## Task 2: 完成 D1 域名接入
 

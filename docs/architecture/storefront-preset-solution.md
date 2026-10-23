@@ -58,7 +58,7 @@ Nuxt 通用路由、导航、canonical 和 sitemap 只读取当前快照；路�
 | `EntryGroup` | 工作区内的 Entry 分组及同组名称约束，与字段结构 Group 分离 | 创建、重命名、移动内容、删除空组 |
 | `ResourceShare` | Entry、媒体、组件跨工作区的显式只读授权、版本及复制来源 | 授权、接受复制、撤销、审计 |
 
-新增对象必须以 `siteId` 作为服务端校验的归属边界。现有 Template/Entry 仓储主要是实例级数据，不能仅靠前端传入 `siteId` 实现多站点隔离。若首期仍只允许一个站点，也应在接口与数据模型中保留站点边界。
+工作区资源以 `workspaceId` 作为服务端归属边界，站点安装、域名和 Release 同时校验 `workspaceId` 与 `siteId`。同工作区的站点可以显式使用获授权内容；跨工作区使用共享授权。现有 Template/Entry 仓储主要是实例级数据，不能仅靠前端传入 ID 实现隔离；迁移时保留已有站点与内容 ID。
 
 ```mermaid
 flowchart LR
