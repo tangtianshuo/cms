@@ -10,6 +10,8 @@
 
 **Spec:** 本文“产品与数据约定”，以及 `docs/architecture/storefront-preset-solution.md` 第 6.3 节。域名实施细节见 `2026-10-23-storefront-domains-phase-d1.md`。
 
+2026-10-24 当前开发快照见 [域名、多独立站与多工作区开发状态](../../verification/storefront-domains-workspaces.md)：代码已到 `264078a`，任务 6 独立审查进行中，任务 7 和整分支审查待完成。
+
 ## 产品与数据约定
 
 - 状态：新增需求，已授权实施；完成情况以任务记录和实际验收为准。开始前发现阶段 C 已由提交 d518158 完成，先复核其验收与当前基线。
