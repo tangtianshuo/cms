@@ -37,7 +37,10 @@ function validateValueShape(prop: Prop, data: any) {
         if (prop.type === PropType.NUMBER && (typeof value !== 'number' || !Number.isFinite(value))) fail(`Invalid number: ${prop.name}`);
         if (prop.type === PropType.BOOLEAN && typeof value !== 'boolean') fail(`Invalid boolean: ${prop.name}`);
         if (prop.type === PropType.DATE && (!value || !Number.isFinite(value.timestamp) || !Number.isFinite(value.timezoneOffset))) fail(`Invalid date: ${prop.name}`);
-        if (prop.type === PropType.ENUMERATION && (typeof value !== 'string' || !prop.data.propEnum?.items.includes(value))) fail(`Invalid enum: ${prop.name}`);
+        if (prop.type === PropType.ENUMERATION && (
+            typeof value !== 'string' ||
+            (value === '' ? prop.required : !prop.data.propEnum?.items.includes(value))
+        )) fail(`Invalid enum: ${prop.name}`);
         if (prop.type === PropType.MEDIA && (!value || typeof value._id !== 'string' || (prop.required && !value._id))) fail(`Invalid media: ${prop.name}`);
         if (prop.type === PropType.ENTRY_POINTER && (!value || typeof value.tid !== 'string' || typeof value.eid !== 'string' || (prop.required && !value.eid))) fail(`Invalid Entry pointer: ${prop.name}`);
         if (prop.type === PropType.RICH_TEXT && (!value || !Array.isArray(value.nodes))) fail(`Invalid rich text: ${prop.name}`);
@@ -158,6 +161,9 @@ export async function buildCopyGraph(shares: ResourceShare[], selections: CopySe
     };
     const rewriteDefinition = (prop: Prop): Prop => {
         const result = structuredClone(prop);
+        // These are default Media IDs, so definitions require the same explicit
+        // dependency authorization and independent target IDs as actual values.
+        if (prop.data.propMedia) result.data.propMedia = prop.data.propMedia.map(id => id ? resolve('Media', id).document._id : '');
         if (prop.type === PropType.WIDGET) result.data.propWidget = { _id: resolve('Widget', prop.data.propWidget!._id).document._id };
         if (prop.type === PropType.GROUP_POINTER) result.data.propGroupPointer = { _id: resolve('Group', prop.data.propGroupPointer!._id).document._id };
         if (prop.type === PropType.ENTRY_POINTER) result.data.propEntryPointer = (prop.data.propEntryPointer || []).map(rule => {
