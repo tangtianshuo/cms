@@ -51,10 +51,11 @@ export async function validatePropValues(props: Prop[], values: PropValue[]) {
             if (!template || (pointer.eid && (!entry || entry.templateId !== template._id))) throw denied('Entry');
             if (!prop.data?.propEntryPointer?.some(rule => rule.templateId === pointer.tid && (!rule.entryIds?.length || rule.entryIds.includes(pointer.eid)))) throw denied('Entry');
         }
-        if (prop.type === PropType.WIDGET) for (const item of data || []) {
-            const widget = await Repo.widget.findById(item._id);
-            if (!widget || prop.data?.propWidget?._id !== item._id) throw denied('Widget');
-            await validatePropValues(widget.props, item.props);
+        if (prop.type === PropType.WIDGET) {
+            if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data._id !== 'string' || !Array.isArray(data.props)) throw new ContentScopeError('Widget value must contain an ID and property values');
+            const widget = await Repo.widget.findById(data._id);
+            if (!widget || prop.data?.propWidget?._id !== data._id) throw denied('Widget');
+            await validatePropValues(widget.props, data.props);
         }
         if (prop.type === PropType.GROUP_POINTER && data?._id) {
             const group = await Repo.group.findById(data._id);

@@ -73,3 +73,22 @@ Backend `npm run build:noEmit` passed after main implementation. Backend declara
 Static self-review checked collection bypass calls, named raw lookups, import reference ordering, title index/move flow, group/workspace deletion races, Media file policy before physical writes/deletes, and no capability serialization into Releases. Follow-up review should prioritize media/socket runtime behavior and migration compatibility under real legacy data.
 
 Final check results: backend `npm run build:noEmit` exit 0; UI `npm run type-check` exit 0 after regenerating ignored backend declarations; `git diff --check` exit 0. Client compiler availability limitation remains as described above. Implementation and report are ready for the independent review gate.
+
+## Review fix round 1 — base b2cd2fd
+
+All three Important findings in `task-4-review.md` were addressed. This section supersedes the initial report's broader wording about workspace-admin content privileges.
+
+1. **Policy composition:** `admin` continues to authorize workspace/site administration; only `instanceAdmin` bypasses Template/Entry/Media content grants. Every other JWT principal, including a workspace member with role `admin`, receives fresh Template and Media policy in REST verification and socket/media revalidation. Missing JWT Media grants deny access; the pre-existing API-key Media behavior is retained. Socket resource broadcasts apply the same instance-admin distinction. Cache keys now include `instanceAdmin` and `apiKeyId` as well as membership role and grants, so promotion/demotion and principal kinds cannot reuse a cache with a different policy exemption.
+   - Necessary lifecycle consequence: content-filtered listings cannot prove a workspace/group is empty. Added `hasOwnedForLifecycle(query)` as an admin-only, workspace-scoped, uncached boolean occupancy check using an ID-only projection. Workspace deletion and EntryGroup deletion use it, so hidden content still blocks deletion without returning that content to the member admin. The existing durable revision/permit CAS remains in force.
+2. **Widget values:** `PropType.WIDGET` now validates the canonical single `{_id,props}` object, rejects array/malformed values, resolves the Widget in the current scope, checks its declared Widget ID, and recursively validates nested properties. This is the shared validator used by ordinary Entry writes, nested Widgets/Groups, and full Entry socket synchronization payloads.
+3. **Persisted SUDO contract:** `SUDO` is now an explicit `UserRoleName`, stored on an ordinary persisted User record. It has the same instance-administration authority as persisted `ADMIN`. JWT signature/issuer/expiry and coarse token-role validation still run, then every REST guard uses the fresh User roles; a token-only SUDO claim cannot elevate a missing, demoted or deleted User. Existing instance-admin-protected User creation/update routes accept SUDO (and reject unsupported role names); the existing self-role-change prohibition remains. Socket and MCP token validators also accept SUDO, then use the same fresh revalidation. Removing the persisted ADMIN/SUDO role immediately removes instance elevation at the next request/event/delivery; a valid remaining USER role follows membership and content grants, and no recognized persisted role is rejected. Synthetic SUDO JWTs without a persisted User are intentionally unsupported.
+
+Focused static self-review checked every `context.admin` content exemption, REST/shared principal policy loading, socket event/broadcast paths, cache distinction, Widget canonical type and the deletion-occupancy consequence. Remaining `context.admin` checks authorize workspace administration only. No subagents, tests, package installation, deployment or remote changes were used.
+
+Commands and observed results after the fixes:
+
+- `cd backend && npm run build:noEmit`: exit 0 (`tsc -p . --noEmit`).
+- `cd ui && npm run type-check`: exit 0 (`vue-tsc --noEmit -p tsconfig.app.json --composite false`). No UI source changed in this round; ignored generated backend declarations were not regenerated.
+- `git diff --check`: exit 0, no output.
+
+No tests were added or run. Runtime verification of member-admin grant denial/revocation, persisted SUDO administration/demotion, nested Widget persistence/synchronization and policy-hidden group/workspace occupancy remains unperformed under the explicit no-tests instruction. Earlier two-test evidence does not establish these fixes. Ready for the controller's scoped re-review.

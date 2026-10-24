@@ -29,7 +29,7 @@ export const EntryGroupController = createController({
         remove: createControllerMethod({ path: '/:groupId', type: 'delete', preRequestHandler: RP.createWorkspaceAdminCheck(),
             async handler({ request }) {
                 const id = (request.params as { groupId: string }).groupId;
-                return { removed: await Repo.entryGroup.methods.removeEmpty(id, async () => (await Repo.entry.findAll()).some(entry => entry.groupId === id)) };
+                return { removed: await Repo.entryGroup.methods.removeEmpty(id, () => Repo.entry.hasOwnedForLifecycle({ groupId: id })) };
             } }),
         move: createControllerMethod({ path: '/:groupId/entries/:entryId', type: 'put', preRequestHandler: RP.createApiKeyJwtCheck(),
             async handler({ request, errorHandler }) {

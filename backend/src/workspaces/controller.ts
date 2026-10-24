@@ -11,7 +11,6 @@ import { Repo } from '../repo';
 import { RP } from '../security/route-protection/main';
 import {
     DEFAULT_WORKSPACE,
-    ownerWorkspace,
     workspaceContext,
     workspaceId,
 } from './context';
@@ -129,24 +128,15 @@ export const WorkspaceController = createController({
                             Repo.entryStatus,
                             Repo.templateOrganizer,
                             Repo.apiKey,
-                        ].map((repo) => repo.findAll()),
+                        ].map((repo) => repo.hasOwnedForLifecycle(repo === Repo.entryGroup ? { _id: { $ne: defaultEntryGroupId() } } : {})),
                     );
-                    if (
-                        resources.some((items) =>
-                            items.some(
-                                (item) =>
-                                    ownerWorkspace(
-                                        item as { workspaceId?: string },
-                                    ) === workspaceId() && item._id !== defaultEntryGroupId(),
-                            ),
-                        )
-                    ) {
+                    if (resources.some(Boolean)) {
                         throw errorHandler(
                             HttpStatus.Conflict,
                             'Workspace contains resources',
                         );
                     }
-                    await Repo.entryGroup.methods.removeEmpty(defaultEntryGroupId(), async () => (await Repo.entry.findAll()).some(entry => entry.groupId === defaultEntryGroupId()), true);
+                    await Repo.entryGroup.methods.removeEmpty(defaultEntryGroupId(), () => Repo.entry.hasOwnedForLifecycle({ groupId: defaultEntryGroupId() }), true);
                     if (
                         !(await Repo.workspace.methods.deleteIfIdle(
                             workspaceId(),

@@ -73,7 +73,9 @@ export class RP {
         return async (data) => {
             const token = this.jwt.verify(data.errorHandler, data.request.headers.authorization || (data.request.query as any).at, roles);
             const user = await Repo.user.methods.findForAuthentication(token.payload.userId);
-            if (!user || (roles?.includes('ADMIN') && !user.roles.some(role => role.name === 'ADMIN'))) throw data.errorHandler(HttpStatus.Forbidden, 'User access revoked');
+            // SUDO is a persisted instance role, never a token-only elevation.
+            const allowedRoles = [...(roles || ['USER']), 'ADMIN', 'SUDO'];
+            if (!user || !user.roles.some(role => allowedRoles.includes(role.name))) throw data.errorHandler(HttpStatus.Forbidden, 'User access revoked');
             return { token, ...await verifyRequestWorkspace(data, { userId: user._id, roles: user.roles.map(role => role.name) }, user.customPool.policy) };
         };
     }

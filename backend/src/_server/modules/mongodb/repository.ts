@@ -1,5 +1,5 @@
 import { withWorkspaceCreation } from '../../../workspaces/lifecycle';
-import { workspaceCacheKey, contentFilter, canWriteContent } from '../../../workspaces/context';
+import { workspaceCacheKey, workspaceContext, workspaceFilter, contentFilter, canWriteContent } from '../../../workspaces/context';
 import { scopedCollection, contentWriteError, stampOwnership, assertContentWrite, ContentScopeError } from '../../../workspaces/scoped-collection';
 import type { Collection, Db, Filter, IndexDescription, UpdateFilter } from 'mongodb';
 import type { Module } from '@bcms/selfhosted-backend/_server/module';
@@ -87,6 +87,8 @@ export interface MongoDBRepository<Entry extends MongoDBEntry, Methods> {
      * Return number of entities.
      */
     count(): Promise<number>;
+    /** Admin-only lifecycle occupancy check; returns no content and includes policy-hidden resources. */
+    hasOwnedForLifecycle(query?: Filter<Entry>): Promise<boolean>;
 }
 
 /**
@@ -316,6 +318,11 @@ export function createMongoDBRepository<
             } as Filter<Entry>);
             self.cache.remove(ids);
             return result.deletedCount === ids.length;
+        },
+
+        async hasOwnedForLifecycle(query = {}) {
+            if (!scoped || !workspaceContext()?.admin) throw new ContentScopeError('Workspace administration required');
+            return !!await raw.findOne({ $and: [workspaceFilter(), query] } as Filter<Entry>, { projection: { _id: 1 } });
         },
 
         async count() {

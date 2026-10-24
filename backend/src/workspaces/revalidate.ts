@@ -11,8 +11,11 @@ export async function revalidateWorkspace(prior: Pick<WorkspaceContext, 'workspa
         context.templatePermissions = key.access.templates; return context;
     }
     const user = await Repo.user.methods.findForAuthentication(prior.actorId);
-    if (!user) throw new Error('User access revoked');
+    if (!user || !user.roles.some(role => ['USER', 'ADMIN', 'SUDO'].includes(role.name))) throw new Error('User access revoked');
     const context = await resolveWorkspaceContext({ userId: user._id, roles: user.roles.map(role => role.name) }, prior, source);
-    if (!context.admin) { context.templatePermissions = user.customPool.policy.templates; context.mediaPermissions = user.customPool.policy.media; }
+    if (!context.instanceAdmin) {
+        context.templatePermissions = user.customPool.policy?.templates || [];
+        context.mediaPermissions = user.customPool.policy?.media || { get: false, post: false, put: false, delete: false };
+    }
     return context;
 }

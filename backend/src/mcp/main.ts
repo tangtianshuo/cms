@@ -34,7 +34,7 @@ function authHeader(request: FastifyRequest): string {
     if (header.startsWith('Bearer ')) {
         const jwt = JWTManager.get({
             token: header.slice('Bearer '.length),
-            roles: ['ADMIN', 'USER'],
+            roles: ['ADMIN', 'USER', 'SUDO'],
         });
         if (jwt instanceof JWTError) {
             throw new Error('Invalid or expired JWT.');

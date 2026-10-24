@@ -13,7 +13,8 @@ export const UserRolePermissionSchema: ObjectSchema = {
     },
 };
 
-export type UserRoleName = 'ADMIN' | 'USER';
+/** SUDO is an instance administrator role stored on an ordinary User record. */
+export type UserRoleName = 'ADMIN' | 'USER' | 'SUDO';
 
 export interface UserRole {
     name: UserRoleName;

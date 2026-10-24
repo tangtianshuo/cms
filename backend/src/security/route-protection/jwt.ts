@@ -24,9 +24,6 @@ export class RPJwt {
         if (token instanceof JWTError) {
             throw errorHandler(HttpStatus.Forbidden, token.message);
         }
-        if (token.payload.rls.includes('SUDO')) {
-            return token;
-        }
         return token;
     }
 }

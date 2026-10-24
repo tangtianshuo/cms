@@ -9,7 +9,10 @@ export async function verifyRequestWorkspace(data: ControllerMethodPreRequestHan
         const context = await resolveWorkspaceContext(principal, { workspaceId: read('x-bcms-workspace'), siteId: read('x-bcms-site') }, {
             workspace: (id) => Repo.workspace.methods.fresh(id), site: (id) => Repo.siteInstallation.methods.findFresh(id),
         });
-        if (!context.admin) { context.templatePermissions = policy?.templates || []; context.mediaPermissions = policy?.media; }
+        if (!context.instanceAdmin) {
+            context.templatePermissions = policy?.templates || [];
+            context.mediaPermissions = policy?.media || (context.apiKeyId ? undefined : { get: false, post: false, put: false, delete: false });
+        }
         if (context.role === 'viewer' && !['GET', 'HEAD'].includes(data.request.method)) throw new Error('Workspace is read only');
         return { [verifiedWorkspace]: context };
     } catch (error) { throw data.errorHandler(HttpStatus.Forbidden, (error as Error).message); }

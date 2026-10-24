@@ -17,7 +17,7 @@ export async function socketIdentity(url = ''): Promise<SocketIdentity> {
         if (!key || key.blocked || key.secret !== secret) throw new Error('Invalid socket API key');
         return { token, context: await revalidateWorkspace({ ...selected, actorId: key._id, apiKeyId: key._id }), userId: key.userId };
     }
-    const jwt = JWTManager.get({ roles: ['ADMIN', 'USER'], token });
+    const jwt = JWTManager.get({ roles: ['ADMIN', 'USER', 'SUDO'], token });
     if (jwt instanceof JWTError) throw new Error('Invalid socket JWT');
     return { token, context: await revalidateWorkspace({ ...selected, actorId: jwt.payload.userId }), userId: jwt.payload.userId };
 }
