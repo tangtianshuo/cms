@@ -118,6 +118,7 @@ export const WorkspaceController = createController({
                         );
                     const resources = await Promise.all(
                         [
+                            Repo.resourceShare,
                             Repo.template,
                             Repo.entry,
                             Repo.entryGroup,

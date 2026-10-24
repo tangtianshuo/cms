@@ -1,3 +1,4 @@
+import { pinReleaseMedia } from '../media/retention';
 import { ownerWorkspace } from '../workspaces/context';
 import { Repo } from '../repo';
 import type { ReleaseSnapshot } from './releases';
@@ -11,6 +12,7 @@ export const ReleaseRepo = createMongoDBRepository<ReleaseRecord, {
     findRetainedMediaReference(id: string): Promise<{ workspaceId: string; siteId: string } | null>;
 }>({
     name: 'StorefrontRelease',
+    prepareWrite: (record) => pinReleaseMedia(record.payload, record._id),
     collection: `${Config.storageScope}_storefront_releases`,
     schema: { ...MongoDBEntrySchema,
         workspaceId: { __type: 'string', __required: false },

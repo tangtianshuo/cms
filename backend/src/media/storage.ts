@@ -1,3 +1,4 @@
+import { claimMediaDeletion } from './retention';
 import crypto from 'crypto';
 import fileSystem from 'fs';
 import systemPath from 'path';
@@ -104,6 +105,7 @@ export class MediaStorage {
     }
 
     static async removeMediaAndChildren(media: Media) {
+        await claimMediaDeletion([media._id], false);
         const path = `/${media._id}`;
         await Storage.fs.deleteDir([
             Config.storageScope,
@@ -113,6 +115,7 @@ export class MediaStorage {
     }
 
     static async remove(media: Media, options?: MediaStorageOptions) {
+        await claimMediaDeletion([media._id], false);
         const path = this.resolveCloudPath(media, options);
         try {
             await Storage.fs.deleteFile([
@@ -126,6 +129,7 @@ export class MediaStorage {
     }
 
     static async removeMany(paths: string[]) {
+        await claimMediaDeletion([...new Set(paths.map(path => path.split('/').filter(Boolean)[0]))], false);
         try {
             for (let i = 0; i < paths.length; i++) {
                 await Storage.fs.deleteFile([

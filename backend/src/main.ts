@@ -1,3 +1,4 @@
+import { ResourceShareController } from './resource-shares/controller';
 import { socketIdentity } from './socket/access';
 import { EntryGroupController } from './entry-groups/controller';
 import { WorkspaceController } from './workspaces/controller';
@@ -147,6 +148,7 @@ async function main() {
                 },
             }),
             WorkspaceController,
+            ResourceShareController,
             ApiKeyController,
             AuthController,
             EntryController,
@@ -247,6 +249,7 @@ async function main() {
              * ----------
              */
             Repo.workspace.init(),
+            Repo.resourceShare.init(),
             Repo.user.init(),
             Repo.apiKey.init(),
             Repo.media.init(),

@@ -1,3 +1,4 @@
+import { registerCopyRepository, copyOverlayItem } from '../../../resource-shares/visibility';
 import { withWorkspaceCreation } from '../../../workspaces/lifecycle';
 import { workspaceCacheKey, workspaceContext, workspaceFilter, contentFilter, canWriteContent } from '../../../workspaces/context';
 import { scopedCollection, contentWriteError, stampOwnership, assertContentWrite, ContentScopeError } from '../../../workspaces/scoped-collection';
@@ -158,7 +159,7 @@ export function createMongoDBRepository<
     let raw: Collection<Entry> = null as never;
     const scoped = config.workspaceScoped !== false;
     const states = new Map<string, { cache: MemCache<Entry>; methods: Methods; manyQueue: Record<string, Queue<Entry[]>>; singleQueue: Record<string, Queue<Entry>>; latches: Record<string, boolean> }>();
-    const invalidate = () => { for (const value of states.values()) { value.cache.items = []; value.latches = {}; if (config.methods) value.methods = config.methods({ name: config.name, collection: config.collection, schema: config.schema, repo: self, logger, mdb: intf, identityCollection: raw, cache: value.cache }); } };
+    const invalidate = () => { for (const value of states.values()) { value.cache = new MemCache<Entry>('_id', []); value.latches = {}; value.manyQueue = {}; value.singleQueue = {}; if (config.methods) value.methods = config.methods({ name: config.name, collection: config.collection, schema: config.schema, repo: self, logger, mdb: intf, identityCollection: raw, cache: value.cache }); } };
     const state = () => {
         const id = scoped ? workspaceCacheKey() : '__instance';
         let value = states.get(id);
@@ -190,7 +191,8 @@ export function createMongoDBRepository<
                         return;
                     }
                     raw = fastify.mongo.db.collection(config.collection);
-                    intf = scoped ? scopedCollection(raw, config.prepareWrite, config.name, config.aroundWrite, invalidate) : raw;
+                    intf = scoped ? scopedCollection(raw, config.prepareWrite, config.name, config.aroundWrite, invalidate, fastify.mongo.db!) : raw;
+                    registerCopyRepository(config.name, { raw, prepare: config.prepareWrite, invalidate }, fastify.mongo.db!);
                     states.clear();
                     (async () => {
                         await config.beforeIndexes?.(raw, fastify.mongo.db!);
@@ -218,6 +220,8 @@ export function createMongoDBRepository<
         },
 
         async findById(id) {
+            const overlay = copyOverlayItem(config.name, id);
+            if (overlay) return overlay as Entry;
             const cacheHit = self.cache.findById(id);
             if (cacheHit) {
                 return structuredClone(cacheHit);
@@ -282,6 +286,7 @@ export function createMongoDBRepository<
             if (scoped) { stampOwnership(entry); assertContentWrite(); if (!canWriteContent(config.name, entry, 'put')) throw new ContentScopeError('Resource update denied'); }
             const previous = await intf.findOne({ _id: entry._id } as Filter<Entry>);
             if (!previous) throw new ContentScopeError('Resource not found in workspace');
+            if (entry.copyBatchId !== previous.copyBatchId || JSON.stringify(entry.provenance) !== JSON.stringify(previous.provenance)) throw new ContentScopeError('Copy provenance cannot be changed');
             if (scoped && !canWriteContent(config.name, previous, 'put')) throw new ContentScopeError('Resource update denied');
             const perform = async () => {
                 await config.prepareWrite?.(entry);

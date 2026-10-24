@@ -1,3 +1,4 @@
+import { copyDatabase, copyVisibility } from '../resource-shares/visibility';
 import { workspaceFilter } from '../workspaces/context';
 import { ContentScopeError } from '../workspaces/scoped-collection';
 import {
@@ -23,6 +24,7 @@ export const MediaRepo = createMongoDBRepository<Media, MediaRepoMethods>({
     schema: MediaSchema,
     async prepareWrite(media) {
         delete media.accessToken; delete media.accessTokenExpiresAt;
+        delete (media as any).retentionPins; delete (media as any).deletionPending;
         const visited = new Set([media._id]);
         let parentId = media.parentId;
         while (parentId) {
@@ -35,7 +37,7 @@ export const MediaRepo = createMongoDBRepository<Media, MediaRepoMethods>({
     },
     methods({ mdb, cache, identityCollection }) {
         return {
-            findForAuthorizedBinary: (_id, workspaceId) => identityCollection.findOne({ $and: [{ _id }, workspaceFilter(workspaceId)] }),
+            findForAuthorizedBinary: async (_id, workspaceId) => identityCollection.findOne({ $and: [{ _id }, workspaceFilter(workspaceId), await copyVisibility(copyDatabase(), workspaceId)] }),
             async findByParentIdAndName(parentId: string, name: string) {
                 const cacheHit = cache.find(
                     (e) => e.parentId === parentId && e.name === name,
