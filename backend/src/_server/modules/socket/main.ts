@@ -55,7 +55,7 @@ export interface SocketEvent {
 }
 
 export interface SocketEventHandler<Data = unknown> {
-    (data: Data, connection: SocketConnection): Promise<void> | void;
+    (data: Data, connection: SocketConnection, eventName?: string): Promise<void> | void;
 }
 
 export interface SocketConfig {
@@ -152,6 +152,7 @@ export function createSocket(config: SocketConfig): Module {
                                         await config.eventHandlers[data.en](
                                             data.ed,
                                             SocketManager.conns[id],
+                                            data.en,
                                         );
                                     }
                                 } catch (error) {

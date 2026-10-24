@@ -367,7 +367,7 @@ export const EntryController = createController({
                         );
                     }
                     const entry = await Repo.entry.findById(params.entryId);
-                    if (!entry) {
+                    if (!entry || entry.templateId !== params.templateId) {
                         throw errorHandler(
                             HttpStatus.NotFound,
                             `Entry with ID "${params.entryId}" does not exist`,
@@ -432,7 +432,7 @@ export const EntryController = createController({
                         entryId: string;
                     };
                     const entry = await Repo.entry.findById(params.entryId);
-                    if (!entry) {
+                    if (!entry || entry.templateId !== params.templateId) {
                         throw errorHandler(
                             HttpStatus.NotFound,
                             `Entry with ID "${params.entryId}" does not exist`,
@@ -495,7 +495,7 @@ export const EntryController = createController({
                         entryId: string;
                     };
                     const entry = await Repo.entry.findById(params.entryId);
-                    if (!entry) {
+                    if (!entry || entry.templateId !== params.templateId) {
                         throw errorHandler(
                             HttpStatus.NotFound,
                             `Entry with ID "${params.entryId}" does not exist`,
@@ -606,6 +606,7 @@ export const EntryController = createController({
                             ? apiKey.userId
                             : '__unknown',
                         ...prepared,
+                        groupId: body.groupId,
                     });
                     entry = await Repo.entry.add(entry);
                     SocketManager.channelEmit(
@@ -689,7 +690,7 @@ export const EntryController = createController({
                         );
                     }
                     let entry = await Repo.entry.findById(body._id);
-                    if (!entry) {
+                    if (!entry || entry.templateId !== params.templateId) {
                         throw errorHandler(
                             HttpStatus.NotFound,
                             `Entry with ID "${body._id}" does not exist`,
@@ -787,6 +788,7 @@ export const EntryController = createController({
                                 .join('\n'),
                         });
                     }
+                    if (body.groupId !== undefined) entry.groupId = body.groupId;
                     entry = await Repo.entry.update(entry);
                     SocketManager.channelEmit(
                         ['global'],
@@ -857,7 +859,7 @@ export const EntryController = createController({
                         entryId: string;
                     };
                     const entry = await Repo.entry.findById(params.entryId);
-                    if (!entry) {
+                    if (!entry || entry.templateId !== params.templateId) {
                         throw errorHandler(
                             HttpStatus.NotFound,
                             `Entry with ID "${params.entryId}" does not exist`,

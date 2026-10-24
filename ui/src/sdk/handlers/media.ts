@@ -79,7 +79,7 @@ export class MediaHandler extends Handler {
         const queue = await this.getAllQueue({
             name: 'getAll',
             handler: async () => {
-                if (!data?.skipCache && this.latch.all) {
+                if (!data?.skipCache && this.latch.all && this.sdk.store.media.items().every(media => (media.accessTokenExpiresAt || 0) > Date.now() + 60000)) {
                     return this.sdk.store.media.items();
                 }
                 const result = await this.sdk.send<
@@ -104,7 +104,7 @@ export class MediaHandler extends Handler {
     async get(data: { mediaId: string; skipCache?: boolean }) {
         if (!data.skipCache) {
             const cacheHit = this.sdk.store.media.findById(data.mediaId);
-            if (cacheHit) {
+            if (cacheHit && (cacheHit.accessTokenExpiresAt || 0) > Date.now() + 60000) {
                 return cacheHit;
             }
         }
@@ -135,13 +135,10 @@ export class MediaHandler extends Handler {
         instanceId?: string;
         data?: MediaGetBinBody;
     }) {
-        return `${this.baseUri}/${data.media._id}/bin/${data.media.name}${
-            data.data
-                ? `?data=${Buffer.from(JSON.stringify(data.data)).toString(
-                      'hex',
-                  )}`
-                : ''
-        }`;
+        const query: string[] = [];
+        if (data.data) query.push(`data=${Buffer.from(JSON.stringify(data.data)).toString('hex')}`);
+        if (data.media.accessToken) query.push(`cap=${encodeURIComponent(data.media.accessToken)}`);
+        return `${this.baseUri}/${data.media._id}/bin/${data.media.name}${query.length ? '?' + query.join('&') : ''}`;
     }
 
     async requestUploadToken() {

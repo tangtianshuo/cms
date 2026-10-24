@@ -56,11 +56,15 @@ export const DashboardLayoutAsideContent = defineComponent({
                 ],
                 visible: true,
                 children: [
+                    ...(['workspaces', 'domains', 'entry-groups', 'shares'] as const).map((page) => ({
+                        title: t(`workspace.${page}`), href: `/d/${page}`, activeOnViews: [({ workspaces: 'WorkspacesView', domains: 'DomainsView', 'entry-groups': 'EntryGroupsView', shares: 'SharesView' } as const)[page]], visible: true,
+                        onClick() { ctx.emit('closeNav'); },
+                    })),
                     {
                         title: t('nav.presets'),
                         href: '/d/presets',
                         activeOnViews: ['PresetsView'],
-                        visible: isAdmin,
+                        visible: !!sdk.context?.context.admin,
                         onClick() { ctx.emit('closeNav'); },
                         titleSlot: () => navItemSlot(t('nav.presets'), '/administration/template'),
                     },
@@ -206,6 +210,7 @@ export const DashboardLayoutAsideContent = defineComponent({
         });
 
         onMounted(async () => {
+            if (!sdk.context) return;
             await throwable(
                 async () => {
                     return await sdk.plugin.getAll();
@@ -261,6 +266,10 @@ export const DashboardLayoutAsideContent = defineComponent({
                         />
                     </button>
                 </div>
+                <a href="/d/workspaces" class="mx-6 mt-6 text-sm break-words">
+                    {sdk.context?.workspace.name || t('workspace.recover')}<br />
+                    <span class="text-xs opacity-70">{sdk.context?.site?.name || t('workspace.chooseSite')}</span>
+                </a>
                 <button
                     class={`mt-14 px-6 mx-6 border border-gray dark:border-darkGray bg-white/50 dark:bg-dark/50 text-black dark:text-white rounded-2.5 flex gap-2 items-center py-[10px]`}
                 >

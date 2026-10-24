@@ -62,7 +62,7 @@ export const TemplateOrganizerController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtCheck(),
+                preRequestHandler: RP.createContentJwtCheck(),
                 async handler() {
                     const items = await Repo.templateOrganizer.findAll();
                     return {
@@ -111,7 +111,7 @@ export const TemplateOrganizerController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtCheck(),
+                preRequestHandler: RP.createContentJwtCheck(),
                 async handler({ request, errorHandler }) {
                     const params = request.params as {
                         templateOrganizerId: string;
@@ -170,7 +170,7 @@ export const TemplateOrganizerController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     TemplateOrganizerCreateBodySchema,
                     ['ADMIN'],
                 ),
@@ -241,7 +241,7 @@ export const TemplateOrganizerController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     TemplateOrganizerUpdateBodySchema,
                     ['ADMIN'],
                 ),
@@ -328,7 +328,7 @@ export const TemplateOrganizerController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createContentJwtCheck(['ADMIN']),
                 async handler({ request, errorHandler, token }) {
                     const params = request.params as {
                         templateOrganizerId: string;

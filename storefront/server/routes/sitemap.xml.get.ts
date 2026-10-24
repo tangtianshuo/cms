@@ -1,3 +1,4 @@
+import { siteContext } from '../utils/site-context';
 import { fetchPublishedSite, sitemapXml } from '../utils/release.mjs';
 
 export default defineEventHandler(async (event) => {
@@ -7,12 +8,12 @@ export default defineEventHandler(async (event) => {
     try {
         site = await fetchPublishedSite({
             path: undefined,
-            host: getRequestHost(event, { xForwardedHost: false }), expectedHost: config.public.siteHost,
+            host: siteContext(event), expectedHost: config.public.siteHost, gatewaySecret: config.gatewaySecret,
             cmsOrigin: config.cmsInternalOrigin, fetcher: $fetch });
     } catch {
         throw createError({ statusCode: 502, statusMessage: 'Published site unavailable' });
     }
     if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not published' });
     setHeader(event, 'Content-Type', 'application/xml; charset=utf-8');
-    return sitemapXml(site.paths, getRequestURL(event).origin);
+    return sitemapXml(site.paths, site.origin);
 });

@@ -1,3 +1,4 @@
+import { ownerWorkspace } from '../workspaces/context';
 import { z } from 'zod';
 import { createController, createControllerMethod, HttpStatus } from '../_server';
 import { Config } from '../config';
@@ -10,7 +11,7 @@ const publishBody = z.object({ expectedReleaseId: z.string() }).strict();
 
 export function releaseSource(): ReleaseSource {
     return {
-        findSite: () => Repo.siteInstallation.methods.findDefaultFresh(),
+        findSite: () => Repo.siteInstallation.methods.findSelected(),
         async loadContent(site) {
             const templates: ReleaseInput['templates'] = [];
             const entries: ReleaseInput['entries'] = [];
@@ -36,10 +37,10 @@ export const ReleaseController = createController({
     methods() {
         return {
             history: createControllerMethod({
-                path: '/', type: 'get', preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                path: '/', type: 'get', preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
-                    const site = await Repo.siteInstallation.methods.findDefaultFresh();
+                    const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site) return { currentReleaseId: '', items: [], audit: [] };
                     const published = site.publishedReleaseIds || [site.currentReleaseId];
                     const records = await Repo.storefrontRelease.methods.findBySite(site._id);
@@ -51,7 +52,7 @@ export const ReleaseController = createController({
                 },
             }),
             check: createControllerMethod({
-                path: '/check', type: 'post', preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                path: '/check', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const source = releaseSource();
@@ -60,8 +61,9 @@ export const ReleaseController = createController({
                         if (!Config.storefrontEnabled) throw new Error('Storefront is disabled');
                         if (!site) throw new Error('Site is not installed');
                         const current = site.currentReleaseId ? await source.findRelease(site.currentReleaseId) : null;
-                        if (current && current.siteId !== site._id) throw new Error('Release belongs to another site');
+                        if (current && (current.siteId !== site._id || ownerWorkspace(current) !== ownerWorkspace(site))) throw new Error('Release belongs to another site');
                         const previous = current ? JSON.parse(current.payload) as ReleaseSnapshot : undefined;
+                        if (previous && (previous.siteId !== site._id || ownerWorkspace(previous) !== ownerWorkspace(site))) throw new Error('Release snapshot belongs to another site');
                         const snapshot = buildRelease({ ...await source.loadContent(site), site, previous });
                         return { valid: true, issues: [], expectedReleaseId: site.currentReleaseId || '',
                             pageCount: snapshot.pages.length, diff: releaseDiff(previous, snapshot) };
@@ -72,7 +74,7 @@ export const ReleaseController = createController({
                 },
             }),
             publish: createControllerMethod({
-                path: '/publish', type: 'post', preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                path: '/publish', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, token, errorHandler, reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const parsed = publishBody.safeParse(request.body);
@@ -86,7 +88,7 @@ export const ReleaseController = createController({
                 },
             }),
             rollback: createControllerMethod({
-                path: '/rollback', type: 'post', preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                path: '/rollback', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, token, errorHandler, reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const parsed = publishBody.extend({ releaseId: z.string().min(1) }).safeParse(request.body);

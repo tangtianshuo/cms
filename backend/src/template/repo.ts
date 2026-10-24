@@ -1,3 +1,8 @@
+import { Repo } from '../repo';
+import { ContentScopeError } from '../workspaces/scoped-collection';
+import { validatePropDefinitions } from '../workspaces/content-references';
+import { workspaceFilter, workspaceId, ownerWorkspace } from '../workspaces/context';
+import { migrateTemplateIndex } from '../workspaces/migration';
 import { createMongoDBRepository } from '@bcms/selfhosted-backend/_server/modules/mongodb';
 import {
     type Template,
@@ -24,13 +29,21 @@ export const TemplateRepo = createMongoDBRepository<
     name: 'Template',
     collection: `${Config.storageScope}_templates`,
     schema: TemplateSchema,
+    beforeIndexes: migrateTemplateIndex,
     indexes: [
         {
-            key: { name: 1 },
-            name: 'template_name_unique',
+            key: { workspaceId: 1, name: 1 },
+            name: 'workspace_template_name_unique',
             unique: true,
         },
     ],
+    async prepareWrite(item) {
+        await validatePropDefinitions(item.props);
+        const previous = await TemplateRepo.findById(item._id);
+        const title = previous?.props.find(prop => prop.name === 'title');
+        const nextTitle = item.props.find(prop => prop.name === 'title');
+        if (title && (!nextTitle || nextTitle.id !== title.id || nextTitle.type !== PropType.STRING) && (await Repo.entry.methods.findAllByTemplateId(item._id)).length) throw new ContentScopeError('Title property mapping cannot change while template entries exist');
+    },
     methods({ mdb, cache }) {
         const latches: {
             [key: string]: boolean;
@@ -112,11 +125,11 @@ export const TemplateRepo = createMongoDBRepository<
             },
 
             async findByName(name) {
-                const cacheHit = cache.find((e) => e.name === name);
+                const cacheHit = cache.find((e) => e.name === name && ownerWorkspace(e) === workspaceId());
                 if (cacheHit) {
                     return cacheHit;
                 }
-                const result = await mdb.findOne({ name });
+                const result = await mdb.findOne({ ...workspaceFilter(), name });
                 if (result) {
                     cache.set(result);
                 }

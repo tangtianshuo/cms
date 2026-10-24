@@ -1,3 +1,5 @@
+import { withMediaAccess } from '../media/access';
+import { canReadContent } from '../workspaces/context';
 import { z } from 'zod';
 import {
     createController,
@@ -10,7 +12,9 @@ import { Config } from '../config';
 import type { Entry } from '../entry/models/main';
 import { getProductPage, previewProductPage, type DevelopmentSite } from './service';
 import { previewPresetPage } from './preset-preview';
-import { publishedSite } from './published';
+import { publishedSite, publishedDomainSite } from './published';
+import { trustedStorefrontHost } from '../site-domains/trust';
+import { domainService } from '../site-domains/source';
 
 const previewBodySchema = z.object({
     entry: z.object({
@@ -49,26 +53,33 @@ export const StorefrontController = createController({
                 async handler({ request, reply, errorHandler }) {
                     reply.header('Cache-Control', 'no-store');
                     if (!Config.storefrontEnabled) throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
-                    const host = request.headers['x-storefront-host'];
-                    const snapshot = await publishedSite(typeof host === 'string' ? host : '', Config.storefrontHost, {
+                    const host = trustedStorefrontHost(request.headers, { secret: Config.storefrontGatewaySecret, localHost: Config.storefrontHost, production: Config.storefrontProduction });
+                    if (!host) throw errorHandler(HttpStatus.NotFound, 'Published site not found');
+                    const local = !Config.storefrontProduction && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) && host === Config.storefrontHost;
+                    const snapshot = local ? await publishedSite(host, Config.storefrontHost, {
                         findSite: () => Repo.siteInstallation.methods.findDefaultFresh(),
+                        findRelease: (id) => Repo.storefrontRelease.findById(id),
+                    }).then((result) => result ? { ...result, primaryHostname: host, bindingRevision: 0 } : null) : await publishedDomainSite(host, {
+                        resolve: (hostname) => domainService().resolve(hostname),
+                        findSiteById: (id) => Repo.siteInstallation.methods.findFresh(id),
                         findRelease: (id) => Repo.storefrontRelease.findById(id),
                     });
                     if (!snapshot) throw errorHandler(HttpStatus.NotFound, 'Published site not found');
                     const path = (request.query as { path?: unknown }).path;
-                    if (path === undefined) return { releaseId: snapshot.releaseId, language: snapshot.language,
+                    if (path === undefined) return { releaseId: snapshot.releaseId, language: snapshot.language, primaryHostname: snapshot.primaryHostname, bindingRevision: snapshot.bindingRevision, origin: `${local ? 'http' : 'https'}://${snapshot.primaryHostname}`,
                         paths: snapshot.pages.map((page) => page.path) };
                     if (typeof path !== 'string') throw errorHandler(HttpStatus.BadRequest, 'Invalid path');
                     const page = snapshot.pages.find((item) => item.path === path);
                     const redirect = snapshot.redirects.find((item) => item.from === path);
                     if (!page && !redirect) throw errorHandler(HttpStatus.NotFound, 'Published page not found');
-                    return { releaseId: snapshot.releaseId, language: snapshot.language,
+                    return { releaseId: snapshot.releaseId, language: snapshot.language, primaryHostname: snapshot.primaryHostname, bindingRevision: snapshot.bindingRevision, origin: `${local ? 'http' : 'https'}://${snapshot.primaryHostname}`,
                         path, content: page?.content, redirect: redirect?.to, navigation: snapshot.navigation };
                 },
             }),
             product: createControllerMethod({
                 type: 'get',
                 path: '/products/:slug',
+                preRequestHandler: RP.createApiKeyJwtCheck(),
                 async handler({ request, reply, errorHandler }) {
                     if (!Config.storefrontEnabled) {
                         throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
@@ -85,7 +96,7 @@ export const StorefrontController = createController({
                         {
                             findTemplate: () => Repo.template.methods.findByName('product'),
                             findEntries: (templateId) => Repo.entry.methods.findAllByTemplateId(templateId),
-                            findMedia: () => Repo.media.findAll(),
+                            findMedia: () => Repo.media.findAll().then(items => items.map(withMediaAccess)),
                         },
                     );
                     if (!page) {
@@ -99,7 +110,7 @@ export const StorefrontController = createController({
                 type: 'post',
                 path: '/preview',
                 preRequestHandler: RP.createJwtCheck(['USER']),
-                async handler({ request, reply, errorHandler, token }) {
+                async handler({ request, reply, errorHandler }) {
                     if (!Config.storefrontEnabled) {
                         throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
                     }
@@ -107,13 +118,13 @@ export const StorefrontController = createController({
                     if (!parsed.success) {
                         throw errorHandler(HttpStatus.BadRequest, 'Invalid preview request');
                     }
-                    const template = await Repo.template.methods.findByName('product');
+                    const selectedSite = await Repo.siteInstallation.methods.findSelected();
+                    const productId = selectedSite?.models.find(model => model.key === 'product')?.templateId;
+                    const template = productId ? await Repo.template.findById(productId) : await Repo.template.methods.findByName('product');
                     if (!template || parsed.data.entry.templateId !== template._id) {
                         throw errorHandler(HttpStatus.BadRequest, 'Entry is not a product');
                     }
-                    const roles = token.payload.rls;
-                    const policy = token.payload.props?.policy?.templates.find((item) => item._id === template._id);
-                    if (!roles.includes('ADMIN') && !roles.includes('SUDO') && !policy?.get) {
+                    if (!canReadContent('Template', { _id: template._id })) {
                         throw errorHandler(HttpStatus.Forbidden, 'Product access denied');
                     }
                     try {
@@ -121,7 +132,7 @@ export const StorefrontController = createController({
                             parsed.data.entry as unknown as Entry,
                             siteConfig(),
                             template,
-                            await Repo.media.findAll(),
+                            (await Repo.media.findAll()).map(withMediaAccess),
                             parsed.data.config,
                         );
                         reply.header('Cache-Control', 'no-store');
@@ -136,23 +147,21 @@ export const StorefrontController = createController({
                 type: 'post',
                 path: '/page-preview',
                 preRequestHandler: RP.createJwtCheck(['USER']),
-                async handler({ request, reply, errorHandler, token }) {
+                async handler({ request, reply, errorHandler }) {
                     if (!Config.storefrontEnabled) {
                         throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
                     }
                     const parsed = pagePreviewBodySchema.safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid page preview request');
-                    const site = await Repo.siteInstallation.methods.findDefault();
+                    const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site || site.status !== 'ready') {
                         throw errorHandler(HttpStatus.NotFound, 'No installed site');
                     }
                     const entry = parsed.data.entry as unknown as Entry;
                     const selectedModel = site.models.find((model) => model.templateId === entry.templateId);
                     if (!selectedModel) throw errorHandler(HttpStatus.BadRequest, 'Entry is outside the installed site');
-                    const elevated = token.payload.rls.includes('ADMIN') || token.payload.rls.includes('SUDO');
-                    const canRead = (templateId: string) => elevated || Boolean(
-                        token.payload.props?.policy?.templates.find((item) => item._id === templateId)?.get,
-                    );
+                    const canRead = (templateId: string) =>
+                        canReadContent('Template', { _id: templateId });
                     if (!canRead(entry.templateId)) {
                         throw errorHandler(HttpStatus.Forbidden, 'Entry access denied');
                     }
@@ -168,7 +177,7 @@ export const StorefrontController = createController({
                             language: parsed.data.language,
                             availableLanguages: (await Repo.language.findAll()).map((item) => item.code),
                             relatedEntries,
-                            media: await Repo.media.findAll(),
+                            media: (await Repo.media.findAll()).map(withMediaAccess),
                             mediaOrigin: siteConfig().mediaOrigin,
                             currency: siteConfig().currency,
                         });

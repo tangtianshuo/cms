@@ -62,7 +62,7 @@ export const EntryStatusController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler() {
                     const items = await Repo.entryStatus.findAll();
                     return {
@@ -111,7 +111,7 @@ export const EntryStatusController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request, errorHandler }) {
                     const params = request.params as {
                         entryStatusId: string;
@@ -169,7 +169,7 @@ export const EntryStatusController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     EntryStatusCreateBodySchema,
                     ['ADMIN'],
                 ),
@@ -238,7 +238,7 @@ export const EntryStatusController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     EntryStatusUpdateBodySchema,
                     ['ADMIN'],
                 ),
@@ -317,7 +317,7 @@ export const EntryStatusController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createContentJwtCheck(['ADMIN']),
                 async handler({ request, errorHandler, token }) {
                     const params = request.params as {
                         entryStatusId: string;

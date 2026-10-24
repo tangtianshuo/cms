@@ -1,12 +1,16 @@
+import type { DomainPrimaryAudit } from '../site-domains/model';
 import type { MongoDBEntry } from '../_server/modules/mongodb';
 import type { ObjectSchema } from '../_utils/object-utility';
 
 export interface SiteInstallation extends MongoDBEntry {
-    slot: 'default';
+    workspaceId?: string;
+    contentGroupId?: string;
+    templateNamespace?: string;
+    slot: string;
     name: string;
     presetId: string;
     presetVersion: string;
-    status: 'importing' | 'ready' | 'failed';
+    status: 'empty' | 'importing' | 'ready' | 'failed';
     importError: string;
     includeDemo: boolean;
     demoSeeded: boolean;
@@ -23,6 +27,11 @@ export interface SiteInstallation extends MongoDBEntry {
         fields: Array<{ key: string; propId: string }>;
     }>;
     pages: SitePage[];
+    domainAuditOutbox?: DomainPrimaryAudit[];
+    primaryDomainId?: string;
+    domainRevision?: number;
+    domainMutationToken?: string;
+    domainMutationUntil?: number;
     currentReleaseId?: string;
     publishedReleaseIds?: string[];
 }
@@ -47,6 +56,9 @@ export const SiteInstallationSchema: ObjectSchema = {
     _id: { __type: 'string', __required: true },
     createdAt: { __type: 'number', __required: true },
     updatedAt: { __type: 'number', __required: true },
+    workspaceId: { __type: 'string', __required: false },
+    contentGroupId: { __type: 'string', __required: false },
+    templateNamespace: { __type: 'string', __required: false },
     slot: { __type: 'string', __required: true },
     name: { __type: 'string', __required: true },
     presetId: { __type: 'string', __required: true },
@@ -55,6 +67,15 @@ export const SiteInstallationSchema: ObjectSchema = {
     importError: { __type: 'string', __required: true },
     includeDemo: { __type: 'boolean', __required: true },
     demoSeeded: { __type: 'boolean', __required: true },
+    domainAuditOutbox: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
+        _id: { __type: 'string', __required: true }, createdAt: { __type: 'number', __required: true }, updatedAt: { __type: 'number', __required: true },
+        siteId: { __type: 'string', __required: true }, domainId: { __type: 'string', __required: true }, actorId: { __type: 'string', __required: true },
+        operation: { __type: 'string', __required: true }, outcome: { __type: 'string', __required: true }, error: { __type: 'string', __required: true }, bindingRevision: { __type: 'number', __required: true },
+    } } },
+    primaryDomainId: { __type: 'string', __required: false },
+    domainRevision: { __type: 'number', __required: false },
+    domainMutationToken: { __type: 'string', __required: false },
+    domainMutationUntil: { __type: 'number', __required: false },
     currentReleaseId: { __type: 'string', __required: false },
     publishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
     theme: {

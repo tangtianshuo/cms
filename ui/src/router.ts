@@ -70,6 +70,11 @@ const routes: Array<RouteRecordRawExtended> = [
         component: () =>
             import(/* webpackChunkName: "home" */ './views/dashboard/home'),
     },
+    ...(['workspaces', 'domains', 'entry-groups', 'shares'] as const).map((page) => ({
+        path: `/d/${page}`, name: ({ workspaces: 'WorkspacesView', domains: 'DomainsView', 'entry-groups': 'EntryGroupsView', shares: 'SharesView' } as const)[page],
+        meta: { titleKey: `workspace.${page}`, layout: 'DashboardLayout' as const },
+        component: () => import(`./views/dashboard/${page}.tsx`),
+    })),
     {
         path: '/d/presets',
         name: 'PresetsView',
@@ -262,7 +267,13 @@ router.beforeEach(async (to, _, next) => {
     } else if (publicRoutes.includes(to.path)) {
         next();
     } else if ((await window.bcms.sdk.isLoggedIn()) && jwt) {
-        next();
+        try {
+            await window.bcms.sdk.ensureContext();
+            next();
+        } catch {
+            if (to.path === '/d/workspaces') next();
+            else next('/d/workspaces?recover=1');
+        }
     } else {
         toLogin(next);
     }

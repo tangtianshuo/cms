@@ -146,3 +146,16 @@ test('concurrent import returns the installation that won the unique slot', asyn
     assert.equal(result._id, 'winner');
     assert.equal(result.status, 'importing');
 });
+
+test('site namespaces keep independent installations and repeat demo titles', async () => {
+    const memory = memorySource();
+    const first = { _id: 'site-one', createdAt: 1, updatedAt: 1, slot: 'site-one', workspaceId: 'a', templateNamespace: 'site-one', contentGroupId: 'site-one', name: 'One', presetId: '', presetVersion: '', status: 'empty' as const, importError: '', includeDemo: false, demoSeeded: false, theme: getPreset('atelier')!.theme, models: [], pages: [] };
+    await memory.source.addSite(first);
+    const one = await importPreset({ presetId: 'atelier', siteName: 'One', includeDemo: true }, memory.source);
+    await memory.source.addSite({ ...first, _id: 'site-two', slot: 'site-two', templateNamespace: 'site-two', contentGroupId: 'site-two' });
+    const two = await importPreset({ presetId: 'market', siteName: 'Two', includeDemo: true }, memory.source);
+    assert.equal(memory.templates.size, 10);
+    assert.equal(memory.entries.size, 10);
+    assert.ok(one.models.every(model => !two.models.some(other => other.templateId === model.templateId)));
+    assert.ok([...memory.entries.values()].every(entry => entry.workspaceId === 'a' && entry.groupId === entry.siteId));
+});

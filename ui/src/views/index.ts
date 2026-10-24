@@ -16,6 +16,10 @@ import EntriesView from './dashboard/entries';
 import EntryView from './dashboard/entry';
 import PluginView from '@bcms/selfhosted-ui/views/dashboard/plugin';
 import PresetsView from './dashboard/presets';
+import WorkspacesView from './dashboard/workspaces';
+import DomainsView from './dashboard/domains';
+import EntryGroupsView from './dashboard/entry-groups';
+import SharesView from './dashboard/shares';
 
 export const views = {
     LoginView,
@@ -24,6 +28,10 @@ export const views = {
 
     TemplatesView,
     PresetsView,
+    WorkspacesView,
+    DomainsView,
+    EntryGroupsView,
+    SharesView,
     TemplateView,
 
     GroupsView,

@@ -5,8 +5,9 @@ import {
 } from '@bcms/selfhosted-backend/api-key/models/main';
 import { Config } from '@bcms/selfhosted-backend/config';
 
-export const ApiKeyRepo = createMongoDBRepository<ApiKey, void>({
+export const ApiKeyRepo = createMongoDBRepository<ApiKey, { findForAuthentication(id: string): Promise<ApiKey | null> }>({
     name: 'ApiKey',
     collection: `${Config.dbPrefix}_api_keys`,
     schema: ApiKeySchema,
+    methods({ identityCollection }) { return { findForAuthentication: (_id) => identityCollection.findOne({ _id }) }; },
 });

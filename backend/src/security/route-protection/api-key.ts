@@ -44,7 +44,7 @@ export class RPApiKey {
                 'Invalid API Key format',
             );
         }
-        const apiKey = await Repo.apiKey.findById(keyId);
+        const apiKey = await Repo.apiKey.methods.findForAuthentication(keyId);
         if (!apiKey) {
             throw errorHandler(HttpStatus.Unauthorized, 'Invalid API Key');
         }

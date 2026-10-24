@@ -1,3 +1,4 @@
+import { workspaceId } from '../workspaces/context';
 import type { ApiKey } from '@bcms/selfhosted-backend/api-key/models/main';
 import { ObjectId } from '@fastify/mongodb';
 import { FunctionManager } from '@bcms/selfhosted-backend/function/main';
@@ -11,6 +12,7 @@ export class ApiKeyFactory {
             createdAt: Date.now(),
             updatedAt: Date.now(),
             ...data,
+            workspaceId: workspaceId(),
         };
     }
 

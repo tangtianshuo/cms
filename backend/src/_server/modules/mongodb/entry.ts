@@ -2,6 +2,9 @@ import type { ObjectId } from '@fastify/mongodb';
 import type { ObjectSchema } from '@bcms/selfhosted-utils/object-utility';
 
 export interface MongoDBEntry {
+    workspaceId?: string;
+    copyBatchId?: string;
+    provenance?: { shareId: string; ownerWorkspaceId: string; resourceId: string; version: string; copiedAt: number; actorId: string };
     _id: string;
     createdAt: number;
     updatedAt: number;
@@ -14,6 +17,7 @@ export interface MongoDBEntryOID {
 }
 
 export const MongoDBEntrySchema: ObjectSchema = {
+    workspaceId: { __type: 'string', __required: false },
     _id: {
         __type: 'string',
         __required: true,

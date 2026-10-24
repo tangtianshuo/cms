@@ -78,7 +78,7 @@ export const WidgetController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request }) {
                     const params = request.params as {
                         widgetId: string;
@@ -122,7 +122,7 @@ export const WidgetController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler() {
                     const items = await Repo.widget.findAll();
                     return {
@@ -171,7 +171,7 @@ export const WidgetController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request, errorHandler }) {
                     const params = request.params as {
                         widgetId: string;
@@ -227,7 +227,7 @@ export const WidgetController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     WidgetCreateBodySchema,
                     ['ADMIN'],
                 ),
@@ -303,7 +303,7 @@ export const WidgetController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     WidgetUpdateBodySchema,
                     ['ADMIN'],
                 ),
@@ -417,7 +417,7 @@ export const WidgetController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createContentJwtCheck(['ADMIN']),
                 async handler({ request, errorHandler, token }) {
                     const params = request.params as {
                         widgetId: string;

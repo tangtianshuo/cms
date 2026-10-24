@@ -22,6 +22,12 @@ import type {
     EntryLiteInfo,
 } from '@bcms/selfhosted-backend/entry/models/main';
 import { useI18n } from 'vue-i18n';
+import { formClass } from '@bcms/selfhosted-ui/components/workspace/common';
+import {
+    entryGroupOptions,
+    type EntryGroupList,
+    type EntryGroupOption,
+} from '@bcms/selfhosted-ui/components/workspace/entry-group-options';
 
 export const EntriesView = defineComponent({
     setup() {
@@ -46,9 +52,11 @@ export const EntriesView = defineComponent({
         const template = computed(() =>
             sdk.store.template.findById(params.value.templateId),
         );
+        const groups = ref<EntryGroupOption[]>([]);
+        const selectedGroup = ref('');
         const entriesLite = computed(() =>
             sdk.store.entryLite
-                .findMany((e) => e.templateId === template.value?._id)
+                .findMany((e) => e.templateId === template.value?._id && (!selectedGroup.value || e.groupId === selectedGroup.value))
                 .sort((a, b) => b.createdAt - a.createdAt),
         );
         const media = computed(() => sdk.store.media.items());
@@ -112,6 +120,10 @@ export const EntriesView = defineComponent({
                     },
                 },
                 {
+                    text: t('shares.grant'),
+                    onClick() { router.push({ path: '/d/shares', query: { type: 'Entry', id: entryLite._id } }); },
+                },
+                {
                     text: t('views.entries.viewModel'),
                     icon: '/code',
                     onClick(event) {
@@ -170,6 +182,12 @@ export const EntriesView = defineComponent({
                 loading.value = true;
             }, 100);
             await throwable(async () => {
+                groups.value = entryGroupOptions(
+                    await sdk.send<EntryGroupList>({
+                        url: '/api/v4/entry-groups/',
+                    }),
+                    t('entryGroups.defaultName'),
+                );
                 await sdk.template.getAll();
                 await sdk.entry.getAllLiteByTemplateId({
                     templateId: params.value.templateId,
@@ -289,33 +307,17 @@ export const EntriesView = defineComponent({
                                     <LanguageSwitch />
                                 </div>
                                 <Button
-                                    onClick={async () => {
-                                        await throwable(
-                                            async () => {
-                                                return await sdk.entry.create({
-                                                    templateId:
-                                                        template.value?._id ||
-                                                        '',
-                                                    data: {
-                                                        statuses: [],
-                                                        meta: [],
-                                                        content: [],
-                                                    },
-                                                });
-                                            },
-                                            async (entry) => {
-                                                await router.push(
-                                                    route.path +
-                                                        '/' +
-                                                        entry._id,
-                                                );
-                                            },
-                                        );
-                                    }}
+                                    onClick={() => router.push({ path: `${route.path}/create`, query: selectedGroup.value ? { group: selectedGroup.value } : {} })}
                                 >
                                     {t('views.entries.createNew')}
                                 </Button>
                             </div>
+                        </div>
+                        <div class="my-4 flex flex-wrap items-center gap-3">
+                            <label class="text-sm">{t('entryGroups.filter')} <select class={formClass} value={selectedGroup.value} onChange={event => { selectedGroup.value = (event.target as HTMLSelectElement).value; }}>
+                                <option value="">{t('entryGroups.all')}</option>{groups.value.map(group => <option value={group._id}>{group.name}</option>)}
+                            </select></label>
+                            <a href="/d/entry-groups" class="text-sm underline">{t('entryGroups.manage')}</a>
                         </div>
                         <div
                             class={`relative max-h-full h-full`}

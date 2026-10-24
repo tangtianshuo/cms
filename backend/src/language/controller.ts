@@ -60,7 +60,7 @@ export const LanguageController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler() {
                     const languages = await Repo.language.findAll();
                     return {
@@ -109,7 +109,7 @@ export const LanguageController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request, errorHandler }) {
                     const params = request.params as {
                         languageId: string;
@@ -167,7 +167,7 @@ export const LanguageController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     LanguageCreateBodySchema,
                     ['ADMIN'],
                 ),
@@ -241,7 +241,7 @@ export const LanguageController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createContentJwtCheck(['ADMIN']),
                 async handler({ request, errorHandler }) {
                     const params = request.params as {
                         orgId: string;

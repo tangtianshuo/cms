@@ -1,4 +1,5 @@
 import type { AxiosError, AxiosRequestConfig } from 'axios';
+import type { ScopeSelection, SelectedContext } from './context';
 import axios from 'axios';
 import { Buffer } from 'buffer';
 import type { UserJwt } from '@bcms/selfhosted-backend/user/models/main';
@@ -40,6 +41,69 @@ export class Sdk {
      * Unpacked access token
      */
     accessToken: UserJwt | null = null;
+
+    context: SelectedContext | null = null;
+    private scopeEpoch = 0;
+    private scopeChanging = false;
+    private contextPromise?: Promise<SelectedContext>;
+
+    async ensureContext(): Promise<SelectedContext> {
+        if (this.context) return this.context;
+        if (!this.contextPromise)
+            this.contextPromise = (async () => {
+                const selected = this.storage.get<ScopeSelection>(
+                    'selection',
+                ) || { workspaceId: 'default' };
+                const result = await this.send<SelectedContext>({
+                    url: '/api/v4/workspaces/current',
+                    selectorOverride: selected,
+                });
+                if (result.context.siteId) {
+                    const sites = await this.send<{
+                        items: import('@bcms/selfhosted-backend/presets/site-model').SiteInstallation[];
+                    }>({
+                        url: '/api/v4/workspaces/current/sites',
+                        selectorOverride: selected,
+                    });
+                    result.site = sites.items.find(
+                        (site) => site._id === result.context.siteId,
+                    );
+                }
+                this.context = result;
+                return result;
+            })();
+        try {
+            return await this.contextPromise;
+        } catch (error) {
+            this.contextPromise = undefined;
+            throw error;
+        }
+    }
+
+    /** Validate first, then retire this entire SDK generation before navigating. */
+    async selectContext(selection: ScopeSelection, destination = '/d/presets') {
+        await this.send<SelectedContext>({
+            url: '/api/v4/workspaces/current',
+            selectorOverride: selection,
+        });
+        if (!(await this.storage.set('selection', selection)))
+            throw new Error('Could not save workspace selection');
+        this.scopeChanging = true;
+        this.scopeEpoch++;
+        this.socket.clear();
+        for (const value of Object.values(this.store)) {
+            if (
+                value &&
+                typeof value.items === 'function' &&
+                typeof value.remove === 'function'
+            )
+                value.remove(
+                    value.items().map((item: { _id: string }) => item._id),
+                );
+        }
+        this.context = null;
+        window.location.assign(destination);
+    }
 
     private refreshQueue = createQueue<boolean>();
 
@@ -107,6 +171,9 @@ export class Sdk {
     }
 
     public async clear() {
+        this.scopeEpoch++;
+        this.context = null;
+        this.contextPromise = undefined;
         this.accessToken = null;
         this.accessTokenRaw = null;
         await this.storage.clear();
@@ -209,7 +276,13 @@ export class Sdk {
 
     public async isLoggedIn(): Promise<boolean> {
         const result = await this.refreshAccessToken();
-        if (result && !this.socket.connected && !this.config.ignoreSocket) {
+        if (
+            result &&
+            this.context &&
+            !this.scopeChanging &&
+            !this.socket.connected &&
+            !this.config.ignoreSocket
+        ) {
             try {
                 await this.socket.connect();
             } catch (error) {
@@ -220,8 +293,22 @@ export class Sdk {
     }
 
     public async send<Result = unknown>(
-        conf: AxiosRequestConfig & { doNotAuth?: boolean },
+        conf: AxiosRequestConfig & {
+            doNotAuth?: boolean;
+            selectorOverride?: ScopeSelection;
+        },
     ): Promise<Result> {
+        const epoch = this.scopeEpoch;
+        if (this.scopeChanging)
+            throw new Error('Workspace selection is changing');
+        const selection =
+            conf.selectorOverride ||
+            (this.context
+                ? {
+                      workspaceId: this.context.context.workspaceId,
+                      siteId: this.context.context.siteId,
+                  }
+                : undefined);
         if (!conf.headers) {
             conf.headers = {};
         }
@@ -235,6 +322,14 @@ export class Sdk {
                 };
             }
         }
+        if (!conf.doNotAuth && selection) {
+            conf.headers['x-bcms-workspace'] = selection.workspaceId;
+            if (selection.siteId)
+                conf.headers['x-bcms-site'] = selection.siteId;
+        }
+        if (epoch !== this.scopeEpoch || this.scopeChanging)
+            throw new Error('Workspace selection changed');
+        delete conf.selectorOverride;
         conf.url = `${this.config.apiOrigin}${conf.url}`;
         if (this.socket.id) {
             conf.headers['X-Bcms-Sid'] = this.socket.id;
@@ -242,6 +337,8 @@ export class Sdk {
         try {
             conf.maxBodyLength = 100000000;
             const response = await axios(conf);
+            if (epoch !== this.scopeEpoch || this.scopeChanging)
+                throw new Error('Workspace selection changed');
             return response.data;
         } catch (error) {
             const err = error as AxiosError<{

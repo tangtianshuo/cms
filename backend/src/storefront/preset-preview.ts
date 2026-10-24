@@ -65,7 +65,7 @@ function image(site: SiteInstallation, modelKey: string, entry: Entry | undefine
     if (!value || typeof value !== 'object' || !('_id' in value) || typeof value._id !== 'string') return '';
     const found = media.find((item) => item._id === value._id && item.mimetype.startsWith('image/'));
     if (!found) return '';
-    return `${new URL(mediaOrigin).origin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image`;
+    return `${new URL(mediaOrigin).origin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image${found.accessToken ? '?cap=' + encodeURIComponent(found.accessToken) : ''}`;
 }
 
 function pointer(site: SiteInstallation, modelKey: string, entry: Entry | undefined,

@@ -27,7 +27,7 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
         await fastify.close();
     });
     await fastify.register(fastifyMongo, { url: process.env.STOREFRONT_TEST_MONGO!, database, forceClose: true });
-    for (const repo of [Repo.siteInstallation, Repo.storefrontRelease, Repo.storefrontReleaseAudit,
+    for (const repo of [Repo.workspace, Repo.siteInstallation, Repo.storefrontRelease, Repo.storefrontReleaseAudit,
         Repo.template, Repo.entry, Repo.language, Repo.media]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify,
             next: (error?: Error) => error ? reject(error) : resolve() } as never));
@@ -98,6 +98,7 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
         const port = new URL(`http://${Config.storefrontHost}`).port;
         storefront = spawn(process.execPath, [path.resolve('../storefront/.output/server/index.mjs')], {
             env: { ...process.env, HOST: '127.0.0.1', PORT: port,
+                NUXT_DOMAIN_PRODUCTION: 'false', NUXT_GATEWAY_SECRET: '',
                 NUXT_CMS_INTERNAL_ORIGIN: address, NUXT_PUBLIC_SITE_HOST: Config.storefrontHost },
             stdio: ['ignore', 'pipe', 'pipe'],
         });

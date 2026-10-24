@@ -1,3 +1,4 @@
+import { emitEntrySync } from '../access';
 import { SocketManager } from '@bcms/selfhosted-backend/_server/modules/socket';
 import { createSocketEventHandler } from '@bcms/selfhosted-backend/socket/handlers/_wrapper';
 import type {
@@ -59,7 +60,7 @@ function emit<Name extends SocketEventName>(
             const conn = connections[i];
             if (conn !== excludeConnection) {
                 if (SocketManager.conns[conn]) {
-                    SocketManager.conns[conn].emit(eventName, data);
+                    void emitEntrySync(SocketManager.conns[conn], eventName, data);
                 }
             }
         }
@@ -67,7 +68,7 @@ function emit<Name extends SocketEventName>(
         for (let i = 0; i < connections.length; i++) {
             const conn = connections[i];
             if (SocketManager.conns[conn]) {
-                SocketManager.conns[conn].emit(eventName, data);
+                void emitEntrySync(SocketManager.conns[conn], eventName, data);
             }
         }
     }

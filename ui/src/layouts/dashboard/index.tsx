@@ -1,4 +1,4 @@
-import { defineComponent, onMounted, ref, Teleport } from 'vue';
+import { defineComponent, onBeforeUnmount, onMounted, ref, Teleport } from 'vue';
 import { delay } from '@bcms/selfhosted-ui/util/delay';
 import { BgDashboard } from '@bcms/selfhosted-ui/components/bg-dashboard';
 import { DashboardLayoutAsideContent } from '@bcms/selfhosted-ui/layouts/dashboard/aside-content';
@@ -17,10 +17,21 @@ export const DashboardLayout = defineComponent({
         const [t1State] = pageTransition.register(() => delay(300));
         const [t2State] = pageTransition.register(() => delay(300));
 
+        async function refreshMediaCapabilities() {
+            if (document.visibilityState === 'visible' && sdk.context && sdk.store.media.items().length) {
+                try { await sdk.media.getAll(); } catch (cause) { console.error('Could not refresh media access', cause); }
+            }
+        }
+        const mediaRefresh = setInterval(refreshMediaCapabilities, 60000);
+        onBeforeUnmount(() => {
+            clearInterval(mediaRefresh);
+            document.removeEventListener('visibilitychange', refreshMediaCapabilities);
+        });
         onMounted(async () => {
+            document.addEventListener('visibilitychange', refreshMediaCapabilities);
             await throwable(async () => {
                 await sdk.user.get('me');
-                await sdk.template.getAll();
+                if (sdk.context) await sdk.template.getAll();
             });
         });
 

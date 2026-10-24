@@ -1,4 +1,8 @@
-import type { Collection, Filter, IndexDescription } from 'mongodb';
+import { registerCopyRepository, copyOverlayItem } from '../../../resource-shares/visibility';
+import { withWorkspaceCreation } from '../../../workspaces/lifecycle';
+import { workspaceCacheKey, workspaceContext, workspaceFilter, contentFilter, canWriteContent } from '../../../workspaces/context';
+import { scopedCollection, contentWriteError, stampOwnership, assertContentWrite, ContentScopeError } from '../../../workspaces/scoped-collection';
+import type { Collection, Db, Filter, IndexDescription, UpdateFilter } from 'mongodb';
 import type { Module } from '@bcms/selfhosted-backend/_server/module';
 import { Logger } from '@bcms/selfhosted-backend/_server/logger';
 import type { MongoDBEntry } from '@bcms/selfhosted-backend/_server/modules/mongodb/entry';
@@ -84,6 +88,8 @@ export interface MongoDBRepository<Entry extends MongoDBEntry, Methods> {
      * Return number of entities.
      */
     count(): Promise<number>;
+    /** Admin-only lifecycle occupancy check; returns no content and includes policy-hidden resources. */
+    hasOwnedForLifecycle(query?: Filter<Entry>): Promise<boolean>;
 }
 
 /**
@@ -107,6 +113,10 @@ export interface MongoDBRepositoryConfig<Entry extends MongoDBEntry, Methods> {
      * Indexes to create before the repository is ready.
      */
     indexes?: IndexDescription[];
+    beforeIndexes?(collection: Collection<Entry>, database?: Db): Promise<void>;
+    workspaceScoped?: boolean;
+    prepareWrite?(entry: Entry): Promise<void>;
+    aroundWrite?<T>(entries: Entry[], action: () => Promise<T>): Promise<T>;
     /**
      * Custom repository methods.
      */
@@ -132,6 +142,8 @@ export interface MongoDBRepositoryConfig<Entry extends MongoDBEntry, Methods> {
          */
         logger: Logger;
         mdb: Collection<Entry>;
+        /** Raw access only for named authentication/public identity lookups. */
+        identityCollection: Collection<Entry>;
         cache: MemCache<Entry>;
     }): Methods;
 }
@@ -144,14 +156,28 @@ export function createMongoDBRepository<
 ): MongoDBRepository<Entry, Methods> {
     const logger = new Logger(config.name);
     let intf: Collection<Entry> = null as never;
+    let raw: Collection<Entry> = null as never;
+    const scoped = config.workspaceScoped !== false;
+    const states = new Map<string, { cache: MemCache<Entry>; methods: Methods; manyQueue: Record<string, Queue<Entry[]>>; singleQueue: Record<string, Queue<Entry>>; latches: Record<string, boolean> }>();
+    const invalidate = () => { for (const value of states.values()) { value.cache = new MemCache<Entry>('_id', []); value.latches = {}; value.manyQueue = {}; value.singleQueue = {}; if (config.methods) value.methods = config.methods({ name: config.name, collection: config.collection, schema: config.schema, repo: self, logger, mdb: intf, identityCollection: raw, cache: value.cache }); } };
+    const state = () => {
+        const id = scoped ? workspaceCacheKey() : '__instance';
+        let value = states.get(id);
+        if (!value) {
+            value = { cache: new MemCache<Entry>('_id', []), methods: undefined as never, manyQueue: {}, singleQueue: {}, latches: {} };
+            states.set(id, value);
+            if (config.methods && raw) value.methods = config.methods({ name: config.name, collection: config.collection, schema: config.schema, repo: self, logger, mdb: intf, identityCollection: raw, cache: value.cache });
+        }
+        return value;
+    };
 
     const self: MongoDBRepository<Entry, Methods> = {
         collection: config.collection,
-        methods: undefined as never,
-        manyQueue: {},
-        singleQueue: {},
-        latches: {},
-        cache: new MemCache<Entry>('_id', []),
+        get methods() { return state().methods; },
+        get manyQueue() { return state().manyQueue; },
+        get singleQueue() { return state().singleQueue; },
+        get latches() { return state().latches; },
+        get cache() { return state().cache; },
         init() {
             return {
                 name: config.name,
@@ -164,25 +190,14 @@ export function createMongoDBRepository<
                         );
                         return;
                     }
-                    intf = fastify.mongo.db.collection(config.collection);
-                    if (config.methods) {
-                        self.methods = config.methods({
-                            name: config.name,
-                            collection: config.collection,
-                            schema: config.schema,
-                            repo: self,
-                            logger,
-                            mdb: intf,
-                            cache: self.cache,
-                        });
-                    }
-                    if (config.indexes?.length) {
-                        intf.createIndexes(config.indexes)
-                            .then(() => next())
-                            .catch((error) => next(error));
-                    } else {
-                        next();
-                    }
+                    raw = fastify.mongo.db.collection(config.collection);
+                    intf = scoped ? scopedCollection(raw, config.prepareWrite, config.name, config.aroundWrite, invalidate, fastify.mongo.db!) : raw;
+                    registerCopyRepository(config.name, { raw, prepare: config.prepareWrite, invalidate }, fastify.mongo.db!);
+                    states.clear();
+                    (async () => {
+                        await config.beforeIndexes?.(raw, fastify.mongo.db!);
+                        if (config.indexes?.length) await raw.createIndexes(config.indexes);
+                    })().then(() => next()).catch(error => next(error));
                 },
             };
         },
@@ -197,17 +212,19 @@ export function createMongoDBRepository<
 
         async findAll() {
             if (self.latches.all) {
-                return self.cache.items;
+                return structuredClone(self.cache.items);
             }
             const result = (await intf.find().toArray()) as Entry[];
             self.cache.set(result);
-            return result;
+            return structuredClone(result);
         },
 
         async findById(id) {
+            const overlay = copyOverlayItem(config.name, id);
+            if (overlay) return overlay as Entry;
             const cacheHit = self.cache.findById(id);
             if (cacheHit) {
-                return cacheHit;
+                return structuredClone(cacheHit);
             }
             const result = (await intf.findOne({
                 _id: id,
@@ -215,13 +232,13 @@ export function createMongoDBRepository<
             if (result) {
                 this.cache.set(result);
             }
-            return result;
+            return structuredClone(result);
         },
 
         async findAllById(ids) {
             const cacheHits: Entry[] = self.cache.findManyById(ids);
             if (cacheHits.length === ids.length) {
-                return cacheHits;
+                return structuredClone(cacheHits);
             }
             const missingIds: string[] = [];
             for (let i = 0; i < ids.length; i++) {
@@ -236,7 +253,7 @@ export function createMongoDBRepository<
                 } as Filter<Entry>)
                 .toArray()) as Entry[];
             self.cache.set(result);
-            return [...cacheHits, ...result];
+            return structuredClone([...cacheHits, ...result]);
         },
 
         async add(entry, manualCU) {
@@ -266,20 +283,32 @@ export function createMongoDBRepository<
             if (!manualCU) {
                 entry.updatedAt = Date.now();
             }
-            await intf.updateOne({ _id: entry._id } as Filter<Entry>, {
-                $set: entry,
-            });
-            self.cache.set(entry);
+            if (scoped) { stampOwnership(entry); assertContentWrite(); if (!canWriteContent(config.name, entry, 'put')) throw new ContentScopeError('Resource update denied'); }
+            const previous = await intf.findOne({ _id: entry._id } as Filter<Entry>);
+            if (!previous) throw new ContentScopeError('Resource not found in workspace');
+            if (entry.copyBatchId !== previous.copyBatchId || JSON.stringify(entry.provenance) !== JSON.stringify(previous.provenance)) throw new ContentScopeError('Copy provenance cannot be changed');
+            if (scoped && !canWriteContent(config.name, previous, 'put')) throw new ContentScopeError('Resource update denied');
+            const perform = async () => {
+                await config.prepareWrite?.(entry);
+                const write = () => raw.updateOne((scoped ? { $and: [contentFilter(config.name, 'put'), { _id: entry._id }] } : { _id: entry._id }) as Filter<Entry>, { $set: entry, ...(config.name === 'Entry' && !('titleKeys' in entry) ? { $unset: { titleKeys: '' } } : {}) } as UpdateFilter<Entry>);
+                const result = config.aroundWrite ? await config.aroundWrite([entry], write) : await write();
+                if (result.matchedCount !== 1) throw new ContentScopeError('Resource not found in workspace');
+                invalidate(); self.cache.set(entry);
+            };
+            try {
+                if (scoped) await withWorkspaceCreation({ kind: config.collection, resourceId: entry._id }, perform);
+                else await perform();
+            } catch (error) { invalidate(); contentWriteError(error, config.name); }
             return entry;
         },
 
         async updateMany(entries, manualCU) {
-            const output: Entry[] = [];
-            for (let i = 0; i < entries.length; i++) {
-                output.push(await self.update(entries[i], manualCU));
-            }
-            self.cache.set(output);
-            return output;
+            const write = async () => {
+                const output: Entry[] = [];
+                for (const entry of entries) output.push(await self.update(entry, manualCU));
+                self.cache.set(output); return output;
+            };
+            return scoped ? withWorkspaceCreation({ kind: config.collection, resourceId: entries.map(entry => entry._id).join(',') }, write) : write();
         },
 
         async deleteById(id) {
@@ -294,6 +323,11 @@ export function createMongoDBRepository<
             } as Filter<Entry>);
             self.cache.remove(ids);
             return result.deletedCount === ids.length;
+        },
+
+        async hasOwnedForLifecycle(query = {}) {
+            if (!scoped || !workspaceContext()?.admin) throw new ContentScopeError('Workspace administration required');
+            return !!await raw.findOne({ $and: [workspaceFilter(), query] } as Filter<Entry>, { projection: { _id: 1 } });
         },
 
         async count() {

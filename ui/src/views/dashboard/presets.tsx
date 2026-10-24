@@ -40,11 +40,11 @@ export const PresetsView = defineComponent({
 
         const selected = computed(() => catalog.value.find((item) => item.id === selectedId.value));
         const conflicts = computed(() => plan.value?.models.filter((item) => item.action === 'conflict') || []);
-        const otherSite = computed(() => !!site.value && site.value.presetId !== selectedId.value);
+        const otherSite = computed(() => !!site.value?.presetId && site.value.presetId !== selectedId.value);
         const installed = computed(() => site.value?.status === 'ready' && site.value.presetId === selectedId.value);
         const importInProgress = computed(() => site.value?.status === 'importing' &&
             Date.now() - site.value.updatedAt < 120000);
-        const canImport = computed(() => !!selected.value && !!plan.value && !busy.value && !installed.value &&
+        const canImport = computed(() => !!sdk.context?.context.admin && !!sdk.context?.context.siteId && !!selected.value && !!plan.value && !busy.value && !installed.value &&
             !importInProgress.value && !otherSite.value && conflicts.value.length === 0 && name.value.trim().length > 0);
         const previewUrl = computed(() => selected.value
             ? `${origin}/presets/${encodeURIComponent(selected.value.id)}?view=${view.value}` : '');
@@ -122,6 +122,8 @@ export const PresetsView = defineComponent({
 
         return () => (
             <div class="px-4 pb-16 pt-8 md:px-8">
+                <div class="mb-5 text-sm"><strong>{sdk.context?.workspace.name}</strong> · {site.value?.name || t('workspace.chooseSite')} <a class="ml-3 underline" href="/d/workspaces">{t('workspace.changeSelection')}</a></div>
+                {!sdk.context?.context.siteId && <p class="mb-5 text-sm">{t('workspace.selectBeforeInstall')}</p>}
                 <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h1 class="text-2xl font-semibold text-dark dark:text-white">{t('presets.title')}</h1>

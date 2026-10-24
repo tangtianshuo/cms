@@ -220,6 +220,7 @@ export const UserController = createController({
                     'ADMIN',
                 ]),
                 async handler({ body, token, errorHandler }) {
+                    if (!['ADMIN', 'USER', 'SUDO'].includes(body.role)) throw errorHandler(HttpStatus.BadRequest, 'Unsupported user role');
                     let user = UserFactory.create({
                         email: body.email,
                         username: body.firstName + ' ' + body.lastName,
@@ -329,7 +330,7 @@ export const UserController = createController({
                                 'You cannot change your role. Ask other admin to do that for you',
                             );
                         }
-                        if (!['ADMIN', 'USER'].includes(body.role)) {
+                        if (!['ADMIN', 'USER', 'SUDO'].includes(body.role)) {
                             throw errorHandler(
                                 HttpStatus.BadRequest,
                                 `Role name "${body.role}" is not allowed`,

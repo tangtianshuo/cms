@@ -22,6 +22,10 @@ import {
 } from '@bcms/selfhosted-backend/entry/models/content';
 
 export interface Entry extends MongoDBEntry {
+    titleKeys?: string[];
+    workspaceId?: string;
+    siteId?: string;
+    groupId?: string;
     templateId: string;
     userId: string;
     statuses: EntryStatusValue[];
@@ -31,6 +35,9 @@ export interface Entry extends MongoDBEntry {
 
 export const EntrySchema: ObjectSchema = {
     ...MongoDBEntrySchema,
+    workspaceId: { __type: 'string', __required: false },
+    siteId: { __type: 'string', __required: false },
+    groupId: { __type: 'string', __required: false },
     templateId: {
         __type: 'string',
         __required: true,
@@ -115,6 +122,9 @@ export interface EntryStatusParsed {
 }
 
 export interface EntryParsed extends MongoDBEntry {
+    workspaceId?: string;
+    siteId?: string;
+    groupId?: string;
     templateId: string;
     templateName: string;
     userId: string;

@@ -1,3 +1,4 @@
+import { withSocketEvent } from '../access';
 import {
     type ObjectSchema,
     ObjectUtility,
@@ -9,7 +10,7 @@ export function createSocketEventHandler<Data = unknown>(
     dataSchema: ObjectSchema,
     handler: SocketEventHandler<Data>,
 ): SocketEventHandler<Data> {
-    return async (data, conn) => {
+    return async (data, conn, eventName) => {
         const dataCheck = ObjectUtility.compareWithSchema(
             data,
             dataSchema,
@@ -19,12 +20,12 @@ export function createSocketEventHandler<Data = unknown>(
             console.warn('socketEventHandler.error', {
                 reason: dataCheck.message,
                 data,
-                conn,
+                connectionId: conn.id,
             });
             return;
         }
         try {
-            await handler(data, conn);
+            await withSocketEvent(conn, eventName || '', data, () => handler(data, conn));
         } catch (err) {
             console.error(err);
         }

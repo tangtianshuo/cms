@@ -1,3 +1,4 @@
+import { siteContext } from '../utils/site-context';
 import { fetchPublishedSite } from '../utils/release.mjs';
 
 export default defineEventHandler(async (event) => {
@@ -10,7 +11,7 @@ export default defineEventHandler(async (event) => {
     let page;
     try {
         page = await fetchPublishedSite({ path,
-            host: getRequestHost(event, { xForwardedHost: false }), expectedHost: config.public.siteHost,
+            host: siteContext(event), expectedHost: config.public.siteHost, gatewaySecret: config.gatewaySecret,
             cmsOrigin: config.cmsInternalOrigin, fetcher: $fetch });
     } catch {
         throw createError({ statusCode: 502, statusMessage: 'Published site unavailable' });

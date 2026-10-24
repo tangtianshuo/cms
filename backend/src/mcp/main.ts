@@ -1,3 +1,4 @@
+import { socketIdentity } from '../socket/access';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -33,7 +34,7 @@ function authHeader(request: FastifyRequest): string {
     if (header.startsWith('Bearer ')) {
         const jwt = JWTManager.get({
             token: header.slice('Bearer '.length),
-            roles: ['ADMIN', 'USER'],
+            roles: ['ADMIN', 'USER', 'SUDO'],
         });
         if (jwt instanceof JWTError) {
             throw new Error('Invalid or expired JWT.');
@@ -43,7 +44,7 @@ function authHeader(request: FastifyRequest): string {
     throw new Error('Unsupported authorization scheme. Use ApiKey or Bearer.');
 }
 
-function createServer(fastify: FastifyInstance, authorization: string) {
+function createServer(fastify: FastifyInstance, authorization: string, selectors: Record<string, string>) {
     const server = new McpServer({
         name: 'bcms-content',
         version: '1.0.0',
@@ -57,7 +58,7 @@ function createServer(fastify: FastifyInstance, authorization: string) {
         const response: any = await fastify.inject({
             method,
             url,
-            headers: { authorization },
+            headers: { authorization, ...selectors },
             payload: payload as any,
         });
         let data: any;
@@ -408,7 +409,7 @@ export function registerMcpEndpoint(fastify: FastifyInstance) {
                 authorization = authHeader(request);
                 if (authorization.startsWith('ApiKey ')) {
                     const [id, secret] = authorization.slice(7).split('.');
-                    const key = await Repo.apiKey.findById(id);
+                    const key = await Repo.apiKey.methods.findForAuthentication(id);
                     if (!key || key.blocked || key.secret !== secret) {
                         reply
                             .code(401)
@@ -428,7 +429,22 @@ export function registerMcpEndpoint(fastify: FastifyInstance) {
                 return;
             }
 
-            const server = createServer(fastify, authorization);
+            const selectors: Record<string, string> = {};
+            for (const name of ['x-bcms-workspace', 'x-bcms-site']) {
+                const value = request.headers[name];
+                if (value !== undefined) {
+                    if (typeof value !== 'string') { reply.code(400).send({ message: 'Invalid workspace selector' }); return; }
+                    selectors[name] = value;
+                }
+            }
+            try {
+                const scope = new URL('http://mcp.local');
+                scope.searchParams.set('token', authorization.startsWith('ApiKey ') ? `apikey_${authorization.slice(7)}` : authorization.slice(7));
+                if (selectors['x-bcms-workspace']) scope.searchParams.set('workspaceId', selectors['x-bcms-workspace']);
+                if (selectors['x-bcms-site']) scope.searchParams.set('siteId', selectors['x-bcms-site']);
+                await socketIdentity(scope.toString());
+            } catch { reply.code(403).send({ message: 'Workspace access denied' }); return; }
+            const server = createServer(fastify, authorization, selectors);
             const transport = new StreamableHTTPServerTransport({
                 sessionIdGenerator: undefined,
             });
