@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { seedIdentity } from '../test-fixtures/identity';
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyMongo from '@fastify/mongodb';
@@ -28,7 +29,7 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     await templates.createIndex({ name: 1 }, { name: 'template_name_unique', unique: true });
     await sites.insertOne({ _id: 'legacy-site' as never, slot: 'default', name: 'Legacy', status: 'empty', presetId: '', createdAt: 1, updatedAt: 1, models: [], pages: [] });
     await templates.insertOne({ _id: 'legacy-template' as never, name: 'custom-legacy', props: [{ id: 'original-prop' }] });
-    for (const repo of [Repo.workspace, Repo.user, Repo.apiKey, Repo.widget, Repo.group, Repo.entryStatus, Repo.templateOrganizer, Repo.siteInstallation, Repo.template, Repo.entryGroup, Repo.entry, Repo.language, Repo.media, Repo.storefrontRelease, Repo.storefrontReleaseAudit, Repo.siteDomain, Repo.siteDomainAudit]) {
+    for (const repo of [Repo.workspace, Repo.user, Repo.apiKey, Repo.widget, Repo.group, Repo.entryStatus, Repo.templateOrganizer, Repo.siteInstallation, Repo.template, Repo.entryGroup, Repo.entry, Repo.language, Repo.media, Repo.resourceShare, Repo.storefrontRelease, Repo.storefrontReleaseAudit, Repo.siteDomain, Repo.siteDomainAudit]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify: app, next: (error?: Error) => error ? reject(error) : resolve() } as never));
     }
     assert.equal((await templates.findOne({ _id: 'legacy-template' as never }))?.props[0].id, 'original-prop');
@@ -37,6 +38,7 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     // New compound constraints permit the same model name only across workspaces.
     await templates.insertOne({ _id: 'other-template' as never, workspaceId: 'other', name: 'custom-legacy' });
     await assert.rejects(templates.insertOne({ _id: 'duplicate' as never, workspaceId: 'default', name: 'custom-legacy' }), (error: any) => error.code === 11000);
+    for (const id of ['admin', 'member', 'viewer', 'stranger']) await seedIdentity(id, id === 'admin' ? 'ADMIN' : 'USER');
     JWTManager.setScopes([{ issuer: Config.jwtIssuer, secret: Config.jwtSecret, alg: 'HS256', expIn: 60000 }]);
     const jwt = (userId: string, roles: string[]) => { const token = JWTManager.create({ issuer: Config.jwtIssuer, userId, roles }); assert.ok(!(token instanceof JWTError)); return `Bearer ${JWTEncode.encode(token)}`; };
     const admin = jwt('admin', ['ADMIN']); const member = jwt('member', ['USER']); const stranger = jwt('stranger', ['USER']); const viewer = jwt('viewer', ['USER']);
@@ -54,8 +56,6 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     assert.equal((await request('/api/v4/workspaces/current', admin, empty._id)).statusCode, 403);
     const a = await ok('/api/v4/workspaces', admin, undefined, undefined, { name: 'A' });
     const b = await ok('/api/v4/workspaces', admin, undefined, undefined, { name: 'B' });
-    await Repo.user.add({ _id: 'member', createdAt: 1, updatedAt: 1 } as never);
-    await Repo.user.add({ _id: 'viewer', createdAt: 1, updatedAt: 1 } as never);
     await ok('/api/v4/workspaces/current/members/member', admin, a._id, undefined, { role: 'admin' }, 'PUT');
     await ok('/api/v4/workspaces/current/members/viewer', admin, a._id, undefined, { role: 'viewer' }, 'PUT');
     assert.equal((await request('/api/v4/workspaces/current/sites', stranger, a._id)).statusCode, 403);
@@ -67,10 +67,10 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     assert.equal((await request('/api/v4/presets/site', member, a._id, three._id)).statusCode, 403);
     assert.equal((await request('/api/v4/presets/site', member, b._id, three._id)).statusCode, 403);
     assert.equal((await request('/api/v4/presets/site', admin, undefined, one._id)).statusCode, 403);
-    const install = (workspace: string, site: string, presetId: string) => ok('/api/v4/presets/import', workspace === a._id ? member : admin, workspace, site, { presetId, siteName: site, includeDemo: true });
+    const install = (workspace: string, site: string, presetId: string) => ok('/api/v4/presets/import', admin, workspace, site, { presetId, siteName: site, includeDemo: true });
     const installed = await Promise.all([install(a._id, one._id, 'atelier'), install(a._id, two._id, 'market'), install(b._id, three._id, 'atelier')]) as SiteInstallation[];
     assert.equal(new Set(installed.flatMap(site => site.models.map(model => model.templateId))).size, 15);
-    assert.equal((await Repo.entry.findAll()).length, 15);
+    assert.equal(await app.mongo.db!.collection(Repo.entry.collection).countDocuments({}), 15);
     assert.equal((await ok('/api/v4/presets/import', admin, undefined, undefined, { presetId: 'atelier', siteName: 'Legacy', includeDemo: true }))._id, 'legacy-site');
     assert.equal((await ok('/api/v4/presets/site')).site._id, 'legacy-site');
     const publish = (workspace: string, site: string, expectedReleaseId = '') => ok('/api/v4/presets/releases/publish', workspace === a._id ? member : admin, workspace, site, { expectedReleaseId });
@@ -78,6 +78,11 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     const races = await Promise.all([install(a._id, concurrentSite._id, 'atelier'), install(a._id, concurrentSite._id, 'atelier')]);
     assert.ok(races.every(site => site._id === concurrentSite._id));
     assert.equal((await Repo.siteInstallation.methods.findFresh(concurrentSite._id))?.status, 'ready');
+    // Workspace administration does not grant content access. Seed explicit model grants.
+    const memberUser = (await Repo.user.findById('member'))!;
+    memberUser.customPool.policy.templates = installed.slice(0, 2).flatMap(site => site.models.map(model =>
+        ({ _id: model.templateId, get: true, post: true, put: true, delete: true })));
+    await Repo.user.update(memberUser);
     const first = await publish(a._id, one._id); const second = await publish(a._id, two._id); const third = await publish(b._id, three._id);
     const next = await publish(a._id, one._id, first.releaseId);
     await ok('/api/v4/presets/releases/rollback', member, a._id, one._id, { releaseId: first.releaseId, expectedReleaseId: next.releaseId });
@@ -92,14 +97,15 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     const resolution = await domainService().resolve('workspace-a.test'); assert.equal(resolution?.workspaceId, a._id);
     const publicSource = { resolve: (host: string) => domainService().resolve(host), findSiteById: Repo.siteInstallation.methods.findFresh, findRelease: (id: string) => Repo.storefrontRelease.findById(id) };
     assert.equal((await publishedDomainSite('workspace-a.test', publicSource))?.siteId, one._id);
-    const record = (await Repo.storefrontRelease.findById(first.releaseId))!;
+    const record = (await runWithWorkspace(ctxA, () => Repo.storefrontRelease.findById(first.releaseId)))!;
+    assert.ok(record);
     assert.equal(await publishedDomainSite('workspace-a.test', { ...publicSource, findRelease: async () => ({ ...record, workspaceId: b._id }) }), null);
     // Verify the durable outbox and publication pointers survive stale editor/import objects.
     const stale = { ...installed[0], domainAuditOutbox: [], currentReleaseId: undefined, primaryDomainId: undefined };
     const fresh = (await Repo.siteInstallation.methods.findFresh(one._id))!;
     await runWithWorkspace(ctxA, async () => { await Repo.siteInstallation.methods.updateImport(stale); const current = (await Repo.siteInstallation.methods.findFresh(one._id))!; assert.equal(await Repo.siteInstallation.methods.saveDraft(stale, current.updatedAt), true); });
     const retained = (await Repo.siteInstallation.methods.findFresh(one._id))!; assert.equal(retained.currentReleaseId, fresh.currentReleaseId); assert.equal(retained.primaryDomainId, fresh.primaryDomainId);
-    await Repo.apiKey.add({ _id: 'scoped', workspaceId: a._id, secret: 'secret', blocked: false, access: { templates: [], functions: [] } } as never);
+    await runWithWorkspace(ctxA, () => Repo.apiKey.add({ _id: 'scoped', workspaceId: a._id, secret: 'secret', blocked: false, access: { templates: [], functions: [] } } as never));
     await Repo.apiKey.add({ _id: 'legacy', secret: 'secret', blocked: false, access: { templates: [], functions: [] } } as never);
     assert.equal((await ok('/scope/', 'ApiKey scoped.secret', a._id)).workspaceId, a._id);
     assert.equal((await request('/scope/', 'ApiKey scoped.secret', b._id)).statusCode, 403);

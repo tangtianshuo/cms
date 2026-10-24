@@ -3,14 +3,19 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import { Repo } from '@bcms/selfhosted-backend/repo';
 import { PropFactory } from '@bcms/selfhosted-backend/prop/factory';
 import { PropType } from '@bcms/selfhosted-backend/prop/models/main';
 import { entryContentNodeToHtml } from '@bcms/selfhosted-backend/entry/content';
+import { Repo } from '@bcms/selfhosted-backend/repo';
 import {
     JWTError,
     JWTManager,
 } from '@bcms/selfhosted-backend/_server/modules/jwt';
+import { createMcpApi } from './api';
+import { registerWorkspaceTools } from './workspace-tools';
+import { registerStorefrontTools } from './storefront-tools';
+import { registerDomainShareTools } from './domain-share-tools';
+import { registerCmsTools } from './cms-tools';
 
 type ItemsResponse = { items: any[] };
 
@@ -44,36 +49,13 @@ function authHeader(request: FastifyRequest): string {
     throw new Error('Unsupported authorization scheme. Use ApiKey or Bearer.');
 }
 
-function createServer(fastify: FastifyInstance, authorization: string, selectors: Record<string, string>) {
+export function createMcpServer(fastify: FastifyInstance, authorization: string, selectors: Record<string, string>) {
     const server = new McpServer({
         name: 'bcms-content',
         version: '1.0.0',
     });
 
-    async function api<T>(
-        method: 'GET' | 'POST' | 'PUT',
-        url: string,
-        payload?: unknown,
-    ): Promise<T> {
-        const response: any = await fastify.inject({
-            method,
-            url,
-            headers: { authorization, ...selectors },
-            payload: payload as any,
-        });
-        let data: any;
-        try {
-            data = response.json();
-        } catch {
-            data = response.body;
-        }
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-            throw new Error(
-                data?.message || `BCMS API returned ${response.statusCode}`,
-            );
-        }
-        return data as T;
-    }
+    const api = createMcpApi(fastify, authorization, selectors);
 
     const textResult = (value: unknown) => ({
         content: [{ type: 'text' as const, text: JSON.stringify(value) }],
@@ -125,16 +107,10 @@ function createServer(fastify: FastifyInstance, authorization: string, selectors
                     .array(
                         z.object({
                             label: z.string().min(1),
-                            type: z.enum([
-                                PropType.STRING,
-                                PropType.NUMBER,
-                                PropType.BOOLEAN,
-                                PropType.DATE,
-                                PropType.MEDIA,
-                                PropType.RICH_TEXT,
-                            ]),
+                            type: z.nativeEnum(PropType),
                             required: z.boolean().default(false),
                             array: z.boolean().default(false),
+                            data: z.unknown().optional(),
                         }),
                     )
                     .default([]),
@@ -165,7 +141,7 @@ function createServer(fastify: FastifyInstance, authorization: string, selectors
                             type: field.type,
                             required: field.required,
                             array: field.array,
-                            data: prop.data,
+                            data: field.data ?? prop.data,
                         },
                     };
                 });
@@ -388,6 +364,10 @@ function createServer(fastify: FastifyInstance, authorization: string, selectors
         }),
     );
 
+    registerWorkspaceTools(server, api);
+    registerStorefrontTools(server, api);
+    registerDomainShareTools(server, api);
+    registerCmsTools(server, api);
     return server;
 }
 
@@ -444,7 +424,7 @@ export function registerMcpEndpoint(fastify: FastifyInstance) {
                 if (selectors['x-bcms-site']) scope.searchParams.set('siteId', selectors['x-bcms-site']);
                 await socketIdentity(scope.toString());
             } catch { reply.code(403).send({ message: 'Workspace access denied' }); return; }
-            const server = createServer(fastify, authorization, selectors);
+            const server = createMcpServer(fastify, authorization, selectors);
             const transport = new StreamableHTTPServerTransport({
                 sessionIdGenerator: undefined,
             });

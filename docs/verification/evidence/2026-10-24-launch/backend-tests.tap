@@ -1,0 +1,448 @@
+TAP version 13
+# Subtest: new entry saves valid language values and derives content text
+ok 1 - new entry saves valid language values and derives content text
+  ---
+  duration_ms: 0.657167
+  type: 'test'
+  ...
+# Subtest: new entry rejects invalid values before any write
+ok 2 - new entry rejects invalid values before any write
+  ---
+  duration_ms: 3.585208
+  type: 'test'
+  ...
+# Subtest: legacy empty entry creation remains valid
+ok 3 - legacy empty entry creation remains valid
+  ---
+  duration_ms: 0.727125
+  type: 'test'
+  ...
+# Subtest: catalog exposes two complete storefront variants
+ok 4 - catalog exposes two complete storefront variants
+  ---
+  duration_ms: 0.756
+  type: 'test'
+  ...
+# Subtest: catalog rejects unknown versions and cannot be changed by consumers
+ok 5 - catalog rejects unknown versions and cannot be changed by consumers
+  ---
+  duration_ms: 0.212
+  type: 'test'
+  ...
+# Subtest: checklist links to generated editors and counts only valid entries
+ok 6 - checklist links to generated editors and counts only valid entries
+  ---
+  duration_ms: 5.416708
+  type: 'test'
+  ...
+# Subtest: public catalog lists selectable presets without CMS credentials
+ok 7 - public catalog lists selectable presets without CMS credentials
+  ---
+  duration_ms: 0.603291
+  type: 'test'
+  ...
+# Subtest: site import and preflight require an admin token
+ok 8 - site import and preflight require an admin token
+  ---
+  duration_ms: 24.342125
+  type: 'test'
+  ...
+# Subtest: preview context requires a user token
+ok 9 - preview context requires a user token
+  ---
+  duration_ms: 1.071791
+  type: 'test'
+  ...
+# Subtest: one import creates complete CMS models and draft pages only once
+ok 10 - one import creates complete CMS models and draft pages only once
+  ---
+  duration_ms: 2.219041
+  type: 'test'
+  ...
+# Subtest: import plan refuses an unrelated product Template collision
+ok 11 - import plan refuses an unrelated product Template collision
+  ---
+  duration_ms: 0.367375
+  type: 'test'
+  ...
+# Subtest: import reuses and extends the existing storefront product Template
+ok 12 - import reuses and extends the existing storefront product Template
+  ---
+  duration_ms: 0.883292
+  type: 'test'
+  ...
+# Subtest: failed import resumes without duplicating previously created models
+ok 13 - failed import resumes without duplicating previously created models
+  ---
+  duration_ms: 0.781875
+  type: 'test'
+  ...
+# Subtest: demo content is seeded once and links into generated Templates
+ok 14 - demo content is seeded once and links into generated Templates
+  ---
+  duration_ms: 1.151292
+  type: 'test'
+  ...
+# Subtest: concurrent import returns the installation that won the unique slot
+ok 15 - concurrent import returns the installation that won the unique slot
+  ---
+  duration_ms: 0.148833
+  type: 'test'
+  ...
+# Subtest: site namespaces keep independent installations and repeat demo titles
+ok 16 - site namespaces keep independent installations and repeat demo titles
+  ---
+  duration_ms: 6.409708
+  type: 'test'
+  ...
+# Subtest: old installations receive page configuration defaults without mutation
+ok 17 - old installations receive page configuration defaults without mutation
+  ---
+  duration_ms: 1.815208
+  type: 'test'
+  ...
+# Subtest: a valid page update saves SEO and selected sections while preserving its draft state
+ok 18 - a valid page update saves SEO and selected sections while preserving its draft state
+  ---
+  duration_ms: 1.513416
+  type: 'test'
+  ...
+# Subtest: page updates reject unsupported sections and routes that collide with another blueprint
+ok 19 - page updates reject unsupported sections and routes that collide with another blueprint
+  ---
+  duration_ms: 1.204791
+  type: 'test'
+  ...
+# Subtest: home Entry binding requires an Entry from the generated home model
+ok 20 - home Entry binding requires an Entry from the generated home model
+  ---
+  duration_ms: 0.608708
+  type: 'test'
+  ...
+# Subtest: fixed product route still allows SEO and section edits
+ok 21 - fixed product route still allows SEO and section edits
+  ---
+  duration_ms: 0.255292
+  type: 'test'
+  ...
+# Subtest: additional pages reuse installed blueprints and bind only their own model
+ok 22 - additional pages reuse installed blueprints and bind only their own model
+  ---
+  duration_ms: 0.945917
+  type: 'test'
+  ...
+# Subtest: release validation, history, publishing and rollback require an administrator
+ok 23 - release validation, history, publishing and rollback require an administrator
+  ---
+  duration_ms: 3.640667
+  type: 'test'
+  ...
+# Subtest: MongoDB and HTTP publication lifecycle preserves public content until activation and rollback
+ok 24 - MongoDB and HTTP publication lifecycle preserves public content until activation and rollback
+  ---
+  duration_ms: 1761.494333
+  type: 'test'
+  ...
+# Subtest: release expands concrete routes and isolates saved content, theme and navigation
+ok 25 - release expands concrete routes and isolates saved content, theme and navigation
+  ---
+  duration_ms: 49.101042
+  type: 'test'
+  ...
+# Subtest: new fixed pages stay out of the old release and path changes create direct redirects
+ok 26 - new fixed pages stay out of the old release and path changes create direct redirects
+  ---
+  duration_ms: 10.214084
+  type: 'test'
+  ...
+# Subtest: release rejects missing required values, broken fields, media, links and duplicate paths
+ok 27 - release rejects missing required values, broken fields, media, links and duplicate paths
+  ---
+  duration_ms: 0.855292
+  type: 'test'
+  ...
+# Subtest: publication stores the snapshot before activation and failed publication preserves the pointer
+ok 28 - publication stores the snapshot before activation and failed publication preserves the pointer
+  ---
+  duration_ms: 1.282125
+  type: 'test'
+  ...
+# Subtest: rollback restores an immutable snapshot and rejects another site or a failed candidate
+ok 29 - rollback restores an immutable snapshot and rejects another site or a failed candidate
+  ---
+  duration_ms: 1.078417
+  type: 'test'
+  ...
+# Subtest: snapshot storage failure preserves the current release
+ok 30 - snapshot storage failure preserves the current release
+  ---
+  duration_ms: 3.259667
+  type: 'test'
+  ...
+# Subtest: an audit outage after activation does not turn a successful publication into a failure
+ok 31 - an audit outage after activation does not turn a successful publication into a failure
+  ---
+  duration_ms: 1.287958
+  type: 'test'
+  ...
+# Subtest: removing a page checks rich text internal links and related published pages
+ok 32 - removing a page checks rich text internal links and related published pages
+  ---
+  duration_ms: 0.454208
+  type: 'test'
+  ...
+# Subtest: a fixed collection page retains its bound description and cover
+ok 33 - a fixed collection page retains its bound description and cover
+  ---
+  duration_ms: 0.764041
+  type: 'test'
+  ...
+# Subtest: unpublished content does not block release with obsolete internal links or incomplete fields
+ok 34 - unpublished content does not block release with obsolete internal links or incomplete fields
+  ---
+  duration_ms: 7.403917
+  type: 'test'
+  ...
+# Subtest: a fixed page can be retired after its bound Entry has been deleted
+ok 35 - a fixed page can be retired after its bound Entry has been deleted
+  ---
+  duration_ms: 0.54975
+  type: 'test'
+  ...
+# Subtest: real Mongo unique domain ownership, primary concurrency, HTTP trust and immutable publication
+ok 36 - real Mongo unique domain ownership, primary concurrency, HTTP trust and immutable publication
+  ---
+  duration_ms: 1475.5095
+  type: 'test'
+  ...
+# Subtest: normalizes IDNA, case and trailing dot, rejects URLs, ports, IPs and invalid labels
+ok 37 - normalizes IDNA, case and trailing dot, rejects URLs, ports, IPs and invalid labels
+  ---
+  duration_ms: 8.644208
+  type: 'test'
+  ...
+# Subtest: global ownership, scoped IDs, expiring credentials and new credentials after unbind
+ok 38 - global ownership, scoped IDs, expiring credentials and new credentials after unbind
+  ---
+  duration_ms: 1.159
+  type: 'test'
+  ...
+# Subtest: checks separate ownership and connection, preserves primary on failure, prevents primary disable/delete
+ok 39 - checks separate ownership and connection, preserves primary on failure, prevents primary disable/delete
+  ---
+  duration_ms: 0.67725
+  type: 'test'
+  ...
+# Subtest: concurrent primary switches conflict; disabled aliases stop resolving immediately
+ok 40 - concurrent primary switches conflict; disabled aliases stop resolving immediately
+  ---
+  duration_ms: 0.372458
+  type: 'test'
+  ...
+# Subtest: explicit migration preserves release data and cannot claim another binding
+ok 41 - explicit migration preserves release data and cannot claim another binding
+  ---
+  duration_ms: 3.326291
+  type: 'test'
+  ...
+# Subtest: failed recheck keeps established domain routing and last success while returning the error
+ok 42 - failed recheck keeps established domain routing and last success while returning the error
+  ---
+  duration_ms: 0.301791
+  type: 'test'
+  ...
+# Subtest: a failed mandatory primary audit leaves the established primary unchanged
+ok 43 - a failed mandatory primary audit leaves the established primary unchanged
+  ---
+  duration_ms: 0.309292
+  type: 'test'
+  ...
+# Subtest: migration retry completes an interrupted initial promotion and preserves an established primary
+ok 44 - migration retry completes an interrupted initial promotion and preserves an established primary
+  ---
+  duration_ms: 0.270875
+  type: 'test'
+  ...
+# Subtest: initial-only migration promotion preserves a primary established during its earlier reads
+ok 45 - initial-only migration promotion preserves a primary established during its earlier reads
+  ---
+  duration_ms: 0.441042
+  type: 'test'
+  ...
+# Subtest: custom host context requires shared gateway secret; production fails closed without config
+ok 46 - custom host context requires shared gateway secret; production fails closed without config
+  ---
+  duration_ms: 2.195666
+  type: 'test'
+  ...
+# Subtest: SSRF filter rejects private, loopback, link local, multicast and IPv4 mapped IPv6
+ok 47 - SSRF filter rejects private, loopback, link local, multicast and IPv4 mapped IPv6
+  ---
+  duration_ms: 3.178708
+  type: 'test'
+  ...
+# Subtest: TXT ownership and signed HTTPS challenge work behind a proxy without matching origin IP
+ok 48 - TXT ownership and signed HTTPS challenge work behind a proxy without matching origin IP
+  ---
+  duration_ms: 1.699084
+  type: 'test'
+  ...
+# Subtest: DNS timeout is bounded and keeps ownership independent of connection
+ok 49 - DNS timeout is bounded and keeps ownership independent of connection
+  ---
+  duration_ms: 4000.809167
+  type: 'test'
+  ...
+# Subtest: IPv4 exclusions are precise CIDRs and retain adjacent public addresses
+ok 50 - IPv4 exclusions are precise CIDRs and retain adjacent public addresses
+  ---
+  duration_ms: 0.469
+  type: 'test'
+  ...
+# Subtest: public lookup returns saved data only for the configured host and slug
+ok 51 - public lookup returns saved data only for the configured host and slug
+  ---
+  duration_ms: 6.54325
+  type: 'test'
+  ...
+# Subtest: demo entries from a preset import stay off the public product route
+ok 52 - demo entries from a preset import stay off the public product route
+  ---
+  duration_ms: 0.386541
+  type: 'test'
+  ...
+# Subtest: preview maps unsaved entry without mutating the saved entry
+ok 53 - preview maps unsaved entry without mutating the saved entry
+  ---
+  duration_ms: 1.881625
+  type: 'test'
+  ...
+# Subtest: preview endpoint rejects requests without a CMS access token
+ok 54 - preview endpoint rejects requests without a CMS access token
+  ---
+  duration_ms: 6.113042
+  type: 'test'
+  ...
+# Subtest: unsaved homepage values and CMS media are rendered in the installed theme
+ok 55 - unsaved homepage values and CMS media are rendered in the installed theme
+  ---
+  duration_ms: 0.93475
+  type: 'test'
+  ...
+# Subtest: collection and product previews map their own Entry fields without catalog demo content
+ok 56 - collection and product previews map their own Entry fields without catalog demo content
+  ---
+  duration_ms: 33.116333
+  type: 'test'
+  ...
+# Subtest: content page preview uses rich text from the selected language
+ok 57 - content page preview uses rich text from the selected language
+  ---
+  duration_ms: 14.216084
+  type: 'test'
+  ...
+# Subtest: preview rejects a wrong template, unavailable language, and missing bound field IDs
+ok 58 - preview rejects a wrong template, unavailable language, and missing bound field IDs
+  ---
+  duration_ms: 10.18575
+  type: 'test'
+  ...
+# Subtest: maps product fields by stable prop IDs and selected language
+ok 59 - maps product fields by stable prop IDs and selected language
+  ---
+  duration_ms: 1.786542
+  type: 'test'
+  ...
+# Subtest: rejects unknown sections and unbound template fields
+ok 60 - rejects unknown sections and unbound template fields
+  ---
+  duration_ms: 0.51725
+  type: 'test'
+  ...
+# Subtest: rejects missing required content and mismatched template
+ok 61 - rejects missing required content and mismatched template
+  ---
+  duration_ms: 0.260833
+  type: 'test'
+  ...
+# Subtest: public lookup reads only the site-owned active snapshot and enforces host identity
+ok 62 - public lookup reads only the site-owned active snapshot and enforces host identity
+  ---
+  duration_ms: 0.599041
+  type: 'test'
+  ...
+# Subtest: domain resolution selects site-owned release independently of caller site IDs
+ok 63 - domain resolution selects site-owned release independently of caller site IDs
+  ---
+  duration_ms: 0.198125
+  type: 'test'
+  ...
+# Subtest: product template setup is opt-in and idempotent
+ok 64 - product template setup is opt-in and idempotent
+  ---
+  duration_ms: 1.09225
+  type: 'test'
+  ...
+# Subtest: generic, custom and warm-cache content reads and writes stay in their workspace
+ok 65 - generic, custom and warm-cache content reads and writes stay in their workspace
+  ---
+  duration_ms: 262.508583
+  type: 'test'
+  ...
+# Subtest: selectors require membership and site ownership; API keys are pinned
+ok 66 - selectors require membership and site ownership; API keys are pinned
+  ---
+  duration_ms: 3.863541
+  type: 'test'
+  ...
+# Subtest: verified async contexts stay isolated across interleaved requests
+ok 67 - verified async contexts stay isolated across interleaved requests
+  ---
+  duration_ms: 6.889875
+  type: 'test'
+  ...
+# Subtest: real Mongo and HTTP workspace membership, independent installations, releases and domain ownership
+ok 68 - real Mongo and HTTP workspace membership, independent installations, releases and domain ownership
+  ---
+  duration_ms: 671.870583
+  type: 'test'
+  ...
+# Subtest: a site creation reserved before insert prevents concurrent workspace deletion
+ok 69 - a site creation reserved before insert prevents concurrent workspace deletion
+  ---
+  duration_ms: 117.535209
+  type: 'test'
+  ...
+# Subtest: deletion winning before a previously authorized creator reserves leaves no orphan
+ok 70 - deletion winning before a previously authorized creator reserves leaves no orphan
+  ---
+  duration_ms: 77.317167
+  type: 'test'
+  ...
+# Subtest: a creation completed after the empty-site check invalidates deletion revision
+ok 71 - a creation completed after the empty-site check invalidates deletion revision
+  ---
+  duration_ms: 66.227542
+  type: 'test'
+  ...
+# Subtest: interrupted creation reservations survive age and restart until explicitly recovered
+ok 72 - interrupted creation reservations survive age and restart until explicitly recovered
+  ---
+  duration_ms: 81.50925
+  type: 'test'
+  ...
+# Subtest: Entry names conflict across templates atomically and foreign references are rejected
+ok 73 - Entry names conflict across templates atomically and foreign references are rejected
+  ---
+  duration_ms: 208.589292
+  type: 'test'
+  ...
+1..73
+# tests 73
+# suites 0
+# pass 73
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9420.676875

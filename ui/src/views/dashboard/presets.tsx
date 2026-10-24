@@ -44,6 +44,7 @@ export const PresetsView = defineComponent({
         const installed = computed(() => site.value?.status === 'ready' && site.value.presetId === selectedId.value);
         const importInProgress = computed(() => site.value?.status === 'importing' &&
             Date.now() - site.value.updatedAt < 120000);
+        const importOptionsLocked = computed(() => busy.value || (!!site.value && site.value.status !== 'empty'));
         const canImport = computed(() => !!sdk.context?.context.admin && !!sdk.context?.context.siteId && !!selected.value && !!plan.value && !busy.value && !installed.value &&
             !importInProgress.value && !otherSite.value && conflicts.value.length === 0 && name.value.trim().length > 0);
         const previewUrl = computed(() => selected.value
@@ -58,6 +59,7 @@ export const PresetsView = defineComponent({
             checklist.value = result.checklist;
             pageOptions.value = result.pageOptions;
             if (result.site) name.value = result.site.name;
+            if (result.site && result.site.status !== 'empty') includeDemo.value = result.site.includeDemo;
         }
 
         async function choosePreset(id: string) {
@@ -225,7 +227,7 @@ export const PresetsView = defineComponent({
                                                 maxlength={80} disabled={!!site.value} class="w-full rounded border border-gray bg-white px-3 py-2 text-dark dark:bg-darkGray dark:text-white" />
                                         </label>
                                         <label class="flex items-center gap-2 pb-2 text-sm">
-                                            <input type="checkbox" checked={includeDemo.value} disabled={!!site.value}
+                                            <input type="checkbox" checked={includeDemo.value} disabled={importOptionsLocked.value}
                                                 onChange={(event) => { includeDemo.value = (event.target as HTMLInputElement).checked; }} />
                                             {t('presets.includeDemo')}
                                         </label>
