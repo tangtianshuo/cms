@@ -1,3 +1,4 @@
+import { CopyProvenance } from '@bcms/selfhosted-ui/components/workspace/provenance';
 import { computed, defineComponent, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Loader } from '@bcms/selfhosted-ui/components/loader';
@@ -212,6 +213,7 @@ export const WidgetView = defineComponent({
                                 )}
                             </div>
                         </div>
+                        <CopyProvenance value={widget.value.provenance} />
                         <PropList
                             class={`mt-3`}
                             items={widget.value.props}

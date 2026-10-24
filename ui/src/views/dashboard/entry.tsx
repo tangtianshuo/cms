@@ -1,3 +1,6 @@
+import { CopyProvenance } from '@bcms/selfhosted-ui/components/workspace/provenance';
+import type { EntryGroup } from '@bcms/selfhosted-backend/entry-groups/repo';
+import { formClass } from '@bcms/selfhosted-ui/components/workspace/common';
 import {
     computed,
     defineComponent,
@@ -82,6 +85,7 @@ export const EntryView = defineComponent({
                         data !== tracked.buffer;
             }
         }, 1000);
+        const groups = ref<EntryGroup[]>([]);
         const entrySync = shallowRef<EntrySync>();
 
         function ensureEntrySync() {
@@ -103,7 +107,7 @@ export const EntryView = defineComponent({
 
         function getEntryStateHash(language: Language) {
             return (
-                JSON.stringify(
+                (entry.value?.groupId || '') + JSON.stringify(
                     entry.value?.meta.find((e) => e.lng === language.code) ||
                         {},
                 ) +
@@ -124,6 +128,8 @@ export const EntryView = defineComponent({
         onMounted(async () => {
             loading.value = true;
             await throwable(async () => {
+                const groupList = await sdk.send<{ items: EntryGroup[]; defaultGroupId: string }>({ url: '/api/v4/entry-groups/' });
+                groups.value = groupList.items;
                 await sdk.template.getAll();
                 if (!template.value) {
                     throw Error(t('views.entry.templateMissing'));
@@ -142,6 +148,7 @@ export const EntryView = defineComponent({
                 const languages = await sdk.language.getAll();
                 if (route.params.entryId === 'create') {
                     entry.value = await entryNewFromTemplate(template.value);
+                    entry.value.groupId = groups.value.some(group => group._id === route.query.group) ? route.query.group as string : groupList.defaultGroupId;
                     for (const language of languages) {
                         entryLngChanges.value[language.code] = {
                             change: true,
@@ -210,7 +217,7 @@ export const EntryView = defineComponent({
                             if (creating) {
                                 const created = await sdk.entry.create({
                                     templateId: data.templateId,
-                                    data: buildEntryCreateBody(data),
+                                    data: { ...buildEntryCreateBody(data), groupId: data.groupId },
                                 });
                                 entry.value = await entryNewFromTemplate(
                                     template.value!,
@@ -223,6 +230,7 @@ export const EntryView = defineComponent({
                                 return;
                             }
                             await sdk.entry.update({
+                                groupId: data.groupId,
                                 _id: data?._id,
                                 templateId: data.templateId,
                                 lng: lngCode.value,
@@ -275,6 +283,10 @@ export const EntryView = defineComponent({
                                       }),
                             );
                         },
+                        async (cause) => {
+                            const message = (cause as { message?: string })?.message || String(cause);
+                            notification.warning(/duplicate|title.*(unique|exist|conflict)|workspace_group_language_title_unique/i.test(message) ? `${t('entryGroups.nameConflict')} ${message}` : message);
+                        },
                     );
                 } finally {
                     saving.value = false;
@@ -290,6 +302,14 @@ export const EntryView = defineComponent({
                             loading.value ? 'opacity-0' : ''
                         }`}
                     >
+                        <div class="mb-5 flex flex-wrap items-center gap-3">
+                            <label class="text-sm">{t('entryGroups.selection')} <select class={formClass} value={entry.value.groupId || ''} disabled={saving.value} onChange={event => { if (entry.value) entry.value.groupId = (event.target as HTMLSelectElement).value; }}>
+                                <option value="" disabled>{t('entryGroups.choose')}</option>{groups.value.map(group => <option value={group._id}>{group.name}</option>)}
+                            </select></label>
+                            <span class="text-xs opacity-70">{t('entryGroups.moveHint')}</span>
+                            {route.params.entryId !== 'create' && <a class="text-sm underline" href={`/d/shares?type=Entry&id=${encodeURIComponent(entry.value._id)}`}>{t('shares.grant')}</a>}
+                        </div>
+                        <CopyProvenance value={entry.value.provenance} />
                         {entrySync.value && (
                             <EntrySyncElements entrySync={entrySync.value} />
                         )}

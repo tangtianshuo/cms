@@ -28,6 +28,12 @@ export const PagePreview = defineComponent({
         const error = ref('');
         const payload = ref<unknown>();
         const gate = createPreviewGate();
+        const refreshTick = ref(0);
+        function refreshCapabilities() {
+            if (document.visibilityState === 'visible') refreshTick.value++;
+        }
+        const capabilityRefresh = setInterval(refreshCapabilities, 5 * 60000);
+        onMounted(() => document.addEventListener('visibilitychange', refreshCapabilities));
         let timeout: ReturnType<typeof setTimeout> | undefined;
 
         function deliver() {
@@ -56,7 +62,7 @@ export const PagePreview = defineComponent({
             }
         }, { immediate: true });
 
-        watch([() => props.entry, () => props.language, selectedPage, open], () => {
+        watch([() => props.entry, () => props.language, selectedPage, open, refreshTick], () => {
             const sequence = gate.next();
             if (timeout) clearTimeout(timeout);
             if (!open.value || !selectedPage.value) return;
@@ -85,6 +91,8 @@ export const PagePreview = defineComponent({
 
         onMounted(() => window.addEventListener('keydown', onKeydown));
         onBeforeUnmount(() => {
+            clearInterval(capabilityRefresh);
+            document.removeEventListener('visibilitychange', refreshCapabilities);
             close();
             window.removeEventListener('keydown', onKeydown);
         });

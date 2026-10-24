@@ -1,6 +1,7 @@
 import {
     defineComponent,
     onBeforeUnmount,
+    onMounted,
     ref,
     watch,
     type PropType,
@@ -22,6 +23,12 @@ export const ProductPreview = defineComponent({
         const error = ref('');
         const page = ref<unknown>();
         const gate = createPreviewGate();
+        const refreshTick = ref(0);
+        function refreshCapabilities() {
+            if (document.visibilityState === 'visible') refreshTick.value++;
+        }
+        const capabilityRefresh = setInterval(refreshCapabilities, 5 * 60000);
+        onMounted(() => document.addEventListener('visibilitychange', refreshCapabilities));
         let timeout: ReturnType<typeof setTimeout> | undefined;
 
         function deliver() {
@@ -31,7 +38,7 @@ export const ProductPreview = defineComponent({
         }
 
         watch(
-            () => props.entry,
+            [() => props.entry, refreshTick],
             () => {
                 const sequence = gate.next();
                 if (timeout) {
@@ -66,6 +73,8 @@ export const ProductPreview = defineComponent({
         );
 
         onBeforeUnmount(() => {
+            clearInterval(capabilityRefresh);
+            document.removeEventListener('visibilitychange', refreshCapabilities);
             gate.next();
             if (timeout) {
                 clearTimeout(timeout);

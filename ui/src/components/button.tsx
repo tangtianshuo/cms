@@ -12,6 +12,7 @@ export const Button = defineComponent({
             default: 'primary',
         },
         disabled: Boolean,
+        type: String as PropType<'button' | 'submit' | 'reset'>,
         size: String as PropType<'m' | 's'>,
         href: String,
         newTab: Boolean,
@@ -55,6 +56,7 @@ export const Button = defineComponent({
                     } ${props.class ? props.class : ''}`}
                     v-cy={props.cyTag}
                     style={props.style}
+                    type={props.type}
                     disabled={props.disabled}
                     onClick={(event) => {
                         ctx.emit('click', event);

@@ -48,6 +48,7 @@ export class SocketHandler extends Handler {
             handler: SocketEventHandler<any>;
         }>;
     } = {};
+    private stopped = false;
     private tryReconnectIn = 1000;
     private readonly maxReconnectTime = 60000;
     private internalEventSubs: {
@@ -76,6 +77,9 @@ export class SocketHandler extends Handler {
      * Close socket if it is opened
      */
     clear(): void {
+        this.stopped = true;
+        this.connected = false;
+        this.id = null;
         if (this.socket) {
             this.socket.close();
         }
@@ -87,160 +91,96 @@ export class SocketHandler extends Handler {
             : 'ws';
         return `${protocol}://${
             this.sdk.config.apiOrigin.split('://')[1]
-        }/api/v4/socket?token=${this.sdk.accessTokenRaw}`;
+        }/api/v4/socket?${new URLSearchParams({
+            token: this.sdk.accessTokenRaw || '',
+            workspaceId: this.sdk.context?.context.workspaceId || 'default',
+            ...(this.sdk.context?.context.siteId
+                ? { siteId: this.sdk.context.context.siteId }
+                : {}),
+        })}`;
     }
 
     /**
      * Connect to the socket server
      */
     async connect() {
+        if (this.stopped || !this.sdk.context) return;
         const queue = await this.connectionQueue({
             name: 'Connection',
             handler: async () => {
-                if (!this.connected) {
-                    this.id = null;
-                    await new Promise<void>((resolve, reject) => {
-                        this.sdk.refreshAccessToken().then((result) => {
-                            if (result) {
-                                this.socket = new WebSocket(
-                                    // `${
-                                    //     window.location.host.includes(':8080')
-                                    //         ? 'ws'
-                                    //         : 'wss'
-                                    // }://${
-                                    //     window.location.host
-                                    // }/api/v4/socket?token=${
-                                    //     this.sdk.accessTokenRaw
-                                    // }`,
-                                    this.getUrl(),
-                                );
-                                this.socket.addEventListener(
-                                    'open',
-                                    async () => {
-                                        this.tryReconnectIn = 1000;
-                                        this.connected = true;
-                                        for (
-                                            let i = 0;
-                                            i <
-                                            this.internalEventSubs.open.length;
-                                            i++
-                                        ) {
-                                            await this.internalEventSubs.open[
-                                                i
-                                            ].handler();
-                                        }
-                                        resolve();
-                                    },
-                                );
-                                this.socket.addEventListener(
-                                    'close',
-                                    async () => {
-                                        this.connected = false;
-                                        for (
-                                            let i = 0;
-                                            i <
-                                            this.internalEventSubs.close.length;
-                                            i++
-                                        ) {
-                                            await this.internalEventSubs.open[
-                                                i
-                                            ].handler();
-                                        }
-                                        setTimeout(async () => {
-                                            this.tryReconnectIn =
-                                                this.tryReconnectIn * 2;
-                                            if (
-                                                this.tryReconnectIn >
-                                                this.maxReconnectTime
-                                            ) {
-                                                this.tryReconnectIn =
-                                                    this.maxReconnectTime;
-                                            }
-                                            await this.connect();
-                                        }, this.tryReconnectIn);
-                                    },
-                                );
-                                this.socket.addEventListener(
-                                    'error',
-                                    async (event) => {
-                                        console.error(
-                                            'Connection error',
-                                            event,
-                                        );
-                                        for (
-                                            let i = 0;
-                                            i <
-                                            this.internalEventSubs.close.length;
-                                            i++
-                                        ) {
-                                            await this.internalEventSubs.open[
-                                                i
-                                            ].handler();
-                                        }
-                                        reject(event);
-                                    },
-                                );
-                                this.socket.addEventListener(
-                                    'message',
-                                    async (event) => {
-                                        try {
-                                            const data: {
-                                                en: SocketEventName;
-                                                ed: SocketEventData;
-                                            } = JSON.parse(
-                                                event.data as string,
-                                            );
-                                            if (this.shouldDebug()) {
-                                                this.debug(
-                                                    'receive',
-                                                    data.en,
-                                                    data.ed,
-                                                );
-                                            }
-                                            if (this.subs[data.en]) {
-                                                for (
-                                                    let i = 0;
-                                                    i <
-                                                    this.subs[data.en].length;
-                                                    i++
-                                                ) {
-                                                    const sub =
-                                                        this.subs[data.en][i];
-                                                    await sub.handler(
-                                                        data.ed,
-                                                        undefined,
-                                                    );
-                                                }
-                                            }
-                                            for (
-                                                let i = 0;
-                                                i < this.subs.all.length;
-                                                i++
-                                            ) {
-                                                const sub = this.subs.all[i];
-                                                await sub.handler(
-                                                    data.ed,
-                                                    undefined,
-                                                );
-                                            }
-                                        } catch (error) {
-                                            console.error(
-                                                'Invalid message from server',
-                                                event.data,
-                                            );
-                                            console.error(error);
-                                        }
-                                    },
-                                );
-                            }
-                        });
+                if (this.stopped || this.connected || !this.sdk.context) return;
+                if (!(await this.sdk.refreshAccessToken()) || this.stopped)
+                    return;
+                this.id = null;
+                await new Promise<void>((resolve, reject) => {
+                    const socket = new WebSocket(this.getUrl());
+                    this.socket = socket;
+                    const current = () =>
+                        !this.stopped && socket === this.socket;
+                    socket.addEventListener('open', async () => {
+                        if (!current()) {
+                            socket.close();
+                            resolve();
+                            return;
+                        }
+                        this.tryReconnectIn = 1000;
+                        this.connected = true;
+                        resolve();
+                        for (const sub of this.internalEventSubs.open) {
+                            if (!current()) return;
+                            await sub.handler();
+                        }
                     });
-                }
+                    socket.addEventListener('close', async () => {
+                        resolve();
+                        if (!current()) return;
+                        this.connected = false;
+                        this.id = null;
+                        for (const sub of this.internalEventSubs.close) {
+                            if (!current()) return;
+                            await sub.handler();
+                        }
+                        setTimeout(async () => {
+                            if (!current()) return;
+                            this.tryReconnectIn = Math.min(
+                                this.tryReconnectIn * 2,
+                                this.maxReconnectTime,
+                            );
+                            try {
+                                await this.connect();
+                            } catch (cause) {
+                                console.error('Socket reconnect failed', cause);
+                            }
+                        }, this.tryReconnectIn);
+                    });
+                    socket.addEventListener('error', (event) => {
+                        if (current()) console.error('Connection error', event);
+                        reject(event);
+                    });
+                    socket.addEventListener('message', async (event) => {
+                        if (!current()) return;
+                        try {
+                            const data: {
+                                en: SocketEventName;
+                                ed: SocketEventData;
+                            } = JSON.parse(event.data as string);
+                            if (this.shouldDebug())
+                                this.debug('receive', data.en, data.ed);
+                            for (const sub of [
+                                ...(this.subs[data.en] || []),
+                                ...this.subs.all,
+                            ]) {
+                                if (!current()) return;
+                                await sub.handler(data.ed, undefined);
+                            }
+                        } catch (cause) {
+                            console.error('Invalid message from server', cause);
+                        }
+                    });
+                });
             },
         }).wait;
-        if (queue instanceof QueueError) {
-            throw queue.error;
-        }
+        if (queue instanceof QueueError) throw queue.error;
     }
 
     /**

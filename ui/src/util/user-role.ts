@@ -12,5 +12,5 @@ export function checkUserRole(
 }
 
 export function isUserAdmin(user?: UserProtected): boolean {
-    return checkUserRole(['ADMIN'], user);
+    return checkUserRole(['ADMIN', 'SUDO'], user);
 }

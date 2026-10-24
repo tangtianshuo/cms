@@ -27,6 +27,7 @@ export const WidgetsView = defineComponent({
 
         return () => (
             <div>
+                <a href="/d/shares?type=Widget" class="mb-4 inline-block text-sm underline">{t('shares.grant')}</a>
                 {widgets.value.length > 0 ? (
                     <>
                         <div class={`flex gap-2`}>

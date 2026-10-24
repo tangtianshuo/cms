@@ -134,7 +134,7 @@ export const StorefrontController = createController({
                             parsed.data.entry as unknown as Entry,
                             siteConfig(),
                             template,
-                            await Repo.media.findAll(),
+                            (await Repo.media.findAll()).map(withMediaAccess),
                             parsed.data.config,
                         );
                         reply.header('Cache-Control', 'no-store');
