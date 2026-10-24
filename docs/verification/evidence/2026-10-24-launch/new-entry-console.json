@@ -1,0 +1,32 @@
+[
+  {
+    "level": "error",
+    "message": "AxiosError",
+    "timestamp": "2026-10-24T05:32:13.639Z",
+    "url": "http://localhost:8080/src/sdk/main.ts"
+  },
+  {
+    "level": "error",
+    "message": "AxiosError",
+    "timestamp": "2026-10-24T05:32:14.058Z",
+    "url": "http://localhost:8080/src/sdk/main.ts"
+  },
+  {
+    "level": "error",
+    "message": "AxiosError",
+    "timestamp": "2026-10-24T05:32:14.059Z",
+    "url": "http://localhost:8080/src/sdk/main.ts"
+  },
+  {
+    "level": "error",
+    "message": "Object",
+    "timestamp": "2026-10-24T05:32:14.059Z",
+    "url": "http://localhost:8080/src/util/throwable.ts"
+  },
+  {
+    "level": "error",
+    "message": "TypeError: Cannot read properties of null (reading 'awareness')\n    at http://localhost:8080/node_modules/.vite/deps/@tiptap_extension-collaboration-cursor.js?v=fba310f4:78:33\n    at Object.addProseMirrorPlugins (http://localhost:8080/node_modules/.vite/deps/@tiptap_extension-collaboration-cursor.js?v=fba310f4:84:11)\n    at http://localhost:8080/node_modules/.vite/deps/chunk-KHKRFO3H.js?v=fba310f4:12707:36\n    at Array.map (<anonymous>)\n    at get plugins (http://localhost:8080/node_modules/.vite/deps/chunk-KHKRFO3H.js?v=fba310f4:12675:35)\n    at Editor2.createView (http://localhost:8080/node_modules/.vite/deps/chunk-KHKRFO3H.js?v=fba310f4:15203:38)\n    at new Editor (http://localhost:8080/node_modules/.vite/deps/chunk-KHKRFO3H.js?v=fba310f4:15039:10)\n    at new Editor2 (http://localhost:8080/node_modules/.vite/deps/@tiptap_vue-3.js?v=fba310f4:522:5)\n    at http://localhost:8080/node_modules/.vite/deps/@tiptap_vue-3.js?v=fba310f4:712:20\n    at http://localhost:8080/node_modules/.vite/deps/chunk-MNZYQKJQ.js?v=fba310f4:3295:40",
+    "timestamp": "2026-10-24T05:33:14.188Z",
+    "url": "http://localhost:8080/node_modules/.vite/deps/@tiptap_extension-collaboration-cursor.js?v=fba310f4"
+  }
+]

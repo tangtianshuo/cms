@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { seedIdentity } from '../test-fixtures/identity';
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyMongo from '@fastify/mongodb';
@@ -7,6 +8,7 @@ import { Repo } from '../repo';
 import { Config } from '../config';
 import { JWTManager, JWTEncode, JWTError } from '../_server/modules/jwt';
 import { WorkspaceController } from './controller';
+import { runWithWorkspace } from './context';
 
 function barrier() {
     let resolve!: () => void;
@@ -33,6 +35,7 @@ async function fixture(context: { after(action: () => Promise<void>): void }) {
     });
     for (const repo of [
         Repo.workspace,
+        Repo.user,
         Repo.siteInstallation,
         Repo.template,
         Repo.entryGroup, Repo.entry,
@@ -43,6 +46,7 @@ async function fixture(context: { after(action: () => Promise<void>): void }) {
         Repo.entryStatus,
         Repo.templateOrganizer,
         Repo.apiKey,
+        Repo.resourceShare,
     ]) {
         await new Promise<void>((resolve, reject) =>
             repo.init().initialize({
@@ -51,6 +55,7 @@ async function fixture(context: { after(action: () => Promise<void>): void }) {
             } as never),
         );
     }
+    await seedIdentity('admin');
     JWTManager.setScopes([
         {
             issuer: Config.jwtIssuer,
@@ -87,22 +92,25 @@ async function fixture(context: { after(action: () => Promise<void>): void }) {
         updatedAt: 1,
     });
     const headers = { authorization, 'x-bcms-workspace': workspace._id };
+    const inWorkspace = <T>(action: () => T) => runWithWorkspace({ workspaceId: workspace._id,
+        actorId: 'admin', admin: true, instanceAdmin: true, role: 'admin' }, action);
     return {
         app,
         workspace,
+        inWorkspace,
         create: () =>
             app.inject({
                 method: 'POST',
                 url: '/api/v4/workspaces/current/sites',
                 headers,
                 payload: { name: 'New site' },
-            }),
+            }).then(response => response),
         remove: () =>
             app.inject({
                 method: 'DELETE',
                 url: '/api/v4/workspaces/current',
                 headers,
-            }),
+            }).then(response => response),
     };
 }
 const options = { skip: !process.env.STOREFRONT_TEST_MONGO, timeout: 10000 };
@@ -111,7 +119,7 @@ test(
     'a site creation reserved before insert prevents concurrent workspace deletion',
     options,
     async (context) => {
-        const { workspace, create, remove } = await fixture(context);
+        const { workspace, create, remove, inWorkspace } = await fixture(context);
         const reached = barrier();
         const resume = barrier();
         const add = Repo.siteInstallation.add;
@@ -133,7 +141,7 @@ test(
             assert.equal(creation.statusCode, 200, creation.body);
         }
         assert.equal(
-            (await Repo.siteInstallation.methods.listWorkspace(workspace._id))
+            (await inWorkspace(() => Repo.siteInstallation.methods.listWorkspace(workspace._id)))
                 .length,
             1,
         );
@@ -144,7 +152,7 @@ test(
     'deletion winning before a previously authorized creator reserves leaves no orphan',
     options,
     async (context) => {
-        const { workspace, create, remove } = await fixture(context);
+        const { workspace, create, remove, inWorkspace } = await fixture(context);
         const reached = barrier();
         const resume = barrier();
         const fresh = Repo.workspace.methods.fresh;
@@ -170,7 +178,7 @@ test(
             assert.equal(creation.statusCode, 409, creation.body);
         }
         assert.equal(
-            (await Repo.siteInstallation.methods.listWorkspace(workspace._id))
+            (await inWorkspace(() => Repo.siteInstallation.methods.listWorkspace(workspace._id)))
                 .length,
             0,
         );
@@ -181,11 +189,12 @@ test(
     'a creation completed after the empty-site check invalidates deletion revision',
     options,
     async (context) => {
-        const { workspace, create, remove } = await fixture(context);
+        const { workspace, create, remove, inWorkspace } = await fixture(context);
         const reached = barrier();
         const resume = barrier();
-        const list = Repo.siteInstallation.methods.listWorkspace;
-        Repo.siteInstallation.methods.listWorkspace = async (id) => {
+        const methods = inWorkspace(() => Repo.siteInstallation.methods);
+        const list = methods.listWorkspace;
+        methods.listWorkspace = async (id) => {
             const items = await list(id);
             reached.resolve();
             await resume.promise;
@@ -199,12 +208,12 @@ test(
         } finally {
             resume.resolve();
             const deletion = await pending;
-            Repo.siteInstallation.methods.listWorkspace = list;
+            methods.listWorkspace = list;
             assert.equal(deletion.statusCode, 409, deletion.body);
         }
         assert.ok(await Repo.workspace.methods.fresh(workspace._id));
         assert.equal(
-            (await Repo.siteInstallation.methods.listWorkspace(workspace._id))
+            (await inWorkspace(() => Repo.siteInstallation.methods.listWorkspace(workspace._id)))
                 .length,
             1,
         );

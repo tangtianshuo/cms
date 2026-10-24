@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
+import { seedIdentity } from '../test-fixtures/identity';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { request as httpRequest } from 'node:http';
@@ -25,9 +26,10 @@ test('real Mongo unique domain ownership, primary concurrency, HTTP trust and im
     await fastify.register(fastifyMongo, { url: process.env.STOREFRONT_TEST_MONGO!, database, forceClose: true });
     let storefront: ChildProcess | undefined;
     context.after(async () => { storefront?.kill(); await fastify.mongo.db?.dropDatabase(); await fastify.close(); });
-    for (const repo of [Repo.workspace, Repo.siteInstallation, Repo.siteDomain, Repo.siteDomainAudit, Repo.storefrontRelease]) {
+    for (const repo of [Repo.workspace, Repo.user, Repo.media, Repo.siteInstallation, Repo.siteDomain, Repo.siteDomainAudit, Repo.storefrontRelease]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify, next: (error?: Error) => error ? reject(error) : resolve() } as never));
     }
+    await seedIdentity('domain-admin');
     JWTManager.setScopes([{ issuer: Config.jwtIssuer, secret: Config.jwtSecret, alg: 'HS256', expIn: 60000 }]);
     const token = JWTManager.create({ issuer: Config.jwtIssuer, userId: 'domain-admin', roles: ['ADMIN', 'USER'] });
     assert.ok(!(token instanceof JWTError));

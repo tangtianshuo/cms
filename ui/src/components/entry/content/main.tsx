@@ -274,7 +274,7 @@ export const EntryContentEditor = defineComponent({
             );
         }
         const editor = useEditor({
-            content: getDocContent([]),
+            content: getDocContent(yProvider ? [] : props.nodes),
             extensions: [
                 createSlashCommandExtension({
                     sdk,
@@ -381,17 +381,19 @@ export const EntryContentEditor = defineComponent({
                 Dropcursor.configure({
                     color: '#ff00ff',
                 }),
-                Collaboration.configure({
-                    document: ydoc,
-                    field: props.propPath,
-                }),
-                CollaborationCursor.configure({
-                    provider: yProvider,
-                    user: {
-                        name: me.value.username,
-                        color: '#f783ac',
-                    },
-                }),
+                ...(yProvider ? [
+                    Collaboration.configure({
+                        document: ydoc,
+                        field: props.propPath,
+                    }),
+                    CollaborationCursor.configure({
+                        provider: yProvider,
+                        user: {
+                            name: me.value.username,
+                            color: '#f783ac',
+                        },
+                    }),
+                ] : []),
             ],
             editable: !props.disabled,
         });
@@ -501,6 +503,7 @@ export const EntryContentEditor = defineComponent({
                     yp.destroy();
                 });
             }
+            ydoc.destroy();
         });
 
         return () => (

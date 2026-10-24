@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import test from 'node:test';
+import { seedIdentity } from '../test-fixtures/identity';
 import Fastify from 'fastify';
 import fastifyMongo from '@fastify/mongodb';
 import { JWTManager, JWTEncode, JWTError } from '../_server/modules/jwt';
@@ -27,11 +28,12 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
         await fastify.close();
     });
     await fastify.register(fastifyMongo, { url: process.env.STOREFRONT_TEST_MONGO!, database, forceClose: true });
-    for (const repo of [Repo.workspace, Repo.siteInstallation, Repo.storefrontRelease, Repo.storefrontReleaseAudit,
-        Repo.template, Repo.entry, Repo.language, Repo.media]) {
+    for (const repo of [Repo.workspace, Repo.user, Repo.siteInstallation, Repo.storefrontRelease, Repo.storefrontReleaseAudit,
+        Repo.template, Repo.entryGroup, Repo.entry, Repo.language, Repo.media]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify,
             next: (error?: Error) => error ? reject(error) : resolve() } as never));
     }
+    await seedIdentity('integration-admin');
     JWTManager.setScopes([{ issuer: Config.jwtIssuer, secret: Config.jwtSecret, alg: 'HS256', expIn: 60000 }]);
     const token = JWTManager.create({ issuer: Config.jwtIssuer, userId: 'integration-admin', roles: ['ADMIN', 'USER'] });
     assert.ok(!(token instanceof JWTError));
@@ -60,7 +62,7 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
     const installed = await admin('/api/v4/presets/import', { presetId: 'atelier', siteName: 'Integration Store', includeDemo: true }) as SiteInstallation;
     assert.equal((await publicPage('/')).statusCode, 404);
     const legacy = await fastify.inject({ url: '/api/v4/storefront/products/featured-product',
-        headers: { 'x-storefront-host': Config.storefrontHost } });
+        headers: { authorization, 'x-storefront-host': Config.storefrontHost } });
     assert.equal(legacy.statusCode, 404);
     const check = await admin('/api/v4/presets/releases/check', {});
     assert.equal(check.valid, true, JSON.stringify(check));

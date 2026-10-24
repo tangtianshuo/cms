@@ -1,0 +1,178 @@
+- main:
+  - strong: Default workspace
+  - text: · Launch Browser Site 20261024
+  - link "切换工作区或站点":
+    - /url: /d/workspaces
+  - heading "独立站预制模版" [level=1]
+  - paragraph: 选择整站设计，并生成建站所需的内容模型。
+  - generic: 已安装 Launch Browser Site 20261024
+  - region "独立站预制模版":
+    - button "Atelier Editorial product storytelling with generous imagery. 主题颜色" [pressed]:
+      - strong: Atelier
+      - generic: Editorial product storytelling with generous imagery.
+      - generic "主题颜色"
+    - button "Market A practical storefront for broad product catalogs. 主题颜色":
+      - strong: Market
+      - generic: A practical storefront for broad product catalogs.
+      - generic "主题颜色"
+  - heading "Atelier" [level=2]
+  - generic: v1.0.0
+  - group "预览设备":
+    - button "桌面端" [pressed]
+    - button "移动端"
+  - tablist:
+    - tab "首页" [active] [selected]
+    - tab "集合页"
+    - tab "商品页"
+    - tab "内容页"
+  - iframe:
+    - generic: 该内容被屏蔽了。请联系网站所有者以解决此问题。
+  - heading "创建独立站" [level=2]
+  - paragraph: 导入后将创建页面草稿和对应的 CMS 内容字段。
+  - generic: 商品
+  - generic: 复用
+  - generic: 商品集合
+  - generic: 复用
+  - generic: 首页
+  - generic: 复用
+  - generic: 内容页
+  - generic: 复用
+  - generic: 站点设置
+  - generic: 复用
+  - paragraph: 页面草稿
+  - generic: Home · /
+  - generic: Collections · /collections
+  - generic: Product detail · /products/:slug
+  - generic: Content page · /pages/:slug
+  - paragraph: 已安装这套模版。
+  - heading "页面草稿" [level=2]
+  - paragraph: 页面修改和新增页面在发布后公开。取消勾选“加入下次发布”可在下一版本下线页面。
+  - button "新增页面":
+    - generic: 新增页面
+  - button "Home /":
+    - generic: Home
+    - generic: /
+  - button "Collections /collections":
+    - generic: Collections
+    - generic: /collections
+  - button "Product detail /products/:slug":
+    - generic: Product detail
+    - generic: /products/:slug
+  - button "Content page /pages/:slug":
+    - generic: Content page
+    - generic: /pages/:slug
+  - text: 页面标题
+  - textbox "页面标题": Home
+  - text: 路径
+  - textbox "路径" [disabled]: /
+  - text: SEO 标题
+  - textbox "SEO 标题": Home
+  - text: 内容条目
+  - combobox "内容条目":
+    - option "未绑定条目" [selected]
+  - checkbox "加入下次发布" [checked] [disabled]
+  - text: 加入下次发布
+  - checkbox "显示在导航中" [checked]
+  - text: 显示在导航中
+  - text: SEO 描述
+  - textbox "SEO 描述"
+  - group "页面区块":
+    - generic: 页面区块
+    - checkbox "首屏" [checked] [disabled]
+    - text: 首屏
+    - checkbox "精选集合" [checked]
+    - text: 精选集合
+  - button "保存":
+    - generic: 保存
+  - heading "发布独立站" [level=2]
+  - paragraph: 保存内容和页面草稿后，先校验差异，再发布。回滚恢复所选公开版本，草稿仍可继续编辑。
+  - paragraph: 独立站尚未发布。
+  - button "校验发布差异":
+    - generic: 校验发布差异
+  - button "发布新版本" [disabled]:
+    - generic: 发布新版本
+  - strong: 请先处理以下问题
+  - alert: Exactly one home Entry is required for language en
+  - heading "建站清单" [level=2]
+  - paragraph: 在自动生成的内容编辑器中完善站点内容。
+  - generic: ✓
+  - generic: 安装主题
+  - generic: 已完成 1 项
+  - generic: ·
+  - generic: 品牌信息
+  - generic: 已完成 0 项
+  - link "打开编辑器":
+    - /url: /d/template/6adc42101f8fb2c3dbd79ac2/entry/create
+  - generic: ·
+  - generic: 商品
+  - generic: 已完成 0 项
+  - link "打开编辑器":
+    - /url: /d/template/6adc42101f8fb2c3dbd79abe/entry/create
+  - generic: ·
+  - generic: 商品集合
+  - generic: 已完成 0 项
+  - link "打开编辑器":
+    - /url: /d/template/6adc42101f8fb2c3dbd79abf/entry/create
+  - generic: ·
+  - generic: 首页
+  - generic: 已完成 0 项
+  - link "打开编辑器":
+    - /url: /d/template/6adc42101f8fb2c3dbd79ac0/entry/create
+  - generic: ·
+  - generic: 内容页
+  - generic: 已完成 0 项
+  - link "打开编辑器":
+    - /url: /d/template/6adc42101f8fb2c3dbd79ac1/entry/create
+  - generic: ·
+  - generic: 发布站点
+  - generic: 已完成 0 项
+  - link "打开编辑器":
+    - /url: /d/presets#releases
+- complementary:
+  - link:
+    - /url: /d
+  - link "Default workspace Launch Browser Site 20261024":
+    - /url: /d/workspaces
+    - text: Default workspace
+    - text: Launch Browser Site 20261024
+  - button "搜索 Ctrl+K":
+    - generic: 搜索
+    - generic: Ctrl+K
+  - button "管理":
+    - text: 管理
+  - link "工作区与站点":
+    - /url: /d/workspaces
+  - link "站点域名":
+    - /url: /d/domains
+  - link "内容分组":
+    - /url: /d/entry-groups
+  - link "资源共享":
+    - /url: /d/shares
+  - link "独立站模版":
+    - /url: /d/presets
+    - generic: 独立站模版
+  - link "模板":
+    - /url: /d/template
+    - generic: 模板
+  - link "分组":
+    - /url: /d/group
+    - generic: 分组
+  - link "组件":
+    - /url: /d/widget
+    - generic: 组件
+  - link "媒体":
+    - /url: /d/media
+    - generic: 媒体
+  - link "设置":
+    - /url: /d/settings
+    - generic: 设置
+  - link "密钥管理":
+    - /url: /d/api-key
+    - generic: 密钥管理
+  - button "条目":
+    - text: 条目
+  - button "AT Acceptance Test acceptance@localhost.test":
+    - generic: AT
+    - generic: Acceptance Test
+    - generic: acceptance@localhost.test
+  - button:

@@ -1,0 +1,96 @@
+- main:
+  - text: 所属分组
+  - combobox "所属分组":
+    - option "选择分组" [disabled]
+    - option "默认分组" [selected]
+    - option "E2E Catalog"
+    - option "Site content"
+  - generic: 保存时将此内容移动至所选分组。
+  - button "English English English":
+    - img "English"
+    - generic: English
+    - generic: English
+  - button "选择条目状态":
+    - generic: 选择条目状态
+  - button "预览页面":
+    - generic: 预览页面
+  - button "创建":
+    - generic: 创建
+  - generic: 标题*
+  - generic: Slug
+  - textbox "Slug"
+  - generic: Headline
+  - generic: Introduction
+  - generic: Hero image
+  - button "点击选择媒体文件":
+    - generic: 点击选择媒体文件
+  - generic: Featured collections
+  - button "向 Featured collections 添加新项":
+    - generic: 向 Featured collections 添加新项
+  - generic: Featured products
+  - button "向 Featured products 添加新项":
+    - generic: 向 Featured products 添加新项
+- complementary:
+  - link:
+    - /url: /d
+  - link "Default workspace Launch Browser Site 20261024":
+    - /url: /d/workspaces
+    - text: Default workspace
+    - text: Launch Browser Site 20261024
+  - button "搜索 Ctrl+K":
+    - generic: 搜索
+    - generic: Ctrl+K
+  - button "管理":
+    - text: 管理
+  - button "条目":
+    - text: 条目
+  - link "Collections":
+    - /url: /d/template/6adc3f29f6c7109dbeab71d5/entry
+    - generic: Collections
+  - link "Collections":
+    - /url: /d/template/6adc42101f8fb2c3dbd79abf/entry
+    - generic: Collections
+  - link "Collections":
+    - /url: /d/template/6adc1e3958c3459acff882b4/entry
+    - generic: Collections
+  - link "Home page":
+    - /url: /d/template/6adc3f29f6c7109dbeab71d6/entry
+    - generic: Home page
+  - link "Home page":
+    - /url: /d/template/6adc42101f8fb2c3dbd79ac0/entry
+    - generic: Home page
+  - link "Home page":
+    - /url: /d/template/6adc1e3958c3459acff882b5/entry
+    - generic: Home page
+  - link "Pages":
+    - /url: /d/template/6adc3f29f6c7109dbeab71d7/entry
+    - generic: Pages
+  - link "Pages":
+    - /url: /d/template/6adc42101f8fb2c3dbd79ac1/entry
+    - generic: Pages
+  - link "Pages":
+    - /url: /d/template/6adc1e3958c3459acff882b6/entry
+    - generic: Pages
+  - link "Product":
+    - /url: /d/template/6adc3e6165b542ab48aa9efd/entry
+    - generic: Product
+  - link "Products":
+    - /url: /d/template/6adc42101f8fb2c3dbd79abe/entry
+    - generic: Products
+  - link "Products":
+    - /url: /d/template/6adc1e3958c3459acff882b3/entry
+    - generic: Products
+  - link "Site settings":
+    - /url: /d/template/6adc3f29f6c7109dbeab71d8/entry
+    - generic: Site settings
+  - link "Site settings":
+    - /url: /d/template/6adc42101f8fb2c3dbd79ac2/entry
+    - generic: Site settings
+  - link "Site settings":
+    - /url: /d/template/6adc1e3958c3459acff882b7/entry
+    - generic: Site settings
+  - button "AT Acceptance Test acceptance@localhost.test":
+    - generic: AT
+    - generic: Acceptance Test
+    - generic: acceptance@localhost.test
+  - button:
