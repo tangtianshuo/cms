@@ -113,7 +113,7 @@ export const TemplateController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request }) {
                     const params = request.params as {
                         templateId: string;
@@ -165,7 +165,7 @@ export const TemplateController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ token, apiKey }) {
                     let items: Template[] = [];
                     if (token) {
@@ -230,7 +230,7 @@ export const TemplateController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request, errorHandler }) {
                     const params = request.params as {
                         templateId: string;
@@ -288,7 +288,7 @@ export const TemplateController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtBodyCheck(
+                preRequestHandler: RP.createContentApiKeyJwtBodyCheck(
                     TemplateCreateBodySchema,
                     ['ADMIN'],
                 ),
@@ -385,7 +385,7 @@ export const TemplateController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtBodyCheck(
+                preRequestHandler: RP.createContentApiKeyJwtBodyCheck(
                     TemplateUpdateBodySchema,
                     ['ADMIN'],
                 ),
@@ -506,7 +506,7 @@ export const TemplateController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(['ADMIN']),
                 async handler({ request, errorHandler, token }) {
                     const params = request.params as {
                         templateId: string;

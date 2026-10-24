@@ -1,3 +1,4 @@
+import { defaultEntryGroupId } from '../entry-groups/repo';
 import { withWorkspaceCreation } from './lifecycle';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -120,6 +121,7 @@ export const WorkspaceController = createController({
                         [
                             Repo.template,
                             Repo.entry,
+                            Repo.entryGroup,
                             Repo.media,
                             Repo.widget,
                             Repo.group,
@@ -135,7 +137,7 @@ export const WorkspaceController = createController({
                                 (item) =>
                                     ownerWorkspace(
                                         item as { workspaceId?: string },
-                                    ) === workspaceId(),
+                                    ) === workspaceId() && item._id !== defaultEntryGroupId(),
                             ),
                         )
                     ) {
@@ -144,6 +146,7 @@ export const WorkspaceController = createController({
                             'Workspace contains resources',
                         );
                     }
+                    await Repo.entryGroup.methods.removeEmpty(defaultEntryGroupId(), async () => (await Repo.entry.findAll()).some(entry => entry.groupId === defaultEntryGroupId()), true);
                     if (
                         !(await Repo.workspace.methods.deleteIfIdle(
                             workspaceId(),

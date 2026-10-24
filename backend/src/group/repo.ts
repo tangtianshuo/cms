@@ -1,3 +1,4 @@
+import { validatePropDefinitions } from '../workspaces/content-references';
 import {
     type Group,
     GroupSchema,
@@ -21,6 +22,7 @@ export const GroupRepo = createMongoDBRepository<Group, GroupRepoMethods>({
     name: 'Group',
     collection: `${Config.storageScope}_groups`,
     schema: GroupSchema,
+    prepareWrite: (item) => validatePropDefinitions(item.props),
     methods({ mdb, cache }) {
         const latches: {
             [key: string]: boolean;

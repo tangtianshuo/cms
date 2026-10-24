@@ -9,6 +9,8 @@ export interface WorkspaceContext {
     instanceAdmin: boolean;
     role: WorkspaceRole;
     apiKeyId?: string;
+    templatePermissions?: Array<{ _id: string; get: boolean; post: boolean; put: boolean; delete: boolean }>;
+    mediaPermissions?: { get: boolean; post: boolean; put: boolean; delete: boolean };
 }
 export type WorkspacePrincipal =
     | { userId: string; roles: string[] }
@@ -93,4 +95,28 @@ export async function resolveWorkspaceContext(
         context.siteId = site._id;
     }
     return context;
+}
+
+export function workspaceCacheKey() {
+    const context = workspaceContext();
+    return JSON.stringify([workspaceId(), context?.actorId, context?.admin, context?.role,
+        context?.templatePermissions, context?.mediaPermissions]);
+}
+export function contentFilter(kind?: string, operation: 'get' | 'post' | 'put' | 'delete' = 'get') {
+    const context = workspaceContext();
+    const scope = workspaceFilter();
+    if (!context || context.admin || !['Entry', 'Template', 'Media'].includes(kind || '')) return scope;
+    if (kind === 'Media') return context.mediaPermissions && !context.mediaPermissions[operation]
+        ? { $and: [scope, { _id: { $in: [] as string[] } }] } : scope;
+    const ids = (context.templatePermissions || []).filter(grant => grant[operation]).map(grant => grant._id);
+    return { $and: [scope, { [kind === 'Entry' ? 'templateId' : '_id']: { $in: ids } }] };
+}
+export function canWriteContent(kind: string, document: { _id?: string; templateId?: string }, operation: 'post' | 'put' | 'delete') {
+    const context = workspaceContext();
+    if (!context || context.admin) return true;
+    if (context.role === 'viewer') return false;
+    if (kind === 'Media') return !context.mediaPermissions || context.mediaPermissions[operation];
+    if (kind === 'Entry' || kind === 'Template') return Boolean(context.templatePermissions?.some(grant =>
+        grant._id === (kind === 'Entry' ? document.templateId : document._id) && grant[operation]));
+    return true;
 }

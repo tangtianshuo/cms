@@ -34,14 +34,14 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
     schema: SiteInstallationSchema,
     beforeIndexes: migrateSiteIndex,
     indexes: [{ key: { workspaceId: 1, slot: 1 }, name: 'workspace_site_slot_unique', unique: true }],
-    methods({ mdb, cache }) {
+    methods({ mdb, cache, identityCollection }) {
         return {
             async listWorkspace(id) { return mdb.find(workspaceFilter(id)).toArray(); },
             async findSelected() {
                 const context = workspaceContext();
                 return mdb.findOne({ ...workspaceFilter(), ...(context?.siteId ? { _id: context.siteId } : { slot: 'default' }) });
             },
-            async findFresh(_id) { return mdb.findOne({ _id }); },
+            async findFresh(_id) { return identityCollection.findOne({ _id }); },
             async withDomainLock(siteId, action) {
                 const token = randomUUID();
                 const now = Date.now();

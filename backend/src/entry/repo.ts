@@ -1,3 +1,6 @@
+import { Repo } from '../repo';
+import { prepareEntryWrite } from '../workspaces/content-references';
+import { migrateEntryGroups } from '../entry-groups/migration';
 import {
     type Entry,
     EntrySchema,
@@ -19,6 +22,11 @@ export const EntryRepo = createMongoDBRepository<Entry, EntryRepoMethods>({
     name: 'Entry',
     collection: 'entries',
     schema: EntrySchema,
+    beforeIndexes: migrateEntryGroups,
+    prepareWrite: prepareEntryWrite,
+    aroundWrite: (entries, action) => Repo.entryGroup.methods.withWrites(entries.map(entry => entry.groupId!), action),
+    indexes: [{ key: { workspaceId: 1, groupId: 1, titleKeys: 1 }, name: 'workspace_group_language_title_unique', unique: true,
+        partialFilterExpression: { titleKeys: { $type: 'array' } } }],
     methods({ mdb, cache }) {
         const latches: {
             [key: string]: boolean;

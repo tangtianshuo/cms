@@ -14,6 +14,7 @@ export class RPBodyCheck {
         schema: ObjectSchema,
         errorHandler: HttpErrorHandler,
     ): Body {
+        if (body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, 'workspaceId')) throw errorHandler(HttpStatus.Forbidden, 'Resource workspace is selected by verified request context');
         const bodyCheck = ObjectUtility.compareWithSchema(body, schema, 'body');
         if (bodyCheck instanceof ObjectUtilityError) {
             throw errorHandler(HttpStatus.Forbidden, bodyCheck.message);

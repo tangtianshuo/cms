@@ -56,7 +56,7 @@ export function mapProduct(
                 continue;
             }
             images.push({
-                src: `${publicOrigin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image`,
+                src: `${publicOrigin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image${found.accessToken ? '?cap=' + encodeURIComponent(found.accessToken) : ''}`,
                 alt: 'alt_text' in item && typeof item.alt_text === 'string' && item.alt_text.trim()
                     ? item.alt_text.trim()
                     : found.altText || name,

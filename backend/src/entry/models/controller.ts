@@ -15,12 +15,14 @@ import type { ObjectSchema } from '@bcms/selfhosted-utils/object-utility';
 import type { PropValue } from '@bcms/selfhosted-backend/prop/models/main';
 
 export interface EntryCreateBody {
+    groupId?: string;
     statuses: EntryStatusValue[];
     meta: EntryMeta[];
     content: EntryContent[];
 }
 
 export const EntryCreateBodySchema: ObjectSchema = {
+    groupId: { __type: 'string', __required: false },
     statuses: {
         __type: 'array',
         __required: true,
@@ -48,6 +50,7 @@ export const EntryCreateBodySchema: ObjectSchema = {
 };
 
 export interface EntryUpdateBody {
+    groupId?: string;
     _id: string;
     templateId: string;
     status?: string;
@@ -59,6 +62,7 @@ export interface EntryUpdateBody {
 }
 
 export const EntryUpdateBodySchema: ObjectSchema = {
+    groupId: { __type: 'string', __required: false },
     _id: {
         __type: 'string',
         __required: false,

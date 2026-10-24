@@ -35,7 +35,7 @@ async function fixture(context: { after(action: () => Promise<void>): void }) {
         Repo.workspace,
         Repo.siteInstallation,
         Repo.template,
-        Repo.entry,
+        Repo.entryGroup, Repo.entry,
         Repo.media,
         Repo.widget,
         Repo.group,

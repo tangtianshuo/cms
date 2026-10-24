@@ -22,6 +22,7 @@ import {
 } from '@bcms/selfhosted-backend/entry/models/content';
 
 export interface Entry extends MongoDBEntry {
+    titleKeys?: string[];
     workspaceId?: string;
     siteId?: string;
     groupId?: string;

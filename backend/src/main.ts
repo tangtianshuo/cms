@@ -1,3 +1,5 @@
+import { socketIdentity } from './socket/access';
+import { EntryGroupController } from './entry-groups/controller';
 import { WorkspaceController } from './workspaces/controller';
 import path from 'path';
 import {
@@ -10,8 +12,6 @@ import FastifyStatic from '@fastify/static';
 import FastifyCors from '@fastify/cors';
 import {
     createJwt,
-    JWTError,
-    JWTManager,
 } from '@bcms/selfhosted-backend/_server/modules/jwt';
 import { Config } from '@bcms/selfhosted-backend/config';
 import { createSocket } from '@bcms/selfhosted-backend/_server/modules/socket';
@@ -29,7 +29,6 @@ import {
 } from '@bcms/selfhosted-backend/auth/controller';
 import { UserController } from '@bcms/selfhosted-backend/user/controller';
 import { StorageController } from '@bcms/selfhosted-backend/storage/controller';
-import type { UserCustomPool } from '@bcms/selfhosted-backend/user/models/custom-pool';
 import { socketEventHandlersEntrySync } from '@bcms/selfhosted-backend/socket/handlers/entry-sync';
 import {
     createEntrySyncChannelHandler,
@@ -151,6 +150,7 @@ async function main() {
             ApiKeyController,
             AuthController,
             EntryController,
+            EntryGroupController,
             EntryStatusController,
             GroupController,
             LanguageController,
@@ -208,95 +208,16 @@ async function main() {
             createSocket({
                 path: '/api/v4/socket',
                 async validateConnection({ req }, next) {
-                    const queryString = req.url ? req.url.split('?')[1] : '';
-                    if (!queryString) {
-                        next(false);
-                        return;
-                    }
-                    const query: { [key: string]: string } = {};
-                    const queryParts = queryString.split('&');
-                    for (let i = 0; i < queryParts.length; i++) {
-                        const [key, value] = queryParts[i].split('=');
-                        query[key] = value;
-                    }
-                    if (!query.token) {
-                        next(false);
-                        return;
-                    }
-                    if (query.token.startsWith('apikey_')) {
-                        const [id, secret] = query.token
-                            .replace('apikey_', '')
-                            .split('.');
-                        const apiKey = await Repo.apiKey.findById(id);
-                        if (
-                            !apiKey ||
-                            apiKey.secret !== secret ||
-                            apiKey.blocked
-                        ) {
-                            next(false);
-                            return;
-                        }
-                        next(true);
-                    } else {
-                        const jwt = JWTManager.get({
-                            roles: ['ADMIN', 'USER'],
-                            token: query.token,
-                        });
-                        if (jwt instanceof JWTError) {
-                            next(false);
-                            return;
-                        }
-                        next(true);
-                    }
+                    try { await socketIdentity(req.url); next(true); } catch { next(false); }
                 },
                 async onConnection(connection, req) {
-                    const queryString = req.url ? req.url.split('?')[1] : '';
-                    if (!queryString) {
-                        return;
-                    }
-                    const query: { [key: string]: string } = {};
-                    const queryParts = queryString.split('&');
-                    for (let i = 0; i < queryParts.length; i++) {
-                        const [key, value] = queryParts[i].split('=');
-                        query[key] = value;
-                    }
-                    if (!query.token) {
-                        return;
-                    }
-                    if (query.token.startsWith('apikey_')) {
-                        const [id, secret] = query.token
-                            .replace('apikey_', '')
-                            .split('.');
-                        const apiKey = await Repo.apiKey.findById(id);
-                        if (!apiKey || apiKey.secret !== secret) {
-                            return;
-                        }
-                        connection.channels.push(
-                            apiKey.userId,
-                            'apiKey',
-                            'global',
-                        );
-                        connection.emit('socket_connection', {
-                            id: connection.id,
-                        });
-                    } else {
-                        const jwt = JWTManager.get<UserCustomPool>({
-                            roles: ['ADMIN', 'USER'],
-                            token: query.token,
-                        });
-                        if (jwt instanceof JWTError) {
-                            return;
-                        }
-                        connection.channels.push(
-                            jwt.payload.userId,
-                            ...jwt.payload.rls,
-                            'user',
-                            'global',
-                        );
-                        connection.emit('socket_connection', {
-                            id: connection.id,
-                        });
-                    }
+                    try {
+                        const identity = await socketIdentity(req.url);
+                        connection.metadata = identity;
+                        connection.channels.push(identity.userId, identity.context.apiKeyId ? 'apiKey' : 'user', 'global');
+                        if (identity.context.instanceAdmin) connection.channels.push('ADMIN');
+                        connection.emit('socket_connection', { id: connection.id });
+                    } catch { connection.socket.close(1008, 'Access denied'); }
                 },
                 eventHandlers: {
                     ...socketEventHandlersEntrySync,
@@ -333,6 +254,7 @@ async function main() {
             Repo.widget.init(),
             Repo.template.init(),
             Repo.templateOrganizer.init(),
+            Repo.entryGroup.init(),
             Repo.entry.init(),
             Repo.language.init(),
             Repo.entryStatus.init(),

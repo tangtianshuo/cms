@@ -1,3 +1,7 @@
+import { withMediaAccess, capabilityMedia, retainedPublicMedia } from './access';
+import { workspaceContext, verifiedWorkspace, canWriteContent, type WorkspaceContext } from '../workspaces/context';
+import { revalidateWorkspace } from '../workspaces/revalidate';
+import { withWorkspaceCreation } from '../workspaces/lifecycle';
 import crypto from 'crypto';
 import {
     createController,
@@ -85,7 +89,7 @@ export const MediaController = createController({
                 async handler() {
                     const items = await Repo.media.findAll();
                     return {
-                        items,
+                        items: items.map(withMediaAccess),
                         limit: items.length,
                         total: items.length,
                         offset: 0,
@@ -146,7 +150,7 @@ export const MediaController = createController({
                         );
                     }
                     return {
-                        item: media,
+                        item: withMediaAccess(media),
                     };
                 },
             }),
@@ -205,7 +209,10 @@ export const MediaController = createController({
                         },
                     },
                 },
-                // preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: async (data) => {
+                    if (data.request.headers.authorization || (data.request.query as { apiKey?: string }).apiKey) return RP.createApiKeyJwtCheck()(data);
+                    return {};
+                },
                 async handler({ errorHandler, reply, request }) {
                     const params = request.params as {
                         mediaId: string;
@@ -213,6 +220,7 @@ export const MediaController = createController({
                     };
                     const query = request.query as {
                         data?: string;
+                        cap?: string;
                     };
                     let data: MediaGetBinBody = {
                         thumbnail: false,
@@ -240,7 +248,8 @@ export const MediaController = createController({
                             dataCheck.message,
                         );
                     }
-                    const media = await Repo.media.findById(params.mediaId);
+                    const privateRequest = !!workspaceContext() || !!query.cap;
+                    const media = workspaceContext() ? await Repo.media.findById(params.mediaId) : query.cap ? await capabilityMedia(params.mediaId, query.cap) : await retainedPublicMedia(params.mediaId);
                     if (!media) {
                         throw errorHandler(
                             HttpStatus.NotFound,
@@ -259,7 +268,7 @@ export const MediaController = createController({
                             data.image,
                         );
                         reply.header('Content-Type', res.mimetype);
-                        reply.header('Cache-Control', 'max-age=86400');
+                        reply.header('Cache-Control', privateRequest ? 'private, no-store' : 'public, max-age=300');
                         // reply.header('Content-Length', res.buffer.length);
                         // reply.header(
                         //     'Content-Disposition',
@@ -279,7 +288,7 @@ export const MediaController = createController({
                             );
                         }
                         reply.header('Content-Type', media.mimetype);
-                        reply.header('Cache-Control', 'max-age=86400');
+                        reply.header('Cache-Control', privateRequest ? 'private, no-store' : 'public, max-age=300');
                         // reply.header('Content-Length', media.size);
                         // reply.header(
                         //     'Content-Disposition',
@@ -330,24 +339,11 @@ export const MediaController = createController({
                     },
                 },
                 preRequestHandler: RP.createJwtCheck(),
-                async handler({ token }) {
-                    const uploadToken =
-                        crypto
-                            .createHash('sha256')
-                            .update(
-                                Date.now() + crypto.randomBytes(16).toString(),
-                            )
-                            .digest('hex') + `.`;
-                    keyValueStore.set(
-                        `media_upload_token.${token.payload.userId}`,
-                        `${token.payload.userId}.${uploadToken}.`,
-                        {
-                            expIn: 900,
-                        },
-                    );
-                    return {
-                        token: `${token.payload.userId}.${uploadToken}.`,
-                    };
+                async handler() {
+                    if (!canWriteContent('Media', {}, 'post')) throw new Error('Media creation denied');
+                    const uploadToken = crypto.randomBytes(32).toString('hex');
+                    keyValueStore.set(`media_upload_token.${uploadToken}`, JSON.stringify({ context: workspaceContext(), expiresAt: Date.now() + 900000 }), { expIn: 900 });
+                    return { token: uploadToken };
                 },
             }),
 
@@ -441,13 +437,13 @@ export const MediaController = createController({
                         console.error(err),
                     );
                     return {
-                        item: media,
+                        item: withMediaAccess(media),
                     };
                 },
             }),
 
             createFile: createControllerMethod<
-                void,
+                { uploadActorId: string },
                 ControllerItemResponse<Media>
             >({
                 path: '/create/file',
@@ -508,28 +504,24 @@ export const MediaController = createController({
                         },
                     },
                 },
-                async handler({ request, errorHandler }) {
+                preRequestHandler: async ({ request, errorHandler }) => {
+                    const token = (request.query as { token?: string }).token;
+                    const saved = typeof token === 'string' ? keyValueStore.getDel(`media_upload_token.${token}`) : null;
+                    if (!saved) throw errorHandler(HttpStatus.Unauthorized, 'Invalid upload token');
+                    try {
+                        const upload = JSON.parse(saved) as { context: WorkspaceContext; expiresAt: number };
+                        if (upload.expiresAt <= Date.now()) throw new Error('Upload token expired');
+                        const context = await revalidateWorkspace(upload.context);
+                        if (context.role === 'viewer' || (context.mediaPermissions && !context.mediaPermissions.post)) throw new Error('Media creation denied');
+                        return { [verifiedWorkspace]: context, uploadActorId: context.actorId };
+                    } catch { throw errorHandler(HttpStatus.Forbidden, 'Upload access revoked'); }
+                },
+                async handler({ request, errorHandler, uploadActorId }) {
                     const query = request.query as {
                         parentId?: string;
                         token?: string;
                     };
-                    if (typeof query.token !== 'string') {
-                        throw errorHandler(
-                            HttpStatus.Unauthorized,
-                            'Missing upload token',
-                        );
-                    }
-                    const tokenParts = query.token.split('.');
-                    const userId = tokenParts[0];
-                    if (
-                        query.token !==
-                        keyValueStore.getDel(`media_upload_token.${userId}`)
-                    ) {
-                        throw errorHandler(
-                            HttpStatus.Unauthorized,
-                            'Invalid upload token',
-                        );
-                    }
+                    const userId = uploadActorId;
                     const file = await request.file({
                         limits: {
                             // Limit file size to 100MB
@@ -576,8 +568,11 @@ export const MediaController = createController({
                             media.name = media.name + '-' + hash;
                         }
                     }
-                    await MediaStorage.save(media, fileBuffer);
-                    media = await Repo.media.add(media);
+                    if (media.parentId && (await Repo.media.findById(media.parentId))?.type !== MediaType.DIR) throw errorHandler(HttpStatus.Forbidden, 'Media parent not found in workspace');
+                    media = await withWorkspaceCreation({ kind: 'media-file', resourceId: media._id }, async () => {
+                        await MediaStorage.save(media, fileBuffer);
+                        return Repo.media.add(media);
+                    });
                     SocketManager.channelEmit(
                         ['global'],
                         'media',
@@ -591,7 +586,7 @@ export const MediaController = createController({
                         console.error(err),
                     );
                     return {
-                        item: media,
+                        item: withMediaAccess(media),
                     };
                 },
             }),
@@ -700,7 +695,7 @@ export const MediaController = createController({
                         );
                     }
                     return {
-                        item: media,
+                        item: withMediaAccess(media),
                     };
                 },
             }),
@@ -748,7 +743,8 @@ export const MediaController = createController({
                     },
                 },
                 preRequestHandler: RP.createJwtBodyCheck(MediaDeleteBodySchema),
-                async handler({ body }) {
+                async handler({ body, errorHandler }) {
+                    if (!canWriteContent('Media', {}, 'delete')) throw errorHandler(HttpStatus.Forbidden, 'Media deletion denied');
                     const allMedia = await Repo.media.findAll();
                     const mediaToDelete: {
                         [mediaId: string]: Media;

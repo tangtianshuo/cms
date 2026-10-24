@@ -8,6 +8,7 @@ const numbers = ['verificationExpiresAt', 'verifiedAt', 'lastCheckedAt', 'lastSu
 export const SiteDomainRepo = createMongoDBRepository<SiteDomain, {
     list(siteId: string): Promise<SiteDomain[]>;
     findHost(hostname: string): Promise<SiteDomain | null>;
+    findPublicId(id: string): Promise<SiteDomain | null>;
     findId(id: string): Promise<SiteDomain | null>;
     replace(record: SiteDomain, expectedUpdatedAt: number): Promise<boolean>;
     remove(id: string, expectedUpdatedAt: number): Promise<boolean>;
@@ -20,10 +21,11 @@ export const SiteDomainRepo = createMongoDBRepository<SiteDomain, {
         ...Object.fromEntries(numbers.map((key) => [key, { __type: 'number', __required: true }])),
         enabled: { __type: 'boolean', __required: true }, dnsReady: { __type: 'boolean', __required: true } },
     indexes: [{ key: { hostname: 1 }, name: 'domain_hostname_unique', unique: true }, { key: { siteId: 1 }, name: 'domains_by_site' }],
-    methods({ mdb, cache }) {
+    methods({ mdb, cache, identityCollection }) {
         return {
             async list(siteId) { return mdb.find({ siteId }).sort({ createdAt: 1 }).toArray(); },
-            async findHost(hostname) { return mdb.findOne({ hostname }); },
+            async findHost(hostname) { return identityCollection.findOne({ hostname }); },
+            async findPublicId(_id) { return identityCollection.findOne({ _id }); },
             async findId(_id) { return mdb.findOne({ _id }); },
             async replace(record, expectedUpdatedAt) {
                 const result = await mdb.updateOne({ _id: record._id, siteId: record.siteId, updatedAt: expectedUpdatedAt }, { $set: record });

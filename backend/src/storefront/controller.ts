@@ -1,3 +1,4 @@
+import { withMediaAccess } from '../media/access';
 import { workspaceContext } from '../workspaces/context';
 import { z } from 'zod';
 import {
@@ -78,6 +79,7 @@ export const StorefrontController = createController({
             product: createControllerMethod({
                 type: 'get',
                 path: '/products/:slug',
+                preRequestHandler: RP.createApiKeyJwtCheck(),
                 async handler({ request, reply, errorHandler }) {
                     if (!Config.storefrontEnabled) {
                         throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
@@ -94,7 +96,7 @@ export const StorefrontController = createController({
                         {
                             findTemplate: () => Repo.template.methods.findByName('product'),
                             findEntries: (templateId) => Repo.entry.methods.findAllByTemplateId(templateId),
-                            findMedia: () => Repo.media.findAll(),
+                            findMedia: () => Repo.media.findAll().then(items => items.map(withMediaAccess)),
                         },
                     );
                     if (!page) {
@@ -179,7 +181,7 @@ export const StorefrontController = createController({
                             language: parsed.data.language,
                             availableLanguages: (await Repo.language.findAll()).map((item) => item.code),
                             relatedEntries,
-                            media: await Repo.media.findAll(),
+                            media: (await Repo.media.findAll()).map(withMediaAccess),
                             mediaOrigin: siteConfig().mediaOrigin,
                             currency: siteConfig().currency,
                         });

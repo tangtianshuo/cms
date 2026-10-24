@@ -37,6 +37,7 @@ export const WorkspaceRepo = createMongoDBRepository<
         ): Promise<void>;
     }
 >({
+    workspaceScoped: false,
     name: 'Workspace',
     collection: `${Config.storageScope}_workspaces`,
     schema: {

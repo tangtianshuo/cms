@@ -17,6 +17,7 @@ export function domainSource(): DomainSource {
         findSiteById: (id) => Repo.siteInstallation.methods.findFresh(id),
         async list(id) { await flushDomainAudits(id); return Repo.siteDomain.methods.list(id); },
         findHost: (host) => Repo.siteDomain.methods.findHost(host),
+        findPublicId: (id) => Repo.siteDomain.methods.findPublicId(id),
         findId: (id) => Repo.siteDomain.methods.findId(id),
         async insert(record) { await Repo.siteDomain.add(record, true); },
         replace: (record, expected) => Repo.siteDomain.methods.replace(record, expected),

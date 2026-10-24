@@ -1,3 +1,4 @@
+import { withWorkspaceCreation } from '../workspaces/lifecycle';
 import { workspaceContext, workspaceId } from '../workspaces/context';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
@@ -172,7 +173,7 @@ export const PresetController = createController({
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid import request');
                     if (workspaceId() !== 'default' && !workspaceContext()?.siteId) throw errorHandler(HttpStatus.BadRequest, 'Create and select a site before installation');
                     try {
-                        return await importPreset(parsed.data, importSource());
+                        return await withWorkspaceCreation({ kind: 'preset-import', resourceId: workspaceContext()?.siteId || 'default' }, () => importPreset(parsed.data, importSource()));
                     } catch (cause) {
                         const message = cause instanceof Error ? cause.message : 'Import failed';
                         throw errorHandler(HttpStatus.BadRequest, message);

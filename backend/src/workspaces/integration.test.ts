@@ -28,7 +28,7 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     await templates.createIndex({ name: 1 }, { name: 'template_name_unique', unique: true });
     await sites.insertOne({ _id: 'legacy-site' as never, slot: 'default', name: 'Legacy', status: 'empty', presetId: '', createdAt: 1, updatedAt: 1, models: [], pages: [] });
     await templates.insertOne({ _id: 'legacy-template' as never, name: 'custom-legacy', props: [{ id: 'original-prop' }] });
-    for (const repo of [Repo.workspace, Repo.user, Repo.apiKey, Repo.widget, Repo.group, Repo.entryStatus, Repo.templateOrganizer, Repo.siteInstallation, Repo.template, Repo.entry, Repo.language, Repo.media, Repo.storefrontRelease, Repo.storefrontReleaseAudit, Repo.siteDomain, Repo.siteDomainAudit]) {
+    for (const repo of [Repo.workspace, Repo.user, Repo.apiKey, Repo.widget, Repo.group, Repo.entryStatus, Repo.templateOrganizer, Repo.siteInstallation, Repo.template, Repo.entryGroup, Repo.entry, Repo.language, Repo.media, Repo.storefrontRelease, Repo.storefrontReleaseAudit, Repo.siteDomain, Repo.siteDomainAudit]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify: app, next: (error?: Error) => error ? reject(error) : resolve() } as never));
     }
     assert.equal((await templates.findOne({ _id: 'legacy-template' as never }))?.props[0].id, 'original-prop');

@@ -80,7 +80,7 @@ export const GroupController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request }) {
                     const params = request.params as {
                         groupId: string;
@@ -134,7 +134,7 @@ export const GroupController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler() {
                     const items = await Repo.group.findAll();
                     return {
@@ -183,7 +183,7 @@ export const GroupController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createApiKeyJwtCheck(),
+                preRequestHandler: RP.createContentApiKeyJwtCheck(),
                 async handler({ request, errorHandler }) {
                     const params = request.params as {
                         groupId: string;
@@ -237,7 +237,7 @@ export const GroupController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     GroupCreateBodySchema,
                     ['ADMIN'],
                 ),
@@ -310,7 +310,7 @@ export const GroupController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtBodyCheck(
+                preRequestHandler: RP.createContentJwtBodyCheck(
                     GroupUpdateBodySchema,
                     ['ADMIN'],
                 ),
@@ -443,7 +443,7 @@ export const GroupController = createController({
                         },
                     },
                 },
-                preRequestHandler: RP.createJwtCheck(['ADMIN']),
+                preRequestHandler: RP.createContentJwtCheck(['ADMIN']),
                 async handler({ request, errorHandler, token }) {
                     const params = request.params as {
                         groupId: string;

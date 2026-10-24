@@ -1,3 +1,6 @@
+import { Repo } from '../repo';
+import { ContentScopeError } from '../workspaces/scoped-collection';
+import { validatePropDefinitions } from '../workspaces/content-references';
 import { workspaceFilter, workspaceId, ownerWorkspace } from '../workspaces/context';
 import { migrateTemplateIndex } from '../workspaces/migration';
 import { createMongoDBRepository } from '@bcms/selfhosted-backend/_server/modules/mongodb';
@@ -34,6 +37,13 @@ export const TemplateRepo = createMongoDBRepository<
             unique: true,
         },
     ],
+    async prepareWrite(item) {
+        await validatePropDefinitions(item.props);
+        const previous = await TemplateRepo.findById(item._id);
+        const title = previous?.props.find(prop => prop.name === 'title');
+        const nextTitle = item.props.find(prop => prop.name === 'title');
+        if (title && (!nextTitle || nextTitle.id !== title.id || nextTitle.type !== PropType.STRING) && (await Repo.entry.methods.findAllByTemplateId(item._id)).length) throw new ContentScopeError('Title property mapping cannot change while template entries exist');
+    },
     methods({ mdb, cache }) {
         const latches: {
             [key: string]: boolean;

@@ -191,6 +191,13 @@ export async function importPreset(
             }
         }
         for (const model of preset.models) {
+            const template = templates.get(model.key)!;
+            if (!await source.findTemplate(template.name)) {
+                template.workspaceId = site.workspaceId || 'default'; template.siteId = site._id;
+                await source.addTemplate(template);
+            }
+        }
+        for (const model of preset.models) {
             const template = templates.get(model.key) as Template;
             template.workspaceId = site.workspaceId || 'default';
             template.siteId = site._id;

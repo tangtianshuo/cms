@@ -10,6 +10,7 @@ export interface DomainSource {
     findSiteById(id: string): Promise<DomainSite | null>;
     list(siteId: string): Promise<SiteDomain[]>;
     findHost(host: string): Promise<SiteDomain | null>;
+    findPublicId?(id: string): Promise<SiteDomain | null>;
     findId(id: string): Promise<SiteDomain | null>;
     insert(record: SiteDomain): Promise<void>;
     replace(record: SiteDomain, expectedUpdatedAt: number): Promise<boolean>;
@@ -140,7 +141,7 @@ export class DomainService {
         if (!record?.enabled || record.ownershipStatus !== 'verified' || !record.lastSuccessAt) return null;
         const site = await this.source.findSiteById(record.siteId);
         if (!site?.primaryDomainId || ownerWorkspace(record) !== ownerWorkspace(site)) return null;
-        const primary = await this.source.findId(site.primaryDomainId);
+        const primary = await (this.source.findPublicId || this.source.findId)(site.primaryDomainId);
         if (!primary?.enabled || (primary.siteId !== site._id || ownerWorkspace(primary) !== ownerWorkspace(site)) || primary.ownershipStatus !== 'verified' || !primary.lastSuccessAt) return null;
         return { workspaceId: ownerWorkspace(site), siteId: site._id, hostname, primaryHostname: primary.hostname, bindingRevision: site.domainRevision || 0 };
     }

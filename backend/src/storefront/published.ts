@@ -1,4 +1,4 @@
-import { ownerWorkspace } from '../workspaces/context';
+import { ownerWorkspace, runWithWorkspace } from '../workspaces/context';
 import type { ReleaseRecord, ReleaseSnapshot } from '../presets/releases';
 import type { SiteInstallation } from '../presets/site-model';
 
@@ -9,7 +9,7 @@ export async function publishedSite(host: string, expectedHost: string, source: 
     if (host.toLowerCase() !== expectedHost.toLowerCase()) return null;
     const site = await source.findSite();
     if (!site?.currentReleaseId) return null;
-    const release = await source.findRelease(site.currentReleaseId);
+    const release = await runWithWorkspace({ workspaceId: ownerWorkspace(site), siteId: site._id, actorId: '__published', admin: false, instanceAdmin: false, role: 'viewer' }, () => source.findRelease(site.currentReleaseId!));
     if (!release || (release.siteId !== site._id || ownerWorkspace(release) !== ownerWorkspace(site))) return null;
     const snapshot = JSON.parse(release.payload) as ReleaseSnapshot;
     if (snapshot.schemaVersion !== 1 || (snapshot.siteId !== site._id || ownerWorkspace(snapshot) !== ownerWorkspace(site))) return null;
@@ -25,7 +25,7 @@ export async function publishedDomainSite(host: string, source: {
     if (!resolution) return null;
     const site = await source.findSiteById(resolution.siteId);
     if (!site?.currentReleaseId || (site._id !== resolution.siteId || ownerWorkspace(site) !== ownerWorkspace(resolution))) return null;
-    const release = await source.findRelease(site.currentReleaseId);
+    const release = await runWithWorkspace({ workspaceId: ownerWorkspace(site), siteId: site._id, actorId: '__published', admin: false, instanceAdmin: false, role: 'viewer' }, () => source.findRelease(site.currentReleaseId!));
     if (!release || (release.siteId !== site._id || ownerWorkspace(release) !== ownerWorkspace(site))) return null;
     let snapshot: ReleaseSnapshot;
     try { snapshot = JSON.parse(release.payload) as ReleaseSnapshot; } catch { return null; }

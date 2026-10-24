@@ -75,6 +75,8 @@ function entryText(input: ReleaseInput, entry: Entry, key: string): string {
 }
 
 export function buildRelease(input: ReleaseInput): ReleaseSnapshot {
+    // Public snapshots always contain stable URLs; editor capabilities must never be serialized.
+    input = { ...input, media: input.media.map(({ accessToken: _accessToken, accessTokenExpiresAt: _expiresAt, ...media }) => media) };
     const { site, language } = input;
     if (site.status !== 'ready') throw new Error('Site import is not ready');
     const preset = getPreset(site.presetId, site.presetVersion);

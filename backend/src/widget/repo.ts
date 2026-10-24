@@ -1,3 +1,4 @@
+import { validatePropDefinitions } from '../workspaces/content-references';
 import { createMongoDBRepository } from '@bcms/selfhosted-backend/_server/modules/mongodb';
 import {
     type Widget,
@@ -21,6 +22,7 @@ export const WidgetRepo = createMongoDBRepository<Widget, WidgetRepoMethods>({
     name: 'Widget',
     collection: `${Config.dbPrefix}_widgets`,
     schema: WidgetSchema,
+    prepareWrite: (item) => validatePropDefinitions(item.props),
     methods({ mdb, cache }) {
         const latches: {
             [key: string]: boolean;

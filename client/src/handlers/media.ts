@@ -52,7 +52,7 @@ export class MediaHandler {
             this.client.socket.register('media', async (data) => {
                 if (data.type === 'update') {
                     const cacheHit = this.cache.findById(data.mediaId);
-                    if (cacheHit) {
+                    if (cacheHit && (cacheHit.accessTokenExpiresAt || 0) > Date.now() + 60000) {
                         await this.getById(data.mediaId, true);
                     }
                 } else {
@@ -86,7 +86,7 @@ export class MediaHandler {
      * @return {Promise<MediaExtended[]>} A promise that resolves to an array of extended media items.
      */
     async getAll(skipCache?: boolean): Promise<MediaExtended[]> {
-        if (!skipCache && this.client.useMemCache && this.latch.all) {
+        if (!skipCache && this.client.useMemCache && this.latch.all && this.cache.items.every(media => (media.accessTokenExpiresAt || 0) > Date.now() + 60000)) {
             return this.cache.items;
         }
         const res = await this.client.send<ControllerItemsResponse<Media>>({
@@ -119,7 +119,7 @@ export class MediaHandler {
     async getById(id: string, skipCache?: boolean): Promise<MediaExtended> {
         if (!skipCache && this.client.useMemCache) {
             const cacheHit = this.cache.findById(id);
-            if (cacheHit) {
+            if (cacheHit && (cacheHit.accessTokenExpiresAt || 0) > Date.now() + 60000) {
                 return cacheHit;
             }
         }
@@ -173,9 +173,8 @@ export class MediaHandler {
                 `data=${Buffer.from(JSON.stringify(data)).toString('hex')}`,
             );
         }
-        query.push(
-            `apiKey=${this.client.apiKeyInfo.id}.${this.client.apiKeyInfo.secret}`,
-        );
+        const capability = this.cache.findById(id)?.accessToken;
+        if (capability) query.push(`cap=${encodeURIComponent(capability)}`);
         let uri = this.baseUri;
         uri += `/${id}/bin/${filename}`;
         if (query.length > 0) {

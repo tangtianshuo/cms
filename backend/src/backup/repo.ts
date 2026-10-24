@@ -6,6 +6,7 @@ import {
 import { Config } from '@bcms/selfhosted-backend/config';
 
 export const BackupRepo = createMongoDBRepository<Backup, undefined>({
+    workspaceScoped: false,
     name: 'Backup',
     schema: BackupSchema,
     collection: `${Config.dbPrefix}_backups`,

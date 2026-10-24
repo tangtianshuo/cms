@@ -21,6 +21,9 @@ export enum MediaType {
 }
 
 export interface Media extends MongoDBEntry {
+    /** Authorized metadata only; never persisted in Release snapshots. */
+    accessToken?: string;
+    accessTokenExpiresAt?: number;
     userId: string;
     type: MediaType;
     mimetype: string;
