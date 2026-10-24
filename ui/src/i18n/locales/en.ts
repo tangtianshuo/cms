@@ -84,6 +84,7 @@ export const en = {
         }
     },
     "entryGroups": {
+        "defaultName": "General",
         "hint": "Titles are unique within the same workspace, group and language across all Templates. Use separate groups to keep repeated demo names.",
         "name": "Group name",
         "deleteHint": "Delete this empty group? Groups containing entries or pending operations cannot be deleted.",

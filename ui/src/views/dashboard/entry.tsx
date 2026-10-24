@@ -1,6 +1,10 @@
 import { CopyProvenance } from '@bcms/selfhosted-ui/components/workspace/provenance';
-import type { EntryGroup } from '@bcms/selfhosted-backend/entry-groups/repo';
 import { formClass } from '@bcms/selfhosted-ui/components/workspace/common';
+import {
+    entryGroupOptions,
+    type EntryGroupList,
+    type EntryGroupOption,
+} from '@bcms/selfhosted-ui/components/workspace/entry-group-options';
 import {
     computed,
     defineComponent,
@@ -85,7 +89,7 @@ export const EntryView = defineComponent({
                         data !== tracked.buffer;
             }
         }, 1000);
-        const groups = ref<EntryGroup[]>([]);
+        const groups = ref<EntryGroupOption[]>([]);
         const entrySync = shallowRef<EntrySync>();
 
         function ensureEntrySync() {
@@ -128,8 +132,13 @@ export const EntryView = defineComponent({
         onMounted(async () => {
             loading.value = true;
             await throwable(async () => {
-                const groupList = await sdk.send<{ items: EntryGroup[]; defaultGroupId: string }>({ url: '/api/v4/entry-groups/' });
-                groups.value = groupList.items;
+                const groupList = await sdk.send<EntryGroupList>({
+                    url: '/api/v4/entry-groups/',
+                });
+                groups.value = entryGroupOptions(
+                    groupList,
+                    t('entryGroups.defaultName'),
+                );
                 await sdk.template.getAll();
                 if (!template.value) {
                     throw Error(t('views.entry.templateMissing'));

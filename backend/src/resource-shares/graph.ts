@@ -9,6 +9,7 @@ import type { Prop, PropValue } from '../prop/models/main';
 import { PropType } from '../prop/models/main';
 import { canWriteContent, workspaceContext, workspaceId } from '../workspaces/context';
 import { ContentScopeError } from '../workspaces/scoped-collection';
+import { defaultEntryGroupId } from '../entry-groups/repo';
 import { copyRepository, withCopyOverlay } from './visibility';
 import type { ResourceShare, ShareKind, SharedResource } from './repo';
 
@@ -81,7 +82,9 @@ export async function buildCopyGraph(shares: ResourceShare[], selections: CopySe
             const template = await Repo.template.findById(choice.templateId!);
             if (!template || !canWriteContent('Entry', { templateId: template._id }, 'post')) throw new ContentScopeError('Target Template creation denied');
             if (template.singleEntry) fail('Copy into singleton Templates is not supported');
-            if (!await Repo.entryGroup.findById(choice.groupId!)) fail('Target EntryGroup not found; create it before copying');
+            if (choice.groupId !== defaultEntryGroupId() && !await Repo.entryGroup.findById(choice.groupId!)) {
+                fail('Target EntryGroup not found; create it before copying');
+            }
             const sourceTemplate = (share.snapshot as Entry).templateId;
             if (templateMap.has(sourceTemplate) && templateMap.get(sourceTemplate) !== template._id) fail('A source Template must have one target mapping within a copy');
             templateMap.set(sourceTemplate, template._id); targets.set(share._id, template);

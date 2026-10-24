@@ -111,6 +111,14 @@ export function contentFilter(kind?: string, operation: 'get' | 'post' | 'put' |
     const ids = (context.templatePermissions || []).filter(grant => grant[operation]).map(grant => grant._id);
     return { $and: [scope, { [kind === 'Entry' ? 'templateId' : '_id']: { $in: ids } }] };
 }
+export function canReadContent(kind: string, document: { _id?: string; templateId?: string }) {
+    const context = workspaceContext();
+    if (!context || context.instanceAdmin) return true;
+    if (kind === 'Media') return context.mediaPermissions?.get ?? Boolean(context.apiKeyId);
+    if (kind === 'Entry' || kind === 'Template') return Boolean(context.templatePermissions?.some(grant =>
+        grant._id === (kind === 'Entry' ? document.templateId : document._id) && grant.get));
+    return true;
+}
 export function canWriteContent(kind: string, document: { _id?: string; templateId?: string }, operation: 'post' | 'put' | 'delete') {
     const context = workspaceContext();
     if (!context || context.instanceAdmin) return true;

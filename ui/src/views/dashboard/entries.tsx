@@ -22,8 +22,12 @@ import type {
     EntryLiteInfo,
 } from '@bcms/selfhosted-backend/entry/models/main';
 import { useI18n } from 'vue-i18n';
-import type { EntryGroup } from '@bcms/selfhosted-backend/entry-groups/repo';
 import { formClass } from '@bcms/selfhosted-ui/components/workspace/common';
+import {
+    entryGroupOptions,
+    type EntryGroupList,
+    type EntryGroupOption,
+} from '@bcms/selfhosted-ui/components/workspace/entry-group-options';
 
 export const EntriesView = defineComponent({
     setup() {
@@ -48,7 +52,7 @@ export const EntriesView = defineComponent({
         const template = computed(() =>
             sdk.store.template.findById(params.value.templateId),
         );
-        const groups = ref<EntryGroup[]>([]);
+        const groups = ref<EntryGroupOption[]>([]);
         const selectedGroup = ref('');
         const entriesLite = computed(() =>
             sdk.store.entryLite
@@ -178,7 +182,12 @@ export const EntriesView = defineComponent({
                 loading.value = true;
             }, 100);
             await throwable(async () => {
-                groups.value = (await sdk.send<{ items: EntryGroup[] }>({ url: '/api/v4/entry-groups/' })).items;
+                groups.value = entryGroupOptions(
+                    await sdk.send<EntryGroupList>({
+                        url: '/api/v4/entry-groups/',
+                    }),
+                    t('entryGroups.defaultName'),
+                );
                 await sdk.template.getAll();
                 await sdk.entry.getAllLiteByTemplateId({
                     templateId: params.value.templateId,

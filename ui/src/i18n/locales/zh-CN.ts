@@ -86,6 +86,7 @@ export const zhCN: typeof en = {
         }
     },
     "entryGroups": {
+        "defaultName": "默认分组",
         "hint": "同一工作区、分组、语言中的标题跨模板唯一。不同分组可以保留相同的演示内容名称。",
         "name": "分组名称",
         "deleteHint": "是否删除此空分组？包含内容或进行中操作的分组不能删除。",

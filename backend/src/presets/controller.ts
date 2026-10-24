@@ -1,5 +1,5 @@
 import { withWorkspaceCreation } from '../workspaces/lifecycle';
-import { workspaceContext, workspaceId } from '../workspaces/context';
+import { canReadContent, workspaceContext, workspaceId } from '../workspaces/context';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { createController, createControllerMethod, HttpStatus } from '../_server';
@@ -97,12 +97,11 @@ export const PresetController = createController({
             previewContext: createControllerMethod({
                 path: '/preview-context/:templateId', type: 'get',
                 preRequestHandler: RP.createJwtCheck(['USER']),
-                async handler({ request, errorHandler, token }) {
+                async handler({ request, errorHandler }) {
                     const { templateId } = request.params as { templateId: string };
-                    const elevated = !!workspaceContext()?.admin;
-                    const canRead = elevated || Boolean(token.payload.props?.policy?.templates
-                        .find((item) => item._id === templateId)?.get);
-                    if (!canRead) throw errorHandler(HttpStatus.Forbidden, 'Template access denied');
+                    if (!canReadContent('Template', { _id: templateId })) {
+                        throw errorHandler(HttpStatus.Forbidden, 'Template access denied');
+                    }
                     const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site || site.status !== 'ready') return { site: null };
                     const model = site.models.find((item) => item.templateId === templateId);

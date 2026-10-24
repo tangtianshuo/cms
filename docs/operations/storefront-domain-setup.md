@@ -21,7 +21,9 @@ Production refuses public routing if gateway configuration is missing. The only 
 
 ## Add and check a domain
 
-All management endpoints require an ADMIN session. In D1 the authorized site's source is the installed default site; no caller-supplied site ID is accepted. Later workspace scope is supplied through the source adapter, preserving these interfaces.
+Domain management uses the server-verified `x-bcms-workspace` and `x-bcms-site` selectors. A persisted instance `ADMIN`/`SUDO`, or an `admin` member of the selected workspace, may manage that site's bindings. `SUDO` must exist on the latest database User record; a token-only claim is not accepted. Selectors and domain names locate resources but never grant authority. Template and Media content access remains subject to its own grants even for a workspace member administrator.
+
+The management UI is available at `/d/domains`. Select a workspace and site first, then add, check, promote, enable/disable or unbind domains. The UI keeps the TXT value only in component memory, refreshes server state after success and failure, and surfaces 409/429 recovery guidance. A full workspace/site switch retires old requests and sockets and reloads the dashboard; unsaved editor state is intentionally discarded.
 
 1. `POST /api/v4/site-domains` with `{ "hostname": "www.example.com" }`. Store the **one-time** `txtName`, `txtValue`, and `expiresAt` response. The token is random, its digest alone is stored, and it expires after 24 hours. The list API never returns the token or digest.
 2. Add TXT `_cms-verify.www.example.com` with the returned `cms-verify=...` value in the external DNS platform. Retain it until ownership succeeds. For a `www` host, create CNAME to the supplied `STOREFRONT_ENTRY_HOST`. For root domains, use provider ALIAS/ANAME flattening or A to `STOREFRONT_ENTRY_IP`. Do not CNAME to the CMS admin host. Both root and www need individual bindings and TXT validation.
@@ -54,6 +56,21 @@ node dist/site-domains/migrate.js --cleanup-expired
 
 Only expired, still-pending bindings are deleted; verified bindings and release history remain. Primary changes atomically persist pointer, binding revision and a committed audit event in the site `domainAuditOutbox`. The event includes actor/site/domain/outcome/revision and remains there until idempotent projection into the audit collection is acknowledged. A failed atomic commit retains the prior primary. A projection outage returns the committed success and logs deferred projection; the next domain list or primary operation retries delivery. Other audit entries remain in the site domain audit collection. Migration, add, check, primary, enable/disable and unbind record actor/site/domain and outcome. No caches of bindings are reused across requests.
 
+## Workspace migration, sharing and media operations
+
+Legacy content belongs only to the default workspace. Before enabling the final workspace indexes, stop writers and preview EntryGroup migration conflicts from `backend/` with an explicit database URI:
+
+```sh
+BCMS_ENTRY_GROUP_MIGRATION_MONGO='mongodb://127.0.0.1:27028/explicit_database' \
+node -r ts-node/register -r tsconfig-paths/register src/entry-groups/preview.ts
+```
+
+The preview does not write, rename or delete content. Resolve every conflict explicitly before startup migration. Do not run the migration concurrently with application writers.
+
+Cross-workspace copies require explicit fixed-version grants for the root and every dependency. Target records remain hidden behind a durable batch barrier until the full graph commits. A failed or indeterminate copy can retain workspace, EntryGroup and share-use permits. Before operator recovery, isolate the original writer and prove every issued database/storage operation can no longer commit; never clear permits based only on elapsed time or process exit.
+
+Private editor media URLs use 15-minute capabilities and dashboard/iframe previews refresh them before expiry. Published Release URLs remain stable and do not contain JWTs or capabilities. Release and copy references conservatively block physical media deletion; unused retention markers and revoked share snapshot files do not yet have automatic garbage collection.
+
 ## Local verification
 
 Domain tests use random isolated databases and random application ports and drop their databases afterwards. They never alter live DNS or certificates:
@@ -66,4 +83,4 @@ STOREFRONT_TEST_MONGO=mongodb://127.0.0.1:27028 STOREFRONT_TEST_SSR=true \
 node -r ts-node/register -r tsconfig-paths/register --test src/site-domains/*.test.ts src/storefront/*.test.ts
 ```
 
-Build `storefront/` before enabling SSR integration. Tests exercise real Mongo indexes/pointers and real built Nuxt HTTP rendering through simulated trusted gateway requests; DNS/HTTPS result fixtures are controlled adapters, not production DNS calls. UI management is scheduled in umbrella Task 6 alongside workspace/site scope.
+Build `storefront/` before enabling SSR integration. The historical D1 tests exercised real Mongo indexes/pointers and built Nuxt HTTP rendering through simulated trusted gateway requests; DNS/HTTPS result fixtures were controlled adapters, not production DNS calls. The later workspace, content-isolation, sharing and management changes are not covered by that historical result. The management UI is implemented, but final-code browser, database/concurrency, failure-recovery and external DNS/TLS acceptance remain unexecuted and are required before production use.

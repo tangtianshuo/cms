@@ -1,5 +1,5 @@
 import { withMediaAccess } from '../media/access';
-import { workspaceContext } from '../workspaces/context';
+import { canReadContent } from '../workspaces/context';
 import { z } from 'zod';
 import {
     createController,
@@ -110,7 +110,7 @@ export const StorefrontController = createController({
                 type: 'post',
                 path: '/preview',
                 preRequestHandler: RP.createJwtCheck(['USER']),
-                async handler({ request, reply, errorHandler, token }) {
+                async handler({ request, reply, errorHandler }) {
                     if (!Config.storefrontEnabled) {
                         throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
                     }
@@ -124,9 +124,7 @@ export const StorefrontController = createController({
                     if (!template || parsed.data.entry.templateId !== template._id) {
                         throw errorHandler(HttpStatus.BadRequest, 'Entry is not a product');
                     }
-                    const roles = token.payload.rls;
-                    const policy = token.payload.props?.policy?.templates.find((item) => item._id === template._id);
-                    if (!workspaceContext()?.admin && !roles.includes('ADMIN') && !roles.includes('SUDO') && !policy?.get) {
+                    if (!canReadContent('Template', { _id: template._id })) {
                         throw errorHandler(HttpStatus.Forbidden, 'Product access denied');
                     }
                     try {
@@ -149,7 +147,7 @@ export const StorefrontController = createController({
                 type: 'post',
                 path: '/page-preview',
                 preRequestHandler: RP.createJwtCheck(['USER']),
-                async handler({ request, reply, errorHandler, token }) {
+                async handler({ request, reply, errorHandler }) {
                     if (!Config.storefrontEnabled) {
                         throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
                     }
@@ -162,10 +160,8 @@ export const StorefrontController = createController({
                     const entry = parsed.data.entry as unknown as Entry;
                     const selectedModel = site.models.find((model) => model.templateId === entry.templateId);
                     if (!selectedModel) throw errorHandler(HttpStatus.BadRequest, 'Entry is outside the installed site');
-                    const elevated = !!workspaceContext()?.admin;
-                    const canRead = (templateId: string) => elevated || Boolean(
-                        token.payload.props?.policy?.templates.find((item) => item._id === templateId)?.get,
-                    );
+                    const canRead = (templateId: string) =>
+                        canReadContent('Template', { _id: templateId });
                     if (!canRead(entry.templateId)) {
                         throw errorHandler(HttpStatus.Forbidden, 'Entry access denied');
                     }

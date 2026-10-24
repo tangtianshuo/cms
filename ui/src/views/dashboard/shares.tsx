@@ -3,7 +3,6 @@ import { computed, defineComponent, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import type { ShareKind } from '@bcms/selfhosted-backend/resource-shares/repo';
-import type { EntryGroup } from '@bcms/selfhosted-backend/entry-groups/repo';
 import type { Workspace } from '@bcms/selfhosted-backend/workspaces/repo';
 import { Button } from '@bcms/selfhosted-ui/components/button';
 import {
@@ -15,6 +14,11 @@ import {
     formClass,
     panelClass,
 } from '@bcms/selfhosted-ui/components/workspace/common';
+import {
+    entryGroupOptions,
+    type EntryGroupList,
+    type EntryGroupOption,
+} from '@bcms/selfhosted-ui/components/workspace/entry-group-options';
 
 export default defineComponent({
     setup() {
@@ -33,7 +37,7 @@ export default defineComponent({
         const targetWorkspace = ref('');
         const incoming = ref<ShareSummary[]>([]);
         const outgoing = ref<ShareSummary[]>([]);
-        const groups = ref<EntryGroup[]>([]);
+        const groups = ref<EntryGroupOption[]>([]);
         const workspaces = ref<Workspace[]>([]);
         const busy = ref(false);
         const error = ref('');
@@ -113,11 +117,12 @@ export default defineComponent({
                         url: '/api/v4/workspaces',
                     })
                 ).items;
-                groups.value = (
-                    await sdk.send<{ items: EntryGroup[] }>({
+                groups.value = entryGroupOptions(
+                    await sdk.send<EntryGroupList>({
                         url: '/api/v4/entry-groups/',
-                    })
-                ).items;
+                    }),
+                    t('entryGroups.defaultName'),
+                );
                 const loaded = await Promise.allSettled([
                     sdk.template.getAll(),
                     sdk.entry.getAllLite(),

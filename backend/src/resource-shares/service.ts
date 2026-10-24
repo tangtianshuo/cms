@@ -13,6 +13,7 @@ import { assertContentWrite, ContentScopeError, contentWriteError } from '../wor
 import { buildCopyGraph, type CopySelection } from './graph';
 import { copyRepository, copyDatabase, copyBatchCollection, invalidateCopyCaches } from './visibility';
 import type { ResourceShare, ShareKind } from './repo';
+import { defaultEntryGroupId } from '../entry-groups/repo';
 
 const grants = () => copyRepository('ResourceShare').raw as Collection<ResourceShare>;
 const batches = () => copyDatabase().collection<any>(copyBatchCollection);
@@ -153,7 +154,12 @@ export async function copyShares(rootShareId: string, selections: CopySelection[
                 if (!reserved.matchedCount) throw missing();
                 held.push(share._id);
             }
-            return await Repo.entryGroup.methods.withWrites(created.filter(item => item.kind === 'Entry').map(item => (item.document as Entry).groupId!), async () => {
+            const entryGroupIds = created.filter(item => item.kind === 'Entry')
+                .map(item => (item.document as Entry).groupId!);
+            if (entryGroupIds.includes(defaultEntryGroupId())) {
+                await Repo.entryGroup.methods.ensure();
+            }
+            return await Repo.entryGroup.methods.withWrites(entryGroupIds, async () => {
                 for (const item of created) {
                     if (item.kind === 'Media') {
                         const media = item.document as Media;

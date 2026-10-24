@@ -2,7 +2,7 @@
 
 Date: 2026-10-24
 
-Status: **DONE_WITH_CONCERNS** — implementation and compiler/build checks are complete; browser/runtime acceptance and the controller's independent review remain outstanding.
+Status: **DONE_WITH_CONCERNS** — implementation, independent static review, review fixes and compiler/build checks are complete; browser/runtime acceptance remains outstanding.
 
 Branch: `codex/storefront-domains-workspaces`
 
@@ -52,4 +52,4 @@ Static review checked route/trailing-slash contracts, context recovery/switching
 - No tests were added or run under the current execution constraint. No browser, isolated backend, database, DNS, TLS or behavioral acceptance flows were executed for Task 6. Previous tasks' runtime evidence is not counted as this task's verification.
 - Task 7 must exercise login/context recovery, switching with old requests and unsaved editors, two sites in one workspace, restricted member/content roles, site installation, domain lifecycle/errors, cross-Template title conflicts/group moves, complete sharing dependency mapping/copy/revoke, and capability expiry/resume in editor and iframe previews using isolated test data.
 - Full-page selection intentionally discards unsaved editor state. Copying still requires explicit selection/mapping of all transitive grants and may return actionable validation errors until those dependencies are supplied. The delivery provides independent copies; it does not add source synchronization.
-- Parent/controller independent review is pending. No push, merge, deployment, production DNS changes, Docker service changes or worktree creation occurred.
+- The independent static review found and the current working tree fixes two Important Task 6 integration defects: callers had dropped an implicit default EntryGroup, and draft preview authorization used workspace-admin/JWT-payload exemptions instead of fresh Template grants. See `task-6-review.md`. No push, merge, deployment, production DNS changes, Docker service changes or worktree creation occurred.

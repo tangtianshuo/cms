@@ -8,7 +8,6 @@ import {
 } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Prop } from '@bcms/selfhosted-backend/prop/models/main';
-import type { EntryGroup } from '@bcms/selfhosted-backend/entry-groups/repo';
 import type {
     ResourceShare,
     ShareKind,
@@ -16,6 +15,7 @@ import type {
 } from '@bcms/selfhosted-backend/resource-shares/repo';
 import type { CopySelection } from '@bcms/selfhosted-backend/resource-shares/graph';
 import { Button } from '@bcms/selfhosted-ui/components/button';
+import type { EntryGroupOption } from './entry-group-options';
 import { errorMessage, formClass, panelClass } from './common';
 export type ShareSummary = Omit<
     ResourceShare,
@@ -29,7 +29,7 @@ interface Preview extends ShareSummary {
 export const ShareCopy = defineComponent({
     props: {
         items: { type: Array as PropType<ShareSummary[]>, required: true },
-        groups: { type: Array as PropType<EntryGroup[]>, required: true },
+        groups: { type: Array as PropType<EntryGroupOption[]>, required: true },
         onCopied: {
             type: Function as PropType<() => Promise<void>>,
             required: true,

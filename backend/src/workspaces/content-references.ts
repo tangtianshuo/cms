@@ -17,6 +17,9 @@ export async function validatePropDefinitions(props: Prop[]) {
         if (prop.type === PropType.WIDGET && prop.data?.propWidget) {
             if (!await Repo.widget.findById(prop.data?.propWidget._id)) throw denied('Widget');
         }
+        if (prop.type === PropType.MEDIA) for (const id of prop.data?.propMedia || []) {
+            if (id && !await Repo.media.findById(id)) throw denied('Media');
+        }
         if (prop.type === PropType.ENTRY_POINTER) for (const pointer of prop.data?.propEntryPointer || []) {
             if (!await Repo.template.findById(pointer.templateId)) throw denied('Template');
             for (const id of pointer.entryIds || []) {
