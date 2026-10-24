@@ -4,7 +4,14 @@ COPY . /app
 
 WORKDIR /app/backend
 
-RUN apt update && apt install ffmpeg zip unzip -y
+RUN apt-get update \
+    && attempt=1 \
+    && until apt-get -o Acquire::Retries=5 install -y ffmpeg zip unzip; do \
+        if [ "$attempt" -ge 5 ]; then exit 1; fi; \
+        attempt=$((attempt + 1)); \
+        sleep 2; \
+    done \
+    && rm -rf /var/lib/apt/lists/*
 RUN npm i
 
 ENTRYPOINT ["npm", "run", "dev"]
