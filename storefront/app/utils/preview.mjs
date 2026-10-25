@@ -26,3 +26,19 @@ export function isPresetPreviewPayload(value) {
         strings(demo.product, ['title', 'price', 'description', 'image']) &&
         strings(demo.page, ['title', 'body', 'image']);
 }
+
+export function isSiteDraftPreviewPayload(value) {
+    if (!value || typeof value !== 'object' || value.kind !== 'preset-site' ||
+        value.schemaVersion !== 1 || !strings(value, ['siteId', 'siteName', 'language']) ||
+        !Array.isArray(value.pages) || value.pages.length === 0 ||
+        !Array.isArray(value.navigation) || !Array.isArray(value.redirects)) return false;
+    const paths = new Set();
+    for (const page of value.pages) {
+        if (!strings(page, ['path', 'pageKey', 'entryId']) || !page.path.startsWith('/') ||
+            paths.has(page.path) || !isPresetPreviewPayload(page.content)) return false;
+        paths.add(page.path);
+    }
+    return paths.has('/') && value.navigation.every((link) =>
+        strings(link, ['label', 'path']) && paths.has(link.path)) &&
+        value.redirects.every((redirect) => strings(redirect, ['from', 'to']));
+}

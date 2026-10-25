@@ -12,10 +12,19 @@ export interface PresetDemo {
     };
     demo: {
         brand: string;
+        contactEmail?: string;
         hero: { title: string; subtitle: string; image: string };
         product: { title: string; price: string; image: string; description: string };
         collection: { title: string; description: string; image: string };
         page: { title: string; body: string; image: string };
+    };
+    showcase?: {
+        eyebrow: string;
+        heroLabel: string;
+        stats: Array<{ value: string; label: string }>;
+        products: Array<{ title: string; price: string; image: string; description: string }>;
+        solutions: Array<{ title: string; description: string; image: string }>;
+        faq: Array<{ question: string; answer: string }>;
     };
 }
 
@@ -26,6 +35,22 @@ export interface PresetPagePreview {
     sections: string[];
     seo: { title: string; description: string };
     items?: Array<{ label: string; path: string; image: string; description: string; price: string }>;
+}
+
+export interface SiteDraftPreview {
+    kind: 'preset-site';
+    schemaVersion: 1;
+    siteId: string;
+    siteName: string;
+    language: string;
+    pages: Array<{
+        path: string;
+        pageKey: string;
+        entryId: string;
+        content: PresetPagePreview;
+    }>;
+    navigation: Array<{ label: string; path: string }>;
+    redirects: Array<{ from: string; to: string }>;
 }
 
 export interface PublishedPageResponse {

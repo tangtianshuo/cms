@@ -12,6 +12,7 @@ import { Config } from '../config';
 import type { Entry } from '../entry/models/main';
 import { getProductPage, previewProductPage, type DevelopmentSite } from './service';
 import { previewPresetPage } from './preset-preview';
+import { buildRelease } from '../presets/releases';
 import { publishedSite, publishedDomainSite } from './published';
 import { trustedStorefrontHost } from '../site-domains/trust';
 import { domainService } from '../site-domains/source';
@@ -187,6 +188,47 @@ export const StorefrontController = createController({
                     } catch (cause) {
                         throw errorHandler(HttpStatus.BadRequest,
                             cause instanceof Error ? cause.message : 'Invalid page preview');
+                    }
+                },
+            }),
+            sitePreview: createControllerMethod({
+                type: 'get',
+                path: '/site-preview',
+                preRequestHandler: RP.createJwtCheck(['USER']),
+                async handler({ reply, errorHandler }) {
+                    if (!Config.storefrontEnabled) {
+                        throw errorHandler(HttpStatus.NotFound, 'Storefront is disabled');
+                    }
+                    const site = await Repo.siteInstallation.methods.findSelected();
+                    if (!site || site.status !== 'ready') {
+                        throw errorHandler(HttpStatus.NotFound, 'No installed site');
+                    }
+                    const templates = [];
+                    const entries = [];
+                    for (const model of site.models) {
+                        if (!canReadContent('Template', { _id: model.templateId })) {
+                            throw errorHandler(HttpStatus.Forbidden, 'Site content access denied');
+                        }
+                        const template = await Repo.template.findById(model.templateId);
+                        if (template) templates.push(template);
+                        entries.push(...await Repo.entry.methods.findAllByTemplateId(model.templateId));
+                    }
+                    try {
+                        const content = buildRelease({
+                            site,
+                            templates,
+                            entries,
+                            media: (await Repo.media.findAll()).map(withMediaAccess),
+                            language: Config.storefrontLanguage,
+                            currency: Config.storefrontCurrency,
+                            mediaOrigin: Config.storefrontMediaOrigin,
+                        }, { preserveMediaCapabilities: true });
+                        reply.header('Cache-Control', 'no-store');
+                        reply.header('X-Robots-Tag', 'noindex, nofollow');
+                        return { kind: 'preset-site', siteName: site.name, ...content };
+                    } catch (cause) {
+                        throw errorHandler(HttpStatus.BadRequest,
+                            cause instanceof Error ? cause.message : 'Invalid site preview');
                     }
                 },
             }),

@@ -41,10 +41,19 @@ export interface PresetManifest {
     pages: PresetPage[];
     demo: {
         brand: string;
+        contactEmail?: string;
         hero: { title: string; subtitle: string; image: string };
         product: { title: string; price: string; image: string; description: string };
         collection: { title: string; description: string; image: string };
         page: { title: string; body: string; image: string };
+    };
+    showcase?: {
+        eyebrow: string;
+        heroLabel: string;
+        stats: Array<{ value: string; label: string }>;
+        products: Array<{ title: string; price: string; image: string; description: string }>;
+        solutions: Array<{ title: string; description: string; image: string }>;
+        faq: Array<{ question: string; answer: string }>;
     };
 }
 
@@ -170,6 +179,57 @@ const presets: PresetManifest[] = [
                 title: 'About North Market', body: 'We bring useful, well-made goods together in one place.',
                 image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1400&q=85',
             },
+        },
+    },
+    {
+        id: 'aeroframe', version: '1.0.0', name: 'AeroFrame',
+        description: 'A mission-ready storefront for drone, robotics, and low-altitude technology brands.',
+        theme: { background: '#080d14', foreground: '#f3f6fa', accent: '#4f7dff', muted: '#182432', font: 'Arial, sans-serif' },
+        models, pages,
+        demo: {
+            brand: 'AEROWORKS', contactEmail: 'sales@example.com',
+            hero: {
+                title: 'Built for the missions ahead',
+                subtitle: 'Reliable aerial systems for demanding work in the real world.',
+                image: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=2400&q=88',
+            },
+            product: {
+                title: 'Aero X8 industrial platform', price: '$8,490',
+                image: 'https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&w=1400&q=85',
+                description: 'A modular multirotor platform built for inspection, mapping, and rapid deployment.',
+            },
+            collection: {
+                title: 'Aircraft systems', description: 'Field-ready platforms for inspection, mapping, and response teams.',
+                image: 'https://flipandsteep.in/assets/images/course-fixed-wing-fly.png',
+            },
+            page: {
+                title: 'Engineering in the field', body: 'We build dependable unmanned systems around the work operators need to complete.',
+                image: 'https://drone-safe-register-public.s3.eu-west-2.amazonaws.com/11731/drones-and-wind-turbins.jpg',
+            },
+        },
+        showcase: {
+            eyebrow: 'UNMANNED SYSTEMS / FIELD PROVEN',
+            heroLabel: 'AERIAL SYSTEMS FOR COMPLEX MISSIONS',
+            stats: [
+                { value: '25 min', label: 'Rapid deployment' },
+                { value: '12 kg', label: 'Payload capacity' },
+                { value: 'IP54', label: 'Weather protection' },
+            ],
+            products: [
+                { title: 'Aero X8 industrial platform', price: '$8,490', image: 'https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&w=1400&q=85', description: 'A modular multirotor platform built for inspection, mapping, and rapid deployment.' },
+                { title: 'Aero M4 field scout', price: '$3,980', image: 'https://images.unsplash.com/photo-1524143986875-3b098d78b363?auto=format&fit=crop&w=1400&q=85', description: 'A compact aircraft for responsive reconnaissance and close-range site assessment.' },
+                { title: 'Aero V2 fixed wing', price: '$12,600', image: 'https://flipandsteep.in/assets/images/course-fixed-wing-fly.png', description: 'Long-range endurance with efficient cruise and straightforward field recovery.' },
+            ],
+            solutions: [
+                { title: 'Industrial inspection', description: 'Capture close visual and thermal data around infrastructure while keeping crews at a safe distance.', image: 'https://drone-safe-register-public.s3.eu-west-2.amazonaws.com/11731/drones-and-wind-turbins.jpg' },
+                { title: 'Survey & mapping', description: 'Cover large sites with repeatable aerial capture and dependable geospatial workflows.', image: 'https://images.unsplash.com/photo-1524143986875-3b098d78b363?auto=format&fit=crop&w=1600&q=85' },
+                { title: 'Emergency response', description: 'Give teams a clear aerial view when access is difficult and decisions cannot wait.', image: 'https://images.unsplash.com/photo-1473968512647-3e447244af8f?auto=format&fit=crop&w=1600&q=85' },
+            ],
+            faq: [
+                { question: 'Can the aircraft carry custom payloads?', answer: 'Platforms are designed around modular payload integration. Share your sensor, mount, and mission requirements for a compatibility review.' },
+                { question: 'What support is available after delivery?', answer: 'Configuration guidance, operator onboarding, maintenance planning, and replacement parts can be arranged with your project.' },
+                { question: 'Can you support a specialized mission profile?', answer: 'Yes. Provide the operating environment, range, endurance, and payload goals so the team can recommend a suitable configuration.' },
+            ],
         },
     },
 ];

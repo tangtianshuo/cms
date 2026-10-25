@@ -90,7 +90,7 @@ function demoValues(preset: PresetManifest, siteName: string): Record<string, Re
         collection: { title: preset.demo.collection.title, slug: 'featured-collection', description: preset.demo.collection.description },
         home: { title: 'Home', slug: 'home', headline: preset.demo.hero.title, intro: preset.demo.hero.subtitle },
         'content-page': { title: preset.demo.page.title, slug: 'about', summary: preset.demo.page.body, body: preset.demo.page.body, seoDescription: preset.demo.page.body },
-        'site-settings': { title: 'Site settings', slug: 'settings', brandName: siteName },
+        'site-settings': { title: 'Site settings', slug: 'settings', brandName: siteName, contactEmail: preset.demo.contactEmail || '' },
     };
 }
 

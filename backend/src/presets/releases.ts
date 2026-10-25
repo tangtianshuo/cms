@@ -62,6 +62,10 @@ export interface ReleaseSource {
     audit(event: ReleaseAudit): Promise<void>;
 }
 
+export interface BuildReleaseOptions {
+    preserveMediaCapabilities?: boolean;
+}
+
 function fieldValues(input: ReleaseInput, entry: Entry, key: string): unknown[] {
     const model = input.site.models.find((item) => item.templateId === entry.templateId);
     const field = model?.fields.find((item) => item.key === key);
@@ -74,9 +78,11 @@ function entryText(input: ReleaseInput, entry: Entry, key: string): string {
     return typeof value === 'string' ? value.trim() : '';
 }
 
-export function buildRelease(input: ReleaseInput): ReleaseSnapshot {
+export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions = {}): ReleaseSnapshot {
     // Public snapshots always contain stable URLs; editor capabilities must never be serialized.
-    input = { ...input, media: input.media.map(({ accessToken: _accessToken, accessTokenExpiresAt: _expiresAt, ...media }) => media) };
+    if (!options.preserveMediaCapabilities) {
+        input = { ...input, media: input.media.map(({ accessToken: _accessToken, accessTokenExpiresAt: _expiresAt, ...media }) => media) };
+    }
     const { site, language } = input;
     if (site.status !== 'ready') throw new Error('Site import is not ready');
     const preset = getPreset(site.presetId, site.presetVersion);

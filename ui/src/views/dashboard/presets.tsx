@@ -131,9 +131,18 @@ export const PresetsView = defineComponent({
                         <h1 class="text-2xl font-semibold text-dark dark:text-white">{t('presets.title')}</h1>
                         <p class="mt-2 max-w-2xl text-sm text-dark/70 dark:text-light/70">{t('presets.subtitle')}</p>
                     </div>
-                    {site.value?.status === 'ready' && (
-                        <span class="text-sm text-green dark:text-yellow">{t('presets.installed', { name: site.value.name })}</span>
-                    )}
+                    <div class="flex flex-wrap items-center gap-4">
+                        {site.value?.status === 'ready' && <a
+                            href={`/d/presets/site-preview?workspaceId=${encodeURIComponent(sdk.context?.context.workspaceId || '')}&siteId=${encodeURIComponent(sdk.context?.context.siteId || '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="border border-green px-3 py-2 text-sm font-medium text-green hover:bg-green/10 dark:border-yellow dark:text-yellow">
+                            {t('presets.previewDraftSite')}
+                        </a>}
+                        {site.value?.status === 'ready' && (
+                            <span class="text-sm text-green dark:text-yellow">{t('presets.installed', { name: site.value.name })}</span>
+                        )}
+                    </div>
                 </div>
 
                 {error.value && <div role="alert" class="mb-6 border-l-4 border-red bg-red/10 px-4 py-3 text-sm text-red">{error.value}</div>}

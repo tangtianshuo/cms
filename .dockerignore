@@ -3,9 +3,26 @@
 /.husky
 /db
 /uploads
+/backups
+
+.env
+**/.env
+**/.env.*
+!**/.env.example
+**/.npmrc
+/backend/.env
+/ui/.env
+/storefront/.env
 
 /backend/node_modules
 /backend/dist
+/backend/logs
+/backend/custom-package.json
+/backend/additional
+/backend/events
+/backend/functions
+/backend/jobs
+/backend/plugins
 
 /ui/node_modules
 /ui/dist

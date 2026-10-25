@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getPreset, listPresets } from './catalog';
 
-test('catalog exposes two complete storefront variants', () => {
+test('catalog exposes three complete storefront variants', () => {
     const list = listPresets();
-    assert.equal(list.length, 2);
-    assert.notEqual(list[0].id, list[1].id);
+    assert.equal(list.length, 3);
+    assert.equal(new Set(list.map((item) => item.id)).size, list.length);
     for (const item of list) {
         assert.ok(item.heroImage.startsWith('https://'));
         const preset = getPreset(item.id, item.version);

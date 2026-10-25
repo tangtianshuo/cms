@@ -85,6 +85,16 @@ const routes: Array<RouteRecordRawExtended> = [
         component: () => import('./views/dashboard/presets'),
     },
     {
+        path: '/d/presets/site-preview',
+        name: 'SitePreviewView',
+        meta: {
+            titleKey: 'presets.sitePreviewTitle',
+            layout: 'NoneLayout',
+        },
+        component: () =>
+            import('./views/dashboard/site-preview'),
+    },
+    {
         path: '/d/template',
         name: 'TemplatesView',
         meta: {

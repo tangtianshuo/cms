@@ -18,7 +18,8 @@ const show = (section: string) => !props.sections || props.sections.includes(sec
 </script>
 
 <template>
-    <div class="preset-demo" :class="[`preset-demo--${preset.id}`, { 'preset-demo--draft': mode === 'draft' }]" :style="themeStyle">
+    <AeroPresetPage v-if="preset.id === 'aeroframe'" :preset="preset" :view="view" :mode="mode" :navigation="navigation" :items="items" :sections="sections" />
+    <div v-else class="preset-demo" :class="[`preset-demo--${preset.id}`, { 'preset-demo--draft': mode === 'draft' }]" :style="themeStyle">
         <header class="preset-demo__header">
             <span v-if="mode === 'draft'" class="preset-demo__brand">{{ preset.demo.brand }}</span>
             <NuxtLink v-else class="preset-demo__brand" :to="mode === 'published' ? '/' : routeFor('home')">{{ preset.demo.brand }}</NuxtLink>

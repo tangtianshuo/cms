@@ -8,7 +8,7 @@ test('public catalog lists selectable presets without CMS credentials', async ()
     const catalog = methods.find((method) => method.name === 'catalog');
     assert.ok(catalog);
     const result = await catalog.handler({ headers: {}, query: {} } as never, { header() { return undefined; } } as never);
-    assert.equal((JSON.parse(result as string) as { items: unknown[] }).items.length, 2);
+    assert.equal((JSON.parse(result as string) as { items: unknown[] }).items.length, 3);
 });
 
 test('site import and preflight require an admin token', async () => {

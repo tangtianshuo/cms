@@ -7,7 +7,7 @@ import type { SiteInstallation } from '../presets/site-model';
 export interface PresetPagePreview {
     kind: 'preset-page';
     view: 'home' | 'collection' | 'product' | 'page';
-    preset: Pick<PresetManifest, 'id' | 'version' | 'name' | 'description' | 'theme' | 'demo'>;
+    preset: Pick<PresetManifest, 'id' | 'version' | 'name' | 'description' | 'theme' | 'demo' | 'showcase'>;
     sections: string[];
     seo: { title: string; description: string };
 }
@@ -100,6 +100,7 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
         ? text(site, 'site-settings', settingsEntry, language, 'brandName') || site.name : site.name;
     const demo: PresetManifest['demo'] = {
         brand,
+        contactEmail: settingsEntry ? text(site, 'site-settings', settingsEntry, language, 'contactEmail') : manifest.demo.contactEmail,
         hero: { title: '', subtitle: '', image: '' },
         product: { title: '', price: '', image: '', description: '' },
         collection: { title: '', description: '', image: '' },
@@ -156,7 +157,7 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
     return {
         kind: 'preset-page', view,
         preset: { id: manifest.id, version: manifest.version, name: site.name, description: '',
-            theme: site.theme, demo },
+            theme: site.theme, demo, showcase: manifest.showcase ? structuredClone(manifest.showcase) : undefined },
         sections: page.sections,
         seo: { title: page.seoTitle || (view === 'page' ? demo.page.title : site.name), description: seoDescription },
     };

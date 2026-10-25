@@ -4,6 +4,9 @@ This Nuxt storefront supports installed presets, immutable published Releases,
 incremental pages and rollback. It serves one configured site, language and
 host. The CMS previews unsaved changes in an iframe at `/preview`.
 
+For production deployment, preset import and public hostname setup, see
+[`docs/operations/storefront-preset-deployment.md`](../docs/operations/storefront-preset-deployment.md).
+
 ## Setup
 
 1. Run the existing CMS database, backend, and UI so the CMS is reachable at
@@ -34,9 +37,12 @@ preview before changes are saved.
 ## Phase A storefront presets
 
 The CMS dashboard now has a **Storefront presets** page at `/d/presets`.
-Administrators can compare the Atelier and Market presets, switch among home,
-collection, product, and content-page demos, inspect generated model changes,
-and import one preset. The import creates five CMS Templates (product,
+Administrators can compare the Atelier, Market, and AeroFrame presets, switch
+among home, collection, product, and content-page demos, inspect generated
+model changes, and import one preset. AeroFrame provides a dark industrial
+theme for drone and low-altitude technology brands, with a mission-led
+homepage, product cards, industry applications, FAQ, and quote actions tied to
+the site contact email. The import creates five CMS Templates (product,
 collection, home, content page, and site settings), four draft page definitions,
 and a setup checklist. Optional example Entries contain text and references;
 the demo images belong to the preview and are not copied into CMS media.
@@ -45,7 +51,8 @@ Run the backend and UI as usual, then run the Nuxt storefront with
 `NUXT_CMS_INTERNAL_ORIGIN` pointing to the backend. Set
 `VITE_STOREFRONT_ORIGIN` in `ui/.env` to the Nuxt origin and rebuild or restart
 the UI. Visit `/d/presets` on the backend origin. The same public demos are at
-`/presets/atelier` and `/presets/market`; use the `view` query parameter with
+`/presets/atelier`, `/presets/market`, and `/presets/aeroframe`; use the `view`
+query parameter with
 `home`, `collection`, `product`, or `page`.
 
 For an isolated backend test, `SERVER_PORT` overrides its default port 8080;
@@ -84,6 +91,10 @@ must remain available and be included in operational backups.
 - `/preview` has no draft data of its own. An authenticated CMS preview API
   maps the unsaved Entry; the editor posts that result to the iframe using the
   configured origin. The preview route has `noindex` and `no-store` headers.
+- Whole-site draft preview opens from the installed site in `/d/presets` as a
+  new CMS tab. The CMS requests a full draft snapshot, then posts it into the
+  same `/preview` renderer. Internal links switch between home, collection,
+  product and content pages without publishing or exposing draft routes.
 - The CMS and storefront origins must be reachable by the browser. Image
   URLs use `STOREFRONT_MEDIA_ORIGIN`. The storefront's private
   `NUXT_CMS_INTERNAL_ORIGIN` is used only by the Nuxt server.
