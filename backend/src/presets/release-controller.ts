@@ -6,8 +6,9 @@ import { Repo } from '../repo';
 import { RP } from '../security/route-protection/main';
 import type { ReleaseInput, ReleaseSource, ReleaseSnapshot } from './releases';
 import { buildRelease, publishRelease, releaseDiff, rollbackRelease } from './releases';
+import { gatewayPublishConfig, GatewayRevisionConflict, publishGatewayRelease } from './gateway-publish';
 
-const publishBody = z.object({ expectedReleaseId: z.string() }).strict();
+const publishBody = z.object({ expectedReleaseId: z.string(), target: z.literal('gateway').optional() }).strict();
 
 export function releaseSource(): ReleaseSource {
     return {
@@ -80,10 +81,15 @@ export const ReleaseController = createController({
                     const parsed = publishBody.safeParse(request.body);
                     if (!parsed.success || !Config.storefrontEnabled) throw errorHandler(HttpStatus.BadRequest, 'Invalid publication request or storefront disabled');
                     try {
+                        if (parsed.data.target === 'gateway') {
+                            return await publishGatewayRelease(releaseSource(), token.payload.userId,
+                                parsed.data.expectedReleaseId, gatewayPublishConfig());
+                        }
                         const record = await publishRelease(releaseSource(), token.payload.userId, parsed.data.expectedReleaseId);
                         return { releaseId: record._id };
                     } catch (cause) {
-                        throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Publication failed');
+                        throw errorHandler(cause instanceof GatewayRevisionConflict ? HttpStatus.Conflict : HttpStatus.BadRequest,
+                            cause instanceof Error ? cause.message : 'Publication failed');
                     }
                 },
             }),

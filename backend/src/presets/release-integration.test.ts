@@ -135,6 +135,44 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
     assert.equal(records.items.length, 3);
     assert.equal(records.currentReleaseId, first.releaseId);
     assert.ok(records.audit.some((event: { operation: string }) => event.operation === 'rollback'));
+    const gatewayEnv = {
+        GATEWAY_BASE_URL: 'http://127.0.0.1:3001', GATEWAY_WORKSPACE_ID: randomUUID(),
+        GATEWAY_SITE_ID: randomUUID(), CMS_SERVICE_SECRET: 'integration-secret',
+        GATEWAY_MANIFEST_CHECKSUM: `sha256:${'a'.repeat(64)}`,
+        GATEWAY_IMAGE_DIGEST: `sha256:${'b'.repeat(64)}`, GATEWAY_EXPECTED_REVISION: '7',
+    };
+    const originalFetch = globalThis.fetch;
+    const originalEnv = Object.fromEntries(Object.keys(gatewayEnv).map((key) => [key, process.env[key]]));
+    try {
+        Object.assign(process.env, gatewayEnv);
+        const calls: string[] = [];
+        globalThis.fetch = async (input, init) => {
+            calls.push(String(input));
+            assert.equal(init?.method, 'POST');
+            return calls.length === 1 ? Response.json({}, { status: 201 })
+                : Response.json({ id: 'operation-1', status: 'pending' }, { status: 202 });
+        };
+        const pending = await admin('/api/v4/presets/releases/publish', { target: 'gateway', expectedReleaseId: first.releaseId });
+        assert.equal(pending.status, 'pending');
+        assert.equal(pending.operationId, 'operation-1');
+        assert.deepEqual(calls, [
+            `${gatewayEnv.GATEWAY_BASE_URL}/api/v1/sites/${gatewayEnv.GATEWAY_SITE_ID}/releases`,
+            `${gatewayEnv.GATEWAY_BASE_URL}/api/v1/sites/${gatewayEnv.GATEWAY_SITE_ID}/publish-operations`,
+        ]);
+        assert.equal((await admin('/api/v4/presets/releases/')).currentReleaseId, first.releaseId);
+        globalThis.fetch = async (input) => String(input).endsWith('/releases')
+            ? Response.json({}, { status: 201 }) : Response.json({}, { status: 409 });
+        const conflict = await fastify.inject({ url: '/api/v4/presets/releases/publish', method: 'POST',
+            headers: { authorization }, payload: { target: 'gateway', expectedReleaseId: first.releaseId } });
+        assert.equal(conflict.statusCode, 409, conflict.body);
+        assert.match(conflict.json().message, /revision conflict/i);
+        assert.equal((await admin('/api/v4/presets/releases/')).currentReleaseId, first.releaseId);
+    } finally {
+        globalThis.fetch = originalFetch;
+        for (const [key, value] of Object.entries(originalEnv)) {
+            if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+    }
     const wrongHost = await fastify.inject({ url: '/api/v4/storefront/published?path=/',
         headers: { 'x-storefront-host': 'another.test' } });
     assert.equal(wrongHost.statusCode, 404);

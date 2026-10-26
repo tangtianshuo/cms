@@ -1,6 +1,6 @@
 # Gateway Template Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Existing local work below is evidence to recheck, not authorization to mark an exit gate complete.
 
 **Goal:** Freeze current CMS publication contracts and establish independent platform-team template image publication (roadmap stages 0–1).
 
@@ -14,9 +14,11 @@
 
 Execution requires an organization-owned private `storefront-templates` repository, private GHCR image publishing, CI OIDC permissions, an organization-controlled signing trust policy, a versioned artifact store with conditional index updates, and retention protection for all referenced image/artifact digests. These resources and credentials must be provisioned, not committed. `storefront-templates/` below denotes the separate repository, **not** a new directory in this CMS checkout. Confirm repository and registry identities before implementing CI. Do not delete current `storefront/`, alter production Compose, or commit without explicit authorization.
 
-In this CMS repository:
-- Create `backend/src/presets/legacy-contract.test.ts`: characterize existing preset/site/Release/domain identity using pure fixtures.
-- Create `backend/src/presets/template-contract.ts` and `backend/src/presets/template-contract.test.ts`: validate a registry record and future site-scoped Release envelope at the external trust boundary, without changing existing controller behavior.
+Local baseline (2026-10-26): a separate `storefront-templates` checkout and CMS `cms-template-foundation` worktree already contain the files named in Tasks 1–5. Focused CMS contract tests passed 20/20; template tests passed 23 with one Windows symlink-permission skip, and `npm run validate` passed. This does not prove backend typecheck, Docker image/browser smoke, remote registry permissions or a published signed image. The current release workflow validates only; it intentionally does not push or publish. Recheck the existing changes and finish the missing gates rather than recreating these files or treating unchecked steps as completed.
+
+In this CMS repository/worktree:
+- `backend/src/presets/legacy-contract.test.ts`: characterize existing preset/site/Release/domain identity using pure fixtures.
+- `backend/src/presets/template-contract.ts` and `backend/src/presets/template-contract.test.ts`: validate a registry record and future site-scoped Release envelope at the external trust boundary, without changing existing controller behavior.
 
 In separate `storefront-templates` repository:
 - `package.json`, `package-lock.json`: Node test, validation and build commands.
@@ -29,7 +31,7 @@ In separate `storefront-templates` repository:
 
 ### Task 1: Characterize legacy CMS contracts (stage 0)
 
-**Files:** Create `backend/src/presets/legacy-contract.test.ts`; read `backend/src/presets/catalog.ts`, `site-model.ts`, `releases.ts`, `backend/src/site-domains/model.ts`, `backend/src/storefront/published.ts`.
+**Files:** `backend/src/presets/legacy-contract.test.ts`; read `backend/src/presets/catalog.ts`, `site-model.ts`, `releases.ts`, `backend/src/site-domains/model.ts`, `backend/src/storefront/published.ts`.
 
 - [ ] **Step 1: Add characterization assertions.** Import `getPreset` and `buildRelease`, using the fixture pattern in `backend/src/presets/releases.test.ts`. Assert `getPreset('aeroframe','1.0.0')` retains the existing five model keys and existing page keys/paths, a legacy `SiteInstallation` has `presetId`, `presetVersion`, `currentReleaseId` without any image pin, `buildRelease` returns `schemaVersion:1`, `siteId`, concrete pages, and `SiteDomain` retains `siteId`, `hostname`, `ownershipStatus`, `connectionStatus`. Use `node:assert/strict` and `node:test`; no live MongoDB.
 - [ ] **Step 2: Run** `node -r ts-node/register -r tsconfig-paths/register --test src/presets/legacy-contract.test.ts` from `backend/`; expected PASS (baseline characterization, not a new behavior). Run `npm run build:noEmit`; expected exit 0. If the fixture disagrees with actual model fields, correct the test, not runtime code.
@@ -37,7 +39,7 @@ In separate `storefront-templates` repository:
 
 ### Task 2: Define registry and snapshot boundary (stage 0)
 
-**Files:** Create `backend/src/presets/template-contract.ts`, `backend/src/presets/template-contract.test.ts`; consult `backend/src/presets/releases.ts` and `backend/src/prop/models/main.ts`.
+**Files:** `backend/src/presets/template-contract.ts`, `backend/src/presets/template-contract.test.ts`; consult `backend/src/presets/releases.ts` and `backend/src/prop/models/main.ts`.
 
 - [ ] **Step 1: Add failing tests** importing `parseTemplateArtifact` and `parseSnapshotEnvelope`. Valid artifact input is `{record,manifest}` with exactly the v1 shapes above and matching `id/version`, checksum and `available` status. Reject invalid digest/checksum, unsupported `cmsSchema`/`releaseSchema`, duplicate model/field/page keys/paths, reserved `/api` or `/preview`, unresolved model/pointer references, mismatch between record and manifest, and invalid numeric `PropType`. A valid envelope is `{schemaVersion:1,workspaceId,siteId,releaseId,checksum,snapshot}` with existing `ReleaseSnapshot`; reject mismatching `siteId`, missing workspace or schema version, or incorrect canonical snapshot checksum. Use fixtures with actual enum values.
 - [ ] **Step 2: Run** `node -r ts-node/register -r tsconfig-paths/register --test src/presets/template-contract.test.ts` from `backend/`; expected FAIL to import `./template-contract`.
@@ -46,7 +48,7 @@ In separate `storefront-templates` repository:
 
 ### Task 3: Validate source manifests in separate repository (stage 1)
 
-**Files:** Create `storefront-templates/package.json`, `package-lock.json`, `schema/template.schema.json`, `scripts/validate.mjs`, `test/validate.test.mjs`, `templates/aeroframe/1.0.0/template.json`; reference `cms/backend/src/presets/catalog.ts` and `catalog.test.ts`.
+**Files:** `storefront-templates/package.json`, `package-lock.json`, `schema/template.schema.json`, `scripts/validate.mjs`, `test/validate.test.mjs`, `templates/aeroframe/1.0.0/template.json`; reference `cms/backend/src/presets/catalog.ts` and `catalog.test.ts`.
 
 - [ ] **Step 1: Initialize** a separate Node 22 package with `"test":"node --test test/*.test.mjs"` and `"validate":"node scripts/validate.mjs templates/aeroframe/1.0.0/template.json"`, install/pin Ajv and format packages in its lockfile. Require all contract fields and forbid unknown fields in the JSON Schema.
 - [ ] **Step 2: Add failing validator tests** importing `validateManifest(manifest,root)`: valid AeroFrame, duplicate model/field/page keys or paths, unknown page model/pointer model, reserved `/api` and `/preview`, missing asset, bad checksum, path traversal/symlink, incompatible CMS/Release schema and remote script URL. Use temporary asset directories. `npm test` should FAIL with missing validator.
@@ -55,7 +57,7 @@ In separate `storefront-templates` repository:
 
 ### Task 4: Build standalone template image (stage 1)
 
-**Files:** Create `storefront-templates/templates/aeroframe/1.0.0/Dockerfile`, `storefront/package.json`, `storefront/nuxt.config.ts`, `storefront/app/pages/index.vue`, `storefront/server/routes/healthz.get.ts`, `storefront/server/utils/published.ts`, `storefront/test/render.test.mjs`, `storefront-templates/test/image.test.mjs`; read `cms/storefront/app/components/AeroPresetPage.vue`, `PublishedPage.vue`, `cms/storefront/test/release.test.mjs`.
+**Files:** `storefront-templates/templates/aeroframe/1.0.0/Dockerfile`, `storefront/package.json`, `storefront/nuxt.config.ts`, `storefront/app/pages/index.vue`, `storefront/server/routes/healthz.get.ts`, `storefront/server/utils/published.ts`, `storefront/test/render.test.mjs`, `storefront-templates/test/image.test.mjs`; read `cms/storefront/app/components/AeroPresetPage.vue`, `PublishedPage.vue`, `cms/storefront/test/release.test.mjs`.
 
 - [ ] **Step 1: Write failing image test** that builds/runs the image with only test gateway URL, site ID and site-scoped credential, probes `/healthz`, `/`, and one representative content route using a fixture `ReleaseSnapshot`. Assert AeroFrame-specific rendered content and an interactive control, and absence of CMS admin origin/credentials. Run `node --test test/image.test.mjs`; expected FAIL because Dockerfile/image is missing.
 - [ ] **Step 2: Extract** the reviewed AeroFrame layout/interaction into a self-contained Nuxt application. Its server-side data client authenticates to a mockable site-scoped gateway endpoint and parses only published Release responses; keep CMS preview/admin code out. Implement health route and Dockerfile building only this template source from its own locked dependencies; run as non-root, expose port 3000. Do not make the template's runtime dependent on the CMS repo at build time.
@@ -63,7 +65,7 @@ In separate `storefront-templates` repository:
 
 ### Task 5: Publish immutable images and registry entries (stage 1)
 
-**Files:** Create `storefront-templates/scripts/publish.mjs`, `test/publish.test.mjs`, `.github/workflows/template-release.yml`.
+**Files:** `storefront-templates/scripts/publish.mjs`, `test/publish.test.mjs`, `.github/workflows/template-release.yml`.
 
 - [ ] **Step 1: Add failing publisher tests** using an in-memory artifact store. `publishTemplate({manifest,imageDigest,signature,expectedRevision},store)` must reject unapproved/unsigned digest, accept same `id@version` + checksum + digest idempotently, reject changed bytes/digest for same version, leave index unchanged if artifact upload/read-back fails, and reject a stale index revision. Assert shared canonical checksum fixture matches CMS Task 2; `npm test` should FAIL importing publisher.
 - [ ] **Step 2: Implement** publisher and store adapter (`getIndex`, `putImmutableArtifact`, `readArtifact`, `compareAndSwapIndex`) with checksum verification and conditional single-revision update. Only publish `available` metadata after signed digest and immutable manifest read-back verify. If index update fails, leave unreferenced artifact inaccessible to catalog and retry safely; never overwrite a referenced version. Run `npm test && npm run validate`; expected PASS including concurrent-update failure tests.
@@ -72,6 +74,8 @@ In separate `storefront-templates` repository:
 
 ## Acceptance and remaining work
 
-Stage 0: characterization/contract tests and backend typecheck pass, with old sites/routes unchanged. Stage 1: a reviewed template with new layout and interaction can be built and registered by immutable signed digest without redeploying CMS or existing Storefront; invalid or mutated versions cannot enter `available`. Registry credentials and deployment infrastructure are external prerequisites; local tests alone cannot establish this gate.
+Stage 0: recheck the existing characterization/contract tests, run backend `npm run build:noEmit`, and confirm old sites/routes are unchanged. Stage 1: run the standalone Docker image and desktop/mobile checks; provision/verify private GHCR publishing, CI OIDC identity and signing policy, a versioned artifact store with compare-and-swap index updates, and retention protection. Then complete the release workflow's real build/push/sign/scan/read-back/publish sequence and verify one signed candidate in a non-production registry, including idempotent retry and mutation rejection. Only a reviewed template registered by immutable signed digest without CMS or existing Storefront redeploy passes stage 1; local unit tests alone do not.
+
+The Windows symlink-permission skip requires a CI run with full filesystem checks before closing the manifest-validation gate. Do not mark stage 0 or 1 complete solely from the local results above. No secrets belong in source or planning files.
 
 This plan does **not** implement user-facing template selection, per-site containers, published snapshot data plane, CMS publish UI or custom HTTPS domains. These remain roadmap stages 2–6 and require separate plans after verifying this contract. Do not describe stage 1 success as a complete independent-site launch.
