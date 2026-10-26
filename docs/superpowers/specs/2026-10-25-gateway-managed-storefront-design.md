@@ -1,6 +1,6 @@
 # Gateway-managed independent storefronts
 
-**Status:** draft for review
+**Status:** reviewed architecture and phase-1 scope; implementation gates remain open
 **Date:** 2026-10-25
 **Supersedes for new development:** `2026-10-24-preset-registry-design.md` where it assumes that new layout/interaction code must be deployed with the shared Storefront. The earlier document remains a reference for declarative content, immutable versions, validation and explicit upgrades.
 
@@ -65,9 +65,9 @@ Ingress strips spoofable site/identity headers and passes the normalized, valida
 Production Compose currently deploys one fixed `storefront` and an Nginx `storefront-gateway` forwarding to it; the latter is an ingress proxy, not this new control/data service. CMS currently owns `SiteInstallation.currentReleaseId`, release publication/rollback and domain verification/resolution. Preserve these interfaces during transition; do not relabel the existing proxy as a full gateway.
 
 1. Freeze current site IDs, Release snapshot shape, domain records and working public routes as a compatibility baseline. Introduce gateway identity and immutable template/image pin while old sites continue on the shared Storefront.
-2. Extract approved template images and manifests into their own CI/repository. Stand up a registry and a gateway with durable deployment state and snapshot replication. Establish gateway-to-CMS authenticated Release fetch or push, with retries and checksum validation; avoid dual authoritative public pointers.
-3. Migrate one noncritical site using a platform subdomain, then custom subdomain and apex; validate TLS, routing, content parity, media and rollback. Keep old shared routing until each migrated site's new route is verified, then switch per site.
-4. Make new CMS publish requests use gateway operations; expose true asynchronous status and retry/rollback in CMS. After all old sites are migrated and retained Releases remain readable, retire shared Storefront and legacy routing paths in a separate cleanup.
+2. Extract approved template images and manifests into their own CI/repository. Stand up a registry and gateway with durable deployment state and snapshot replication. Establish gateway-to-CMS authenticated Release fetch or push, with retries and checksum validation; avoid dual authoritative public pointers. Deploy and validate per-site instances, ingress and atomic route changes before directing CMS publications to them.
+3. Make new CMS publish requests use gateway operations; expose true asynchronous status and retry/rollback in CMS. Complete the platform-subdomain selection, edit and publish pilot, then verify custom subdomain and apex ownership, routing and HTTPS.
+4. Shadow/canary migrate one noncritical legacy site and then the remaining sites; validate TLS, routing, content parity, media, primary-domain semantics and rollback. Keep old shared routing until each migrated site's new route is verified, then switch per site. Only after all old sites are migrated, retained Releases remain readable and production failure/recovery drills pass may shared Storefront and legacy routing paths be retired in a separate cleanup.
 
 ## Failure and acceptance gates
 
@@ -76,5 +76,6 @@ Production Compose currently deploys one fixed `storefront` and an Nginx `storef
 - Published pages stay available if CMS or control/worker is down; drafts and another site's Release are inaccessible through public gateway/API or a forged Host/site ID.
 - Invalid/unapproved digest, incompatible manifest, missing artifact/media or failed health check cannot become active. Repeated, concurrent and interrupted publish requests converge on one correct operation; failed upgrades preserve the old site; explicit rollback works.
 - Existing sites remain unchanged until individually migrated; catalog updates alone never rewrite a pin or active Release. Gateway reports deployed image digest, Release ID and route revision so operators can audit each site.
+- Phase 1 is complete only after capacity, backup/restore, certificate renewal and host-failure recovery drills on the single-host deployment, plus per-site migration with old routes available until verified cutover. The stage-4 platform-subdomain pilot is not production completion.
 
 The original Git-bundled preset registry can still serve as a migration/test fixture, but cannot be the final release path: phase-1 acceptance requires dynamic template/image publication and a gateway-managed instance. The original declarative-only and shared-theme-runtime restriction is intentionally replaced for platform-authored, reviewed images; it remains appropriate for any future untrusted submissions.

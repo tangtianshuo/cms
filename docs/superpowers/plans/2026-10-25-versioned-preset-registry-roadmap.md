@@ -1,6 +1,6 @@
 # Gateway-managed storefront delivery roadmap
 
-**Status:** revised for review, not authorization to implement
+**Status:** reviewed phase-1 direction; stage exit gates remain unverified
 **Design:** `docs/superpowers/specs/2026-10-25-gateway-managed-storefront-design.md`
 **Historical baseline:** `docs/superpowers/specs/2026-10-24-preset-registry-design.md`
 
@@ -14,15 +14,19 @@ The previous roadmap's bundled Git registry, shared theme runtime and phase-5 dy
 
 | Stage | Deliverable and dependency | Exit gate |
 | --- | --- | --- |
-| 0. Baseline and contracts | Inventory existing presets, Release/media/domain APIs and deploy topology; define template manifest, snapshot protocol, site identity, image pin, operation states and legacy migration. | Existing sites/routes unchanged; contract and failure cases reviewed. |
-| 1. Independent template pipeline | Platform-owned template project/repository, CI build/tests/security review, signed/allowlisted immutable OCI images, manifest validation and registry with artifact retention. Depends on 0. | A new layout/interaction is published without CMS or existing Storefront deploy; invalid/incompatible image cannot enter catalog. |
-| 2. Gateway foundation | Separate authenticated control API, durable desired/actual state and reconciliation worker; published snapshot store/data API; per-site workload identity, tenant isolation, status/audit. Depends on 0–1. | CMS outage does not stop an existing published page; unauthorized site/Release access fails. |
-| 3. Per-site deployments and ingress | Worker deploys pinned image digests with resource limits, health/page probes, atomic route revisions and retained previous instance; ingress routes by verified Host. Depends on 2. | Two sites can run one template image with isolated content; failed deployment leaves old route serving. |
+| 0. Baseline and contracts | Inventory existing presets, Release/media/domain APIs and deploy topology; define template manifest, snapshot protocol, site identity, image pin, operation states and legacy migration. | Existing sites/routes unchanged; contract and failure cases reviewed and contract tests/typecheck pass. |
+| 1. Independent template pipeline | Platform-owned template project/repository, CI build/tests/security review, signed/allowlisted immutable OCI images, manifest validation and registry with artifact retention. Depends on 0. | A new layout/interaction is published to a real registry without CMS or existing Storefront deploy; digest, signature, manifest and retained artifacts verify independently; invalid/incompatible image cannot enter catalog. |
+| 2. Gateway foundation | Separate authenticated control API, durable desired/actual state and reconciliation worker; published snapshot store/data API; per-site workload identity, tenant isolation, status/audit. Depends on 0–1. | Staged, site-scoped snapshots remain readable without CMS; unauthorized site/Release access fails; desired/actual state survives worker restart. This is an API/data-plane gate, not a live-page availability claim. |
+| 3. Per-site deployments and ingress | Worker deploys pinned image digests with resource limits, health/page probes, atomic route revisions and retained previous instance; ingress routes by verified Host. Depends on 2. | Two sites can run one template image with isolated content; failed deployment leaves old route serving; an existing published page remains available during CMS or control/worker outage. |
 | 4. CMS creation and publication | CMS installs manifest as editable draft, pins image/version, builds immutable Release and submits idempotent publish intent with expected revision; UI shows actual asynchronous state, retry and rollback. Depends on 1–3. | Select -> edit -> publish -> accessible platform subdomain works; content-only publish avoids image rebuild; rollback restores prior active tuple. |
 | 5. Custom domains and HTTPS | Gateway owns unique hostname reservation, TXT proof, DNS targeting, TLS issuance/renewal and route activation for subdomains and apex; CMS shows guidance/status. Depends on 3–4. | Verified custom subdomain and apex serve correct site over HTTPS; failed validation leaves platform subdomain and old bindings intact. |
-| 6. Migration and production gate | Shadow/canary migrate existing sites and Releases, preserve domain/primary semantics, run failure and capacity drills; retire shared routes only after per-site parity. Depends on 1–5. | All phase-1 acceptance tests pass and legacy sites remain reachable throughout migration. |
+| 6. Migration and production gate | Shadow/canary migrate existing sites and Releases, preserve domain/primary semantics, run failure and capacity drills; retire shared routes only after per-site parity. Depends on 1–5. | Per-site parity and rollback proven, capacity/backup-restore/renewal/host-recovery drills pass; all phase-1 acceptance tests pass and legacy sites remain reachable throughout migration. |
 
-Stages 0–6 together are **phase 1**. Deliver an integrated pilot after stage 4, then complete stage 5 before declaring phase 1 done; do not defer custom apex support beyond that gate. Each stage gets a separate test-first implementation plan once the design is reviewed. Parallel work is possible for template CI and gateway contracts after stage 0, but integration requires one agreed manifest and Release protocol.
+Stages 0–6 together are **phase 1**. Deliver an integrated pilot after stage 4, then complete stages 5 and 6 before declaring phase 1 done; do not defer custom apex support beyond that gate. Each remaining stage gets a separate test-first implementation plan at its integration gate. Parallel work is possible for template CI and gateway contracts after stage 0, but integration requires one agreed manifest and Release protocol.
+
+## Current verification boundary
+
+Local work already exists in a separate `storefront-templates` repository and a CMS `cms-template-foundation` worktree. The focused CMS contract tests passed (20/20); template tests passed (23, with one Windows symlink-permission skip), and manifest validation passed. These are local results, not stage 0–1 production acceptance. The template release workflow currently validates but does not push or publish images. Verify CMS backend typecheck and Docker image/browser smoke before closing stage 0 or the standalone-image task; verify private GHCR, OIDC signing identity/trust policy, conditional artifact index updates, retention and a real signed non-production publication before closing stage 1. Do not infer remote permissions or deployment from local files.
 
 ## Ownership and critical contracts
 
@@ -41,5 +45,6 @@ Current touchpoints to preserve or adapt: `backend/src/presets/catalog.ts`, `imp
 - Failure injection: CMS offline, registry unavailable after installation, worker crash after image start, data replication failure, health check failure, routing/TLS failure, retries and concurrent publish. Prove previous page, image and Release remain live or initial site stays unpublished.
 - Browser/integration: new interaction and layout without CMS/shared Storefront deploy; desktop/mobile preview; two isolated sites on one image; content-only update; first publish, upgrade and rollback; platform subdomain, custom subdomain and apex all over HTTPS.
 - Migration: compare old and new site content/media/canonical routing, verify canary with rollback, track per-site deployed digest/Release/route revision and resource use. Keep legacy routes until verified cutover.
+- Single-host operations: size per-site capacity and quotas; exercise backup/restore, certificate renewal and host failure recovery before production cutover. A single host remains a fault domain even after these drills.
 
-**Planning handoff:** Review the new design first. Then expand stage 0–1 into exact-file, test-first tasks using the Superpowers writing-plans process; plan remaining stages at each integration gate. No functional code changes are authorized by this roadmap.
+**Planning handoff:** Complete the outstanding stage 0 checks and stage 1 real-publication prerequisites in the foundation plan, then plan gateway stages 2–3 at the next integration gate. No functional code changes are authorized by this roadmap.
