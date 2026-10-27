@@ -67,6 +67,8 @@ jobs:
       - name: Check backend types
         working-directory: backend
         run: npm run build:noEmit
+      - name: Generate backend types for UI
+        run: npm run build:types
       - name: Check UI types
         working-directory: ui
         run: npm run type-check

@@ -24,7 +24,8 @@ RUN npm ci --prefix ui --ignore-scripts
 
 COPY . /app
 
-RUN npm run build:ui \
+RUN npm run build:types \
+    && npm run build:ui \
     && npm run build:backend \
     && rm -rf _scripts node_modules cli client proxy ui/public ui/node_modules ui/src backend/plugins
 
