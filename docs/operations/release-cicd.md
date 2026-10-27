@@ -9,3 +9,5 @@ The server keeps a protected copy of the previous Compose configuration and rest
 Gateway follows the same master and release branch policy. Templates also publish a new immutable registry record and synchronize the image to the server, but leave the active site on its current template version. Upgrade the template in CMS and publish the site to activate a new version.
 
 Deployment receipts are stored under `/opt/novaintelligent/deploy/releases/` as `<component>.current.json` and `<component>-<run-number>.json`. The server serializes deployments, rejects stale workflow runs, and uses a separate forced-command SSH key for each component.
+
+To release, update master, create the next `release/vMAJOR.MINOR.PATCH` branch from that commit, and push the branch. Watch the release branch's Actions run through verification, publication and deployment. A manual workflow run only verifies; rerun the original failed push run to retry delivery of the same commit.
