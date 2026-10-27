@@ -99,9 +99,7 @@ export const ModalApiKeyCreateEdit = defineComponent({
                     },
                     async (err) => {
                         console.error(err);
-                        notification.error(
-                            t('modals.apiKey.createFailed'),
-                        );
+                        notification.error(err);
                         return false;
                     },
                 );

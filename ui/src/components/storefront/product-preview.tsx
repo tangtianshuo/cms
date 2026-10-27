@@ -1,3 +1,4 @@
+import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import {
     defineComponent,
     onBeforeUnmount,
@@ -60,7 +61,7 @@ export const ProductPreview = defineComponent({
                     } catch (cause) {
                         if (gate.isCurrent(sequence)) {
                             page.value = undefined;
-                            error.value = (cause as Error).message || t('storefrontPreview.error');
+                            error.value = userErrorMessage(cause);
                         }
                     } finally {
                         if (gate.isCurrent(sequence)) {
@@ -89,7 +90,7 @@ export const ProductPreview = defineComponent({
                         {loading.value ? t('storefrontPreview.updating') : error.value ? t('storefrontPreview.failed') : t('storefrontPreview.draft')}
                     </span>
                 </div>
-                {error.value && <p class="px-4 py-3 text-sm text-red" role="alert">{error.value}</p>}
+                {error.value && <p class="border-l-4 border-red bg-error px-4 py-3 text-sm leading-relaxed text-dark" role="alert">{error.value}</p>}
                 <iframe
                     ref={frame}
                     title={t('storefrontPreview.title')}

@@ -1,3 +1,4 @@
+import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { computed, defineComponent, onMounted, ref, watch, type PropType } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { EntryLite } from '@bcms/selfhosted-backend/entry/models/main';
@@ -88,7 +89,7 @@ export const PageDraftEditor = defineComponent({
                 selectedKey.value = result.key;
                 window.bcms.notification.success(t('presets.pageSaved'));
             } catch (cause) {
-                error.value = (cause as Error).message || t('presets.pageSaveError');
+                error.value = userErrorMessage(cause);
             } finally {
                 saving.value = false;
             }
@@ -171,7 +172,7 @@ export const PageDraftEditor = defineComponent({
                             </label>)}
                         </div>
                     </fieldset>
-                    {error.value && <p role="alert" class="m-0 text-sm text-red sm:col-span-2">{error.value}</p>}
+                    {error.value && <p role="alert" class="m-0 border-l-4 border-red bg-error px-3 py-2 text-sm leading-relaxed text-dark sm:col-span-2">{error.value}</p>}
                     <div class="sm:col-span-2">
                         <Button disabled={saving.value} onClick={save}>{saving.value ? t('presets.savingPage') : t('common.save')}</Button>
                     </div>

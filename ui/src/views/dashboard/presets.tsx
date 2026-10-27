@@ -1,3 +1,4 @@
+import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { computed, defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { ChecklistStep } from '@bcms/selfhosted-backend/presets/checklist';
@@ -101,7 +102,7 @@ export const PresetsView = defineComponent({
                     if (result.installedSite && !site.value) site.value = result.installedSite;
                 }
             } catch (cause) {
-                error.value = (cause as { message?: string }).message || t('presets.loadError');
+                error.value = userErrorMessage(cause);
             }
         }
 
@@ -120,7 +121,7 @@ export const PresetsView = defineComponent({
                 await sdk.template.getAll({ skipCache: true });
                 await refreshSite();
             } catch (cause) {
-                error.value = (cause as { message?: string }).message || t('presets.importError');
+                error.value = userErrorMessage(cause);
                 await refreshSite();
             } finally {
                 busy.value = false;
@@ -140,7 +141,7 @@ export const PresetsView = defineComponent({
                 await refreshSite();
                 window.bcms.notification.success(t('presets.versionAdopted'));
             } catch (cause) {
-                error.value = (cause as Error).message;
+                error.value = userErrorMessage(cause);
                 await refreshSite();
             } finally { busy.value = false; }
         }
@@ -161,7 +162,7 @@ export const PresetsView = defineComponent({
                 if (first) await choosePreset(first);
                 if (result.registryError) error.value = t('presets.registryUnavailable');
             } catch (cause) {
-                error.value = (cause as { message?: string }).message || t('presets.loadError');
+                error.value = userErrorMessage(cause);
             } finally {
                 loading.value = false;
             }
@@ -193,7 +194,7 @@ export const PresetsView = defineComponent({
                     </div>
                 </div>
 
-                {error.value && <div role="alert" class="mb-6 border-l-4 border-red bg-red/10 px-4 py-3 text-sm text-red">{error.value}</div>}
+                {error.value && <div role="alert" class="mb-6 border-l-4 border-red bg-error px-4 py-3 text-sm leading-relaxed text-dark">{error.value}</div>}
                 {loading.value ? <p class="text-sm">{t('common.loading')}</p> : (
                     <>
                         <div class="grid gap-8 xl:grid-cols-[310px_minmax(0,1fr)]">
@@ -266,9 +267,12 @@ export const PresetsView = defineComponent({
                                     <div class="mt-5">
                                         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                             {plan.value.models.map((item) => (
-                                                <div class="flex justify-between gap-3 border-b border-gray/60 py-2 text-sm dark:border-gray">
-                                                    <span>{t(`presets.models.${item.key}`)}</span>
-                                                    <span class={item.action === 'conflict' ? 'text-red' : 'opacity-60'}>{t(`presets.actions.${item.action}`)}</span>
+                                                <div class="border-b border-gray/60 py-2 text-sm dark:border-gray">
+                                                    <div class="flex justify-between gap-3">
+                                                        <span>{t(`presets.models.${item.key}`)}</span>
+                                                        <span class={item.action === 'conflict' ? 'text-red' : 'opacity-60'}>{t(`presets.actions.${item.action}`)}</span>
+                                                    </div>
+                                                    {item.reason && <p role="alert" class="mt-2 text-xs leading-relaxed text-red">{userErrorMessage(item.reason)}</p>}
                                                 </div>
                                             ))}
                                         </div>
@@ -312,7 +316,7 @@ export const PresetsView = defineComponent({
                             <section class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">
                                 <h2 class="text-lg font-semibold">{t('presets.checklistTitle')}</h2>
                                 <p class="mt-2 text-sm opacity-70">{t('presets.checklistSubtitle')}</p>
-                                {site.value.status === 'failed' && <p role="alert" class="mt-3 text-sm text-red">{site.value.importError}</p>}
+                                {site.value.status === 'failed' && <p role="alert" class="mt-3 text-sm text-red">{userErrorMessage(site.value.importError)}</p>}
                                 <div class="mt-6 divide-y divide-gray/50 border-y border-gray/50 dark:divide-gray dark:border-gray">
                                     {checklist.value.map((step) => (
                                         <div class="flex flex-wrap items-center gap-3 py-4 text-sm">

@@ -1,3 +1,4 @@
+import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { defineComponent, onBeforeUnmount, onMounted, ref, type PropType } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Button } from '@bcms/selfhosted-ui/components/button';
@@ -67,7 +68,7 @@ export const ReleaseManager = defineComponent({
                     await acceptPublication({ ...publication.value, ...result, operationId: result.id }, true);
                 } catch (cause) {
                     if (disposed) return;
-                    error.value = (cause as Error).message;
+                    error.value = userErrorMessage(cause);
                     schedulePoll();
                 }
             }, 2500);
@@ -86,7 +87,7 @@ export const ReleaseManager = defineComponent({
             busy.value = true;
             error.value = '';
             try { await action(); }
-            catch (cause) { error.value = (cause as Error).message; }
+            catch (cause) { error.value = userErrorMessage(cause); }
             finally { busy.value = false; }
         }
         async function check() {
@@ -138,7 +139,7 @@ export const ReleaseManager = defineComponent({
             <p class="mt-2 max-w-3xl text-sm opacity-70">{t(gateway.value?.bound ? 'presets.gatewayReleaseHint' : 'presets.releaseHint')}</p>
             {gateway.value?.bound && <p role="status" class="mt-3 text-sm">
                 {publication.value ? t(`presets.gatewayStatus.${publication.value.status}`) : t('presets.gatewayNotPublished')}
-                {publication.value?.failureCode && <span class="ml-2">{publication.value.failureCode}</span>}
+                {publication.value?.failureCode && <span class="ml-2">{userErrorMessage(publication.value.failureCode)}</span>}
             </p>}
             {gateway.value && !gateway.value.bound && <p class="mt-3 text-sm">{history.value.currentReleaseId
                 ? t('presets.activeRelease', { id: history.value.currentReleaseId.slice(0, 8) }) : t('presets.noRelease')}</p>
@@ -151,10 +152,10 @@ export const ReleaseManager = defineComponent({
                     : history.value.currentReleaseId && <a href={origin} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
             </div>
             {busy.value && <p role="status" class="mt-3 text-sm">{t('common.loading')}</p>}
-            {error.value && <p role="alert" class="mt-3 text-sm text-red">{error.value}</p>}
+            {error.value && <p role="alert" class="mt-3 border-l-4 border-red bg-error px-3 py-2 text-sm leading-relaxed text-dark">{error.value}</p>}
             {preflight.value && <div class="mt-5 border border-gray/60 p-4 text-sm dark:border-gray">
                 <strong>{preflight.value.valid ? t('presets.releaseValid', { count: preflight.value.pageCount }) : t('presets.releaseInvalid')}</strong>
-                {preflight.value.issues.map((issue) => <p role="alert" class="mt-2 text-red">{issue}</p>)}
+                {preflight.value.issues.map((issue) => <p role="alert" class="mt-2 text-red">{userErrorMessage(issue)}</p>)}
                 {!gateway.value?.bound && preflight.value.diff && <div class="mt-3 grid gap-4 sm:grid-cols-3">
                     {(['added', 'changed', 'removed'] as const).map((kind) => <div>
                         <p class="font-medium">{t(`presets.releaseDiff.${kind}`)}</p>
@@ -184,7 +185,7 @@ export const ReleaseManager = defineComponent({
                 <summary class="cursor-pointer">{t('presets.releaseAudit')}</summary>
                 {history.value.audit.map((event) => <p class={`mt-2 ${event.error ? 'text-red' : ''}`}>
                     {new Date(event.createdAt).toLocaleString()} · {event.actorId} · {event.operation} · {event.releaseId.slice(0, 8)}
-                    {event.error ? ` · ${event.error}` : ` · ${t('presets.releaseSuccess')}`}
+                    {event.error ? ` · ${userErrorMessage(event.error)}` : ` · ${t('presets.releaseSuccess')}`}
                 </p>)}
             </details>}
         </section>;

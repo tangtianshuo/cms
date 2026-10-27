@@ -85,9 +85,7 @@ export const ModalBackupRestore = defineComponent({
                     },
                     async (err) => {
                         console.error(err);
-                        notification.error(
-                            t('modals.backup.restoreFailed'),
-                        );
+                        notification.error(err);
                         return false;
                     },
                 );

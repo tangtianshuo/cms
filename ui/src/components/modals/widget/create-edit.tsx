@@ -102,7 +102,7 @@ export const ModalWidgetCreateEdit = defineComponent({
                     },
                     async (err) => {
                         console.error(err);
-                        notification.error(t('modals.widget.createFailed'));
+                        notification.error(err);
                         return false;
                     },
                 );

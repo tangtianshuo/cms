@@ -107,7 +107,7 @@ export default defineComponent({
                 {error.value && (
                     <p
                         role="alert"
-                        class="mt-4 border-l-4 border-red bg-red/10 p-3 text-sm text-red"
+                        class="mt-4 border-l-4 border-red bg-error p-3 text-sm leading-relaxed text-dark"
                     >
                         {error.value}
                     </p>
@@ -327,7 +327,7 @@ export default defineComponent({
                                 )}
                                 {item.lastError && (
                                     <p class="mt-3 text-sm text-red">
-                                        {item.lastError}
+                                        {errorMessage(item.lastError)}
                                     </p>
                                 )}
                                 <div class="mt-4 flex flex-wrap gap-3">

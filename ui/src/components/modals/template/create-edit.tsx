@@ -109,9 +109,7 @@ export const ModalTemplateCreateEdit = defineComponent({
                     },
                     async (err) => {
                         console.error(err);
-                        notification.error(
-                            t('modals.template.createFailed'),
-                        );
+                        notification.error(err);
                         return false;
                     },
                 );

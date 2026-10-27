@@ -293,8 +293,7 @@ export const EntryView = defineComponent({
                             );
                         },
                         async (cause) => {
-                            const message = (cause as { message?: string })?.message || String(cause);
-                            notification.warning(/duplicate|title.*(unique|exist|conflict)|workspace_group_language_title_unique/i.test(message) ? `${t('entryGroups.nameConflict')} ${message}` : message);
+                            notification.error(cause);
                         },
                     );
                 } finally {

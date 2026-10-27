@@ -102,7 +102,7 @@ export const ModalGroupCreateEdit = defineComponent({
                     },
                     async (err) => {
                         console.error(err);
-                        notification.error(t('modals.group.createFailed'));
+                        notification.error(err);
                         return false;
                     },
                 );

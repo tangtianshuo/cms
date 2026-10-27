@@ -83,9 +83,7 @@ export const ModalMediaCreateDir = defineComponent({
                     },
                     async (err) => {
                         console.error(err);
-                        notification.error(
-                            t('modals.mediaDir.createFailed'),
-                        );
+                        notification.error(err);
                         return false;
                     },
                 );

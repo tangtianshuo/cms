@@ -1,5 +1,6 @@
 import * as uuid from 'uuid';
 import type { JSX } from 'vue/jsx-runtime';
+import { userErrorMessage } from '../util/user-message';
 
 export interface NotificationMessage {
     id: string;
@@ -36,10 +37,8 @@ export class NotificationService {
         });
     }
 
-    warning(content: string): void {
-        this.handlers.forEach((e) => {
-            e.handler('warning', content);
-        });
+    warning(content: unknown): void {
+        this.push('warning', userErrorMessage(content));
     }
 
     success(content: string): void {
@@ -48,15 +47,17 @@ export class NotificationService {
         });
     }
 
-    error(content: string): void {
-        this.handlers.forEach((e) => {
-            e.handler('error', content);
-        });
+    error(content: unknown): void {
+        this.push('error', userErrorMessage(content));
     }
 
     push(type: NotificationMessageType, content: string): void {
+        const message =
+            type === 'error' || type === 'warning'
+                ? userErrorMessage(content)
+                : content;
         this.handlers.forEach((e) => {
-            e.handler(type, content);
+            e.handler(type, message);
         });
     }
 }

@@ -1,3 +1,4 @@
+import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -44,7 +45,7 @@ export const SitePreviewView = defineComponent({
                 deliveryTimer = setTimeout(deliver, 500);
             } catch (cause) {
                 payload.value = undefined;
-                error.value = (cause as Error).message || t('presets.sitePreviewError');
+                error.value = userErrorMessage(cause);
             } finally {
                 loading.value = false;
             }
@@ -77,7 +78,7 @@ export const SitePreviewView = defineComponent({
                     {t('common.close')}
                 </button>
             </header>
-            {error.value && <div role="alert" class="border-b border-red/60 bg-red/20 px-4 py-3 text-sm">
+            {error.value && <div role="alert" class="border-b border-red/60 bg-error px-4 py-3 text-sm leading-relaxed text-dark">
                 {error.value}
             </div>}
             <div class="relative flex min-h-0 flex-1 justify-center overflow-hidden bg-black/40">

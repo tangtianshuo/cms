@@ -23,10 +23,7 @@ export async function throwable<
             return await onError(e);
         } else {
             console.error(e);
-            const err = e as Error;
-            if (err && err.message) {
-                window.bcms.notification.warning(err.message);
-            }
+            window.bcms.notification.error(e);
             return e as OnErrorResult;
         }
     }
