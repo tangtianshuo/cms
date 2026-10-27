@@ -1,0 +1,100 @@
+{
+  "verified_at": "2026-10-27T06:41:09.826261+00:00",
+  "releases": {
+    "cms": {
+      "component": "cms",
+      "digest": "sha256:0fdf1ffbe81ea0f84d39aa784459941dc59a2686088e5cc3c4a403b7a90cbdfe",
+      "commit": "d2dd484cf98ca48ff604198e5c3898c71f0d8c0c",
+      "version": "1.0.0",
+      "run_number": 5,
+      "image": "ghcr.io/tangtianshuo/cms@sha256:0fdf1ffbe81ea0f84d39aa784459941dc59a2686088e5cc3c4a403b7a90cbdfe",
+      "time": "2026-10-27T06:39:33.854698+00:00",
+      "backup": "/opt/novaintelligent/backups/release-cms-20261027T063933855202Z"
+    },
+    "gateway": {
+      "component": "gateway",
+      "digest": "sha256:5634f94d0574b0732d3d529bc763920024b0596c8afed8abfd38ecf769e57b1f",
+      "commit": "e9854d2677ebffdd3ee6f388d28d2b3c86b9b687",
+      "version": "1.0.0",
+      "run_number": 3,
+      "image": "ghcr.io/tangtianshuo/independent-website-gateway@sha256:5634f94d0574b0732d3d529bc763920024b0596c8afed8abfd38ecf769e57b1f",
+      "time": "2026-10-27T06:35:04.780562+00:00",
+      "backup": "/opt/novaintelligent/backups/release-gateway-20261027T063504781068Z"
+    },
+    "templates": {
+      "component": "templates",
+      "digest": "sha256:8aaec8fb8d6c18a6435f3f1bbc06cdfe9ad5b49139850956e53374345c1d8b69",
+      "commit": "4f6e1a8d4558b610c395590537dc2891db109be6",
+      "version": "1.0.2",
+      "run_number": 5,
+      "image": "ghcr.io/tangtianshuo/independent-website-templates/aeroframe@sha256:8aaec8fb8d6c18a6435f3f1bbc06cdfe9ad5b49139850956e53374345c1d8b69",
+      "time": "2026-10-27T06:32:36.280204+00:00"
+    }
+  },
+  "services": {
+    "cms": {
+      "image": "ghcr.io/tangtianshuo/cms@sha256:0fdf1ffbe81ea0f84d39aa784459941dc59a2686088e5cc3c4a403b7a90cbdfe",
+      "running": true,
+      "health": "healthy"
+    },
+    "cms-gateway-proxy": {
+      "image": "nginx:alpine",
+      "running": true,
+      "health": null
+    },
+    "control": {
+      "image": "ghcr.io/tangtianshuo/independent-website-gateway@sha256:5634f94d0574b0732d3d529bc763920024b0596c8afed8abfd38ecf769e57b1f",
+      "running": true,
+      "health": "healthy"
+    },
+    "worker": {
+      "image": "ghcr.io/tangtianshuo/independent-website-gateway@sha256:5634f94d0574b0732d3d529bc763920024b0596c8afed8abfd38ecf769e57b1f",
+      "running": true,
+      "health": null
+    },
+    "mongo": {
+      "image": "mongo:7",
+      "running": true,
+      "health": "healthy"
+    },
+    "postgres": {
+      "image": "postgres:18-alpine",
+      "running": true,
+      "health": "healthy"
+    }
+  },
+  "public_pages": [
+    {
+      "url": "https://cms.novaintelligent.cn/",
+      "status": 200
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/",
+      "status": 200
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/collections",
+      "status": 200
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/products/featured-product",
+      "status": 200
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/pages/about",
+      "status": 200
+    }
+  ],
+  "active_site": {
+    "host": "shop.novaintelligent.cn",
+    "revision": 4,
+    "release_id": "07b1ea4b-6865-497b-bbd5-dd5c084e6ac1",
+    "template_version": "1.0.1",
+    "image": "ghcr.io/tangtianshuo/independent-website-templates/aeroframe@sha256:931b7e38882216deda60ac4060a9b76bbfb782426a1317c7b842727f0931a80a"
+  },
+  "workflow_runs": {
+    "cms": "https://github.com/tangtianshuo/cms/actions/runs/40461881844",
+    "gateway": "https://github.com/tangtianshuo/Independent-Website-Gateway/actions/runs/40461546661",
+    "templates": "https://github.com/tangtianshuo/Independent-Website-Templates/actions/runs/40461390282"
+  }
+}
