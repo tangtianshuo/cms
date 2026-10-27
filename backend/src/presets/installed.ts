@@ -2,16 +2,16 @@ import { getPreset, type PresetManifest } from './catalog';
 import type { SiteInstallation } from './site-model';
 
 export function resolveInstalledPreset(site: SiteInstallation): PresetManifest {
-    if (site.publishedTemplateRecord !== undefined && site.presetManifestSnapshot === undefined) {
+    if (site.publishedTemplateRecord != null && site.presetManifestSnapshot == null) {
         throw new Error('Installed public template snapshot is missing');
     }
-    if (site.presetManifestSnapshot !== undefined) {
+    if (site.presetManifestSnapshot != null) {
         let preset: unknown;
         try { preset = JSON.parse(site.presetManifestSnapshot); } catch { throw new Error('Installed template snapshot is invalid'); }
         if (!preset || typeof preset !== 'object' || (preset as PresetManifest).id !== site.presetId ||
             (preset as PresetManifest).version !== site.presetVersion || !Array.isArray((preset as PresetManifest).models) ||
             !Array.isArray((preset as PresetManifest).pages)) throw new Error('Installed template snapshot does not match the site');
-        if (site.publishedTemplateRecord !== undefined) {
+        if (site.publishedTemplateRecord != null) {
             let record: unknown;
             try { record = JSON.parse(site.publishedTemplateRecord); } catch { throw new Error('Installed public template record is invalid'); }
             if (!record || typeof record !== 'object' || (record as { id?: unknown }).id !== site.presetId ||

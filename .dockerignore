@@ -1,9 +1,20 @@
 /node_modules
 /.github
 /.husky
+/.git
 /db
 /uploads
 /backups
+/deliverables
+/manual-assets
+
+**/node_modules
+**/logs
+**/*.log
+**/*.pem
+**/*.key
+**/id_rsa*
+**/id_ed25519*
 
 .env
 **/.env
@@ -14,7 +25,6 @@
 /ui/.env
 /storefront/.env
 
-/backend/node_modules
 /backend/dist
 /backend/logs
 /backend/custom-package.json
@@ -24,9 +34,7 @@
 /backend/jobs
 /backend/plugins
 
-/ui/node_modules
 /ui/dist
 
-/storefront/node_modules
 /storefront/.nuxt
 /storefront/.output
