@@ -10,6 +10,7 @@ import { getPreset, listPresets } from './catalog';
 import { adoptPublicTemplate, importPreset, planImport, type ImportSource } from './import';
 import { getPublicRegistry, getPublicTemplate } from './registry';
 import { createPageDraft, pageDraft, pageSectionOptions, updatePageDraft } from './pages';
+import { gatewayBound, gatewayPublishConfig } from './gateway-publish';
 
 const importBody = z.object({
     presetId: z.string().min(1),
@@ -50,6 +51,10 @@ export function importSource(): ImportSource {
 async function siteView() {
     const site = await Repo.siteInstallation.methods.findSelected();
     if (!site) return { site: null, checklist: [], pageOptions: {} };
+    let gatewayReady = false;
+    if (gatewayBound(site, gatewayPublishConfig()) && site.gatewayPublishIntent) {
+        try { gatewayReady = JSON.parse(site.gatewayPublishIntent).status === 'ready'; } catch { /* malformed intent is not a successful publication */ }
+    }
     const templates: Parameters<typeof buildChecklist>[1] = {};
     const entries: Parameters<typeof buildChecklist>[2] = {};
     for (const model of site.models) {
@@ -58,7 +63,7 @@ async function siteView() {
     }
     return {
         site: { ...site, pages: site.pages.map((page) => pageDraft(site, page.key)) },
-        checklist: buildChecklist(site, templates, entries),
+        checklist: buildChecklist(site, templates, entries, gatewayReady),
         pageOptions: Object.fromEntries(site.pages.map((page) => [page.key, pageSectionOptions(page.layout)])),
     };
 }

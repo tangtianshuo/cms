@@ -108,6 +108,28 @@ test('a persisted request key cannot be retried with a changed immutable record 
         config, h.fetcher, () => snapshot), /immutable|record|version/i);
 });
 
+test('a ready intent from an adopted older version can be replaced by the next version publication', async () => {
+    const h = harness();
+    const first = await publishGatewayRelease(h.state, 'admin', '', requestKey, config, h.fetcher, () => snapshot);
+    const previousIntent = JSON.parse(h.site.gatewayPublishIntent || '{}');
+    h.site.gatewayPublishIntent = JSON.stringify({ ...previousIntent, status: 'ready' });
+    const nextRecord = { ...record, version: '1.0.2', manifestPath: 'templates/aeroframe/1.0.2/template.json',
+        manifestChecksum: `sha256:${'e'.repeat(64)}`, imageDigest: `sha256:${'f'.repeat(64)}` };
+    h.site.presetVersion = '1.0.2';
+    h.site.publishedTemplateRecord = JSON.stringify(nextRecord);
+    h.site.presetManifestSnapshot = JSON.stringify({ id: 'aeroframe', version: '1.0.2' });
+    const fetcher = async (url: string | URL | Request, init?: RequestInit) => {
+        const value = String(url);
+        if (value.endsWith('/template-pin')) return Response.json({ ...nextRecord, templateId: nextRecord.id, templateVersion: nextRecord.version });
+        return h.fetcher(url, init);
+    };
+    const next = await publishGatewayRelease(h.state, 'admin', '', requestKey.replace('3333', '5555'), config, fetcher, () => snapshot);
+    assert.notEqual(next.releaseId, first.releaseId);
+    const nextIntent = JSON.parse(h.site.gatewayPublishIntent || '{}');
+    assert.equal(nextIntent.record.version, '1.0.2');
+    assert.equal(nextIntent.requestKey, requestKey.replace('3333', '5555'));
+});
+
 test('Gateway revision conflict becomes terminal and a new explicit action reads a fresh revision', async () => {
     const h = harness();
     let revision = 9;

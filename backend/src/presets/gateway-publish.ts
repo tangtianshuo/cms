@@ -86,7 +86,7 @@ function parseIntent(site: SiteInstallation): GatewayPublishIntent | null {
         const intent = JSON.parse(site.gatewayPublishIntent) as GatewayPublishIntent;
         if (typeof intent.requestKey !== 'string' || typeof intent.releaseId !== 'string' || typeof intent.snapshot !== 'string' ||
             typeof intent.checksum !== 'string' || !Number.isSafeInteger(intent.revision) ||
-            !intent.record || intent.record.id !== site.presetId || intent.record.version !== site.presetVersion) throw new Error();
+            !intent.record || intent.record.id !== site.presetId || typeof intent.record.version !== 'string') throw new Error();
         return intent;
     } catch { throw new Error('Stored Gateway publication intent is invalid'); }
 }

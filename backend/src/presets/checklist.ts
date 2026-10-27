@@ -24,6 +24,7 @@ export function buildChecklist(
     site: SiteInstallation,
     templates: Record<string, Template | undefined>,
     entries: Record<string, Entry[] | undefined>,
+    gatewayPublishReady = false,
 ): ChecklistStep[] {
     const steps: ChecklistStep[] = [{
         key: 'theme', complete: site.status === 'ready', available: true, count: site.status === 'ready' ? 1 : 0,
@@ -43,7 +44,8 @@ export function buildChecklist(
             href: model ? `/d/template/${model.templateId}/entry/${validEntries[0]?._id || 'create'}` : '',
         });
     }
-    steps.push({ key: 'publish', complete: !!site.currentReleaseId, available: true,
-        count: site.currentReleaseId ? 1 : 0, href: '/d/presets#releases' });
+    const published = !!site.currentReleaseId || gatewayPublishReady;
+    steps.push({ key: 'publish', complete: published, available: true,
+        count: published ? 1 : 0, href: '/d/presets#releases' });
     return steps;
 }

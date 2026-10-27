@@ -42,3 +42,13 @@ test('checklist links to generated editors and counts only valid entries', () =>
     site.currentReleaseId = 'release';
     assert.equal(buildChecklist(site, {}, {}).find((step) => step.key === 'publish')?.complete, true);
 });
+
+test('checklist accepts a Gateway-ready publication without changing local release state', () => {
+    const site = { _id: 'site', createdAt: 1, updatedAt: 1, slot: 'default', name: 'Site', presetId: 'aeroframe',
+        presetVersion: '1.0.1', status: 'ready' as const, importError: '', includeDemo: false, demoSeeded: false,
+        theme: { background: '#000000', foreground: '#ffffff', accent: '#111111', muted: '#222222', font: 'Arial' },
+        models: [], pages: [], currentReleaseId: '' } satisfies SiteInstallation;
+    assert.equal(buildChecklist(site, {}, {}).find((step) => step.key === 'publish')?.complete, false);
+    assert.equal(buildChecklist(site, {}, {}, true).find((step) => step.key === 'publish')?.complete, true);
+    assert.equal(site.currentReleaseId, '');
+});
