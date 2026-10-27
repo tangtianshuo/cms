@@ -11,6 +11,8 @@ import { TemplateFactory } from '../template/factory';
 import { getPreset, type PresetField, type PresetManifest, type PresetModel } from './catalog';
 import type { SiteInstallation } from './site-model';
 import { pageDraft } from './pages';
+import type { PublicTemplateRecord, VerifiedPublicTemplate } from './registry';
+import { resolveInstalledPreset } from './installed';
 
 export interface ImportSource {
     findSite(): Promise<SiteInstallation | null>;
@@ -28,6 +30,9 @@ export interface ImportSource {
 export interface ImportPlan {
     presetId: string;
     version: string;
+    manifestChecksum?: string;
+    sourceCommit?: string;
+    imageDigest?: string;
     models: Array<{ key: string; name: string; action: 'create' | 'reuse' | 'update' | 'conflict'; reason?: string }>;
     pages: PresetManifest['pages'];
 }
@@ -131,14 +136,19 @@ async function seedDemo(site: SiteInstallation, preset: PresetManifest, source: 
 }
 
 export async function importPreset(
-    input: { presetId: string; siteName: string; includeDemo: boolean }, source: ImportSource,
+    input: { presetId: string; presetVersion?: string; siteName: string; includeDemo: boolean }, source: ImportSource,
+    selected?: VerifiedPublicTemplate,
 ): Promise<SiteInstallation> {
-    const preset = getPreset(input.presetId);
+    const preset = selected?.manifest || getPreset(input.presetId, input.presetVersion);
     if (!preset) throw new Error('Unknown preset');
+    if (preset.id !== input.presetId || (input.presetVersion && preset.version !== input.presetVersion)) throw new Error('Selected preset identity mismatch');
     const siteName = input.siteName.trim();
     if (!siteName || siteName.length > 80) throw new Error('Site name must be 1-80 characters');
     const current = await source.findSite();
     if (current?.presetId && current.presetId !== preset.id) throw new Error('Another preset is already installed');
+    if (current?.presetId === preset.id && current.presetVersion && current.presetVersion !== preset.version) {
+        throw new Error('Adopting a newer template version requires an explicit adoption');
+    }
     if (current?.status === 'ready') return current;
     if (current?.status === 'importing' && Date.now() - current.updatedAt < 120000) return current;
     const plan = await planImport(preset, source);
@@ -146,6 +156,8 @@ export async function importPreset(
     let site: SiteInstallation = current || {
         workspaceId: 'default', _id: new ObjectId().toString(), createdAt: Date.now(), updatedAt: Date.now(), slot: 'default',
         name: siteName, presetId: preset.id, presetVersion: preset.version, status: 'importing',
+        presetManifestSnapshot: selected ? JSON.stringify(preset) : undefined,
+        publishedTemplateRecord: selected ? JSON.stringify(publicRecord(selected)) : undefined,
         importError: '', includeDemo: input.includeDemo, demoSeeded: false,
         theme: { ...preset.theme }, models: [],
         pages: preset.pages.map((page) => ({ ...page, status: 'draft' as const })),
@@ -153,7 +165,9 @@ export async function importPreset(
     site.contentGroupId ||= site._id;
     if (!current) site.pages = site.pages.map((page) => pageDraft(site, page.key) as NonNullable<ReturnType<typeof pageDraft>>);
     if (current) {
-        site = { ...current, ...(current.status === 'empty' ? { name: siteName, presetId: preset.id, presetVersion: preset.version, includeDemo: input.includeDemo, theme: { ...preset.theme }, pages: preset.pages.map(page => ({ ...page, status: 'draft' as const })) } : {}), status: 'importing', importError: '', updatedAt: Date.now() };
+        site = { ...current, ...(current.status === 'empty' ? { name: siteName, presetId: preset.id, presetVersion: preset.version, includeDemo: input.includeDemo, theme: { ...preset.theme }, pages: preset.pages.map(page => ({ ...page, status: 'draft' as const })),
+            presetManifestSnapshot: selected ? JSON.stringify(preset) : undefined,
+            publishedTemplateRecord: selected ? JSON.stringify(publicRecord(selected)) : undefined } : {}), status: 'importing', importError: '', updatedAt: Date.now() };
         site.pages = site.pages.map(page => pageDraft(site, page.key)!);
         if (source.claimSite) {
             if (!await source.claimSite(site, current.updatedAt)) {
@@ -234,4 +248,55 @@ export async function importPreset(
         await source.updateSite(site);
         throw error;
     }
+}
+
+function publicRecord(template: VerifiedPublicTemplate): PublicTemplateRecord {
+    const { manifest: _manifest, ...record } = template;
+    return record;
+}
+
+export async function adoptPublicTemplate(input: {
+    presetId: string; presetVersion: string; expectedUpdatedAt: number;
+}, source: ImportSource, selected: VerifiedPublicTemplate): Promise<SiteInstallation> {
+    const site = await source.findSite();
+    if (!site || site.status !== 'ready' || site.presetId !== input.presetId || selected.id !== input.presetId ||
+        selected.version !== input.presetVersion) throw new Error('Only a compatible version of the installed template can be adopted');
+    if (!Number.isSafeInteger(input.expectedUpdatedAt) || site.updatedAt !== input.expectedUpdatedAt) throw new Error('Site changed; refresh before adopting');
+    if (site.gatewayPublishIntent) {
+        try {
+            const intent = JSON.parse(site.gatewayPublishIntent) as { status?: string; operationId?: string };
+            if (intent.status === 'pending' || intent.status === undefined && !intent.operationId) {
+                throw new Error('A Gateway publication is still pending; wait before adopting another version');
+            }
+        } catch (cause) {
+            if (cause instanceof Error && cause.message.includes('still pending')) throw cause;
+            throw new Error('Stored Gateway publication intent is invalid');
+        }
+    }
+    const installed = resolveInstalledPreset(site);
+    const signature = (preset: PresetManifest) => JSON.stringify({
+        models: preset.models.map((model) => ({ key: model.key, singleEntry: model.singleEntry,
+            fields: model.fields.map(({ key, type, required, array, referenceModel }) => ({ key, type, required, array, referenceModel })) })),
+        pages: preset.pages.map(({ key, path, modelKey, layout }) => ({ key, path, modelKey, layout })),
+    });
+    if (signature(installed) !== signature(selected.manifest)) throw new Error('Public template schema changes require a new installation');
+    for (const model of selected.manifest.models) {
+        const mapping = site.models.find((item) => item.key === model.key);
+        const template = mapping ? await source.findTemplate(templateName(model.key, site.templateNamespace)) : null;
+        if (!mapping || !template || template._id !== mapping.templateId) throw new Error(`Missing existing model ${model.key}`);
+        if (template.singleEntry !== model.singleEntry) throw new Error(`Existing model ${model.key} is incompatible`);
+        for (const field of model.fields) {
+            const mapped = mapping.fields.find((item) => item.key === field.key);
+            const prop = mapped && template.props.find((item) => item.id === mapped.propId);
+            if (!mapped || !prop || prop.name !== field.key || prop.type !== field.type ||
+                prop.required !== field.required || prop.array !== field.array) throw new Error(`Existing field ${model.key}.${field.key} is incompatible`);
+        }
+    }
+    const updated: SiteInstallation = {
+        ...site, presetVersion: selected.version,
+        presetManifestSnapshot: JSON.stringify(selected.manifest),
+        publishedTemplateRecord: JSON.stringify(publicRecord(selected)), updatedAt: Math.max(Date.now(), site.updatedAt + 1),
+    };
+    if (!source.claimSite || !await source.claimSite(updated, input.expectedUpdatedAt)) throw new Error('Site changed; refresh before adopting');
+    return (await source.findSite())!;
 }

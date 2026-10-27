@@ -13,8 +13,12 @@ interface PresetSummary {
     name: string;
     description: string;
     heroImage: string;
+    sourceCommit?: string;
+    manifestChecksum?: string;
     theme: { background: string; foreground: string; accent: string; muted: string; font: string };
 }
+
+const presetKey = (item: PresetSummary) => `${item.id}@${item.version}:${item.sourceCommit || 'builtin'}`;
 
 type DemoView = 'home' | 'collection' | 'product' | 'page';
 
@@ -23,7 +27,7 @@ export const PresetsView = defineComponent({
         const { t } = useI18n();
         const sdk = window.bcms.sdk;
         const catalog = ref<PresetSummary[]>([]);
-        const selectedId = ref('');
+        const selectedKey = ref('');
         const site = ref<SiteInstallation | null>(null);
         const pageOptions = ref<Record<string, { allowed: string[]; required: string }>>({});
         const checklist = ref<ChecklistStep[]>([]);
@@ -36,18 +40,22 @@ export const PresetsView = defineComponent({
         const busy = ref(false);
         const error = ref('');
         let refreshTimer: ReturnType<typeof setInterval> | undefined;
-        const origin = new URL(import.meta.env.VITE_STOREFRONT_ORIGIN || 'http://localhost:3000').origin;
+        const origin = import.meta.env.VITE_STOREFRONT_ORIGIN ? new URL(import.meta.env.VITE_STOREFRONT_ORIGIN).origin : '';
 
-        const selected = computed(() => catalog.value.find((item) => item.id === selectedId.value));
+        const selected = computed(() => catalog.value.find((item) => presetKey(item) === selectedKey.value));
         const conflicts = computed(() => plan.value?.models.filter((item) => item.action === 'conflict') || []);
-        const otherSite = computed(() => !!site.value?.presetId && site.value.presetId !== selectedId.value);
-        const installed = computed(() => site.value?.status === 'ready' && site.value.presetId === selectedId.value);
+        const otherSite = computed(() => !!site.value?.presetId && site.value.presetId !== selected.value?.id);
+        const sameTemplate = computed(() => site.value?.status === 'ready' && site.value.presetId === selected.value?.id);
+        const installed = computed(() => sameTemplate.value && site.value?.presetVersion === selected.value?.version &&
+            (!!site.value?.publishedTemplateRecord === !!selected.value?.sourceCommit));
+        const canAdopt = computed(() => sameTemplate.value && !installed.value && !!selected.value?.sourceCommit && !!plan.value &&
+            !busy.value && !!sdk.context?.context.admin && conflicts.value.length === 0);
         const importInProgress = computed(() => site.value?.status === 'importing' &&
             Date.now() - site.value.updatedAt < 120000);
         const importOptionsLocked = computed(() => busy.value || (!!site.value && site.value.status !== 'empty'));
-        const canImport = computed(() => !!sdk.context?.context.admin && !!sdk.context?.context.siteId && !!selected.value && !!plan.value && !busy.value && !installed.value &&
+        const canImport = computed(() => !!sdk.context?.context.admin && !!sdk.context?.context.siteId && !!selected.value && !!plan.value && !busy.value && !sameTemplate.value && !installed.value &&
             !importInProgress.value && !otherSite.value && conflicts.value.length === 0 && name.value.trim().length > 0);
-        const previewUrl = computed(() => selected.value
+        const previewUrl = computed(() => selected.value && origin && !selected.value.sourceCommit
             ? `${origin}/presets/${encodeURIComponent(selected.value.id)}?view=${view.value}` : '');
 
         async function refreshSite() {
@@ -58,20 +66,29 @@ export const PresetsView = defineComponent({
             site.value = result.site;
             checklist.value = result.checklist;
             pageOptions.value = result.pageOptions;
+            if (result.site?.publishedTemplateRecord && result.site.presetManifestSnapshot) {
+                try {
+                    const record = JSON.parse(result.site.publishedTemplateRecord) as { sourceCommit: string; manifestChecksum: string };
+                    const manifest = JSON.parse(result.site.presetManifestSnapshot) as PresetSummary & { demo: { hero: { image: string } } };
+                    const installedSummary: PresetSummary = { ...manifest, ...record, heroImage: manifest.demo.hero.image };
+                    if (!catalog.value.some((item) => presetKey(item) === presetKey(installedSummary))) catalog.value.push(installedSummary);
+                } catch { /* The backend reports invalid persisted template data during validation. */ }
+            }
             if (result.site) name.value = result.site.name;
             if (result.site && result.site.status !== 'empty') includeDemo.value = result.site.includeDemo;
         }
 
-        async function choosePreset(id: string) {
-            selectedId.value = id;
+        async function choosePreset(item: PresetSummary) {
+            const key = presetKey(item);
+            selectedKey.value = key;
             view.value = 'home';
             plan.value = null;
             error.value = '';
             try {
                 const result = await sdk.send<{ plan: ImportPlan; installedSite: SiteInstallation | null }>({
-                    url: `/api/v4/presets/plan/${encodeURIComponent(id)}`, method: 'GET',
+                    url: `/api/v4/presets/plan/${encodeURIComponent(item.id)}${item.sourceCommit ? `?version=${encodeURIComponent(item.version)}` : ''}`, method: 'GET',
                 });
-                if (selectedId.value === id) {
+                if (selectedKey.value === key) {
                     plan.value = result.plan;
                     if (result.installedSite && !site.value) site.value = result.installedSite;
                 }
@@ -87,7 +104,8 @@ export const PresetsView = defineComponent({
             try {
                 const result = await sdk.send<SiteInstallation>({
                     url: '/api/v4/presets/import', method: 'POST',
-                    data: { presetId: selectedId.value, siteName: name.value.trim(), includeDemo: includeDemo.value },
+                    data: { presetId: selected.value!.id, siteName: name.value.trim(), includeDemo: includeDemo.value, mode: 'import',
+                        ...(selected.value!.sourceCommit ? { presetVersion: selected.value!.version, manifestChecksum: selected.value!.manifestChecksum } : {}) },
                 });
                 site.value = result;
                 await sdk.template.getAll({ skipCache: true });
@@ -100,18 +118,39 @@ export const PresetsView = defineComponent({
             }
         }
 
+        async function adoptSelected() {
+            if (!canAdopt.value || !selected.value || !site.value) return;
+            busy.value = true;
+            error.value = '';
+            try {
+                await sdk.send<SiteInstallation>({ url: '/api/v4/presets/import', method: 'POST', data: {
+                    presetId: selected.value.id, presetVersion: selected.value.version,
+                    manifestChecksum: selected.value.manifestChecksum,
+                    mode: 'adopt', expectedUpdatedAt: site.value.updatedAt,
+                } });
+                await refreshSite();
+                window.bcms.notification.success(t('presets.versionAdopted'));
+            } catch (cause) {
+                error.value = (cause as Error).message;
+                await refreshSite();
+            } finally { busy.value = false; }
+        }
+
         onMounted(async () => {
             refreshTimer = setInterval(() => {
                 if (site.value?.status === 'importing') refreshSite().catch(() => undefined);
             }, 3000);
             try {
-                const result = await sdk.send<{ items: PresetSummary[] }>({
+                const result = await sdk.send<{ items: PresetSummary[]; registryError?: string }>({
                     url: '/api/v4/presets/catalog', method: 'GET',
                 });
                 catalog.value = result.items;
+                if (result.registryError) error.value = t('presets.registryUnavailable');
                 await refreshSite();
-                const first = site.value?.presetId || result.items[0]?.id;
+                const first = catalog.value.find((item) => item.id === site.value?.presetId && item.version === site.value?.presetVersion &&
+                    (!!item.sourceCommit === !!site.value?.publishedTemplateRecord)) || catalog.value[0];
                 if (first) await choosePreset(first);
+                if (result.registryError) error.value = t('presets.registryUnavailable');
             } catch (cause) {
                 error.value = (cause as { message?: string }).message || t('presets.loadError');
             } finally {
@@ -132,7 +171,7 @@ export const PresetsView = defineComponent({
                         <p class="mt-2 max-w-2xl text-sm text-dark/70 dark:text-light/70">{t('presets.subtitle')}</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-4">
-                        {site.value?.status === 'ready' && <a
+                        {site.value?.status === 'ready' && origin && <a
                             href={`/d/presets/site-preview?workspaceId=${encodeURIComponent(sdk.context?.context.workspaceId || '')}&siteId=${encodeURIComponent(sdk.context?.context.siteId || '')}`}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -140,7 +179,7 @@ export const PresetsView = defineComponent({
                             {t('presets.previewDraftSite')}
                         </a>}
                         {site.value?.status === 'ready' && (
-                            <span class="text-sm text-green dark:text-yellow">{t('presets.installed', { name: site.value.name })}</span>
+                            <span class="text-sm text-green dark:text-yellow">{t('presets.installed', { name: site.value.name })} · v{site.value.presetVersion}</span>
                         )}
                     </div>
                 </div>
@@ -154,13 +193,14 @@ export const PresetsView = defineComponent({
                                     {catalog.value.map((item) => (
                                         <button
                                             type="button"
-                                            aria-pressed={selectedId.value === item.id}
-                                            onClick={() => choosePreset(item.id)}
-                                            class={`overflow-hidden rounded-md border bg-white text-left shadow-sm transition-colors dark:bg-darkGray ${selectedId.value === item.id ? 'border-green dark:border-yellow' : 'border-gray/60 dark:border-gray'}`}
+                                            aria-pressed={selectedKey.value === presetKey(item)}
+                                            onClick={() => choosePreset(item)}
+                                            class={`overflow-hidden rounded-md border bg-white text-left shadow-sm transition-colors dark:bg-darkGray ${selectedKey.value === presetKey(item) ? 'border-green dark:border-yellow' : 'border-gray/60 dark:border-gray'}`}
                                         >
                                             <img src={item.heroImage} alt="" class="h-36 w-full object-cover" />
                                             <span class="block p-4">
-                                                <strong class="block text-base">{item.name}</strong>
+                                                <strong class="block text-base">{item.name} <span class="text-xs">v{item.version}</span></strong>
+                                                <span class="mt-1 block text-xs">{t(item.sourceCommit ? 'presets.publicSource' : 'presets.builtinSource')}</span>
                                                 <span class="mt-1 block text-xs opacity-70">{item.description}</span>
                                                 <span class="mt-3 flex gap-2" aria-label={t('presets.colors')}>
                                                     {[item.theme.background, item.theme.foreground, item.theme.accent].map((color) => (
@@ -178,29 +218,32 @@ export const PresetsView = defineComponent({
                                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                                         <div>
                                             <h2 class="text-xl font-semibold">{selected.value.name}</h2>
-                                            <span class="text-xs opacity-60">v{selected.value.version}</span>
+                                            <span class="text-xs opacity-60">v{selected.value.version} · {t(selected.value.sourceCommit ? 'presets.publicSource' : 'presets.builtinSource')}</span>
+                                            {selected.value.sourceCommit && <p class="mt-1 text-xs opacity-60">{t('presets.templateSource')} {selected.value.sourceCommit.slice(0, 8)}</p>}
                                         </div>
-                                        <div class="flex gap-1 rounded-md border border-gray/60 p-1 dark:border-gray" role="group" aria-label={t('presets.viewport')}>
+                                        {previewUrl.value && <div class="flex gap-1 rounded-md border border-gray/60 p-1 dark:border-gray" role="group" aria-label={t('presets.viewport')}>
                                             {(['desktop', 'mobile'] as const).map((mode) => (
                                                 <button type="button" aria-pressed={viewport.value === mode} onClick={() => { viewport.value = mode; }}
                                                     class={`rounded px-3 py-1.5 text-sm ${viewport.value === mode ? 'bg-dark text-white dark:bg-light dark:text-dark' : ''}`}>
                                                     {t(`presets.${mode}`)}
                                                 </button>
                                             ))}
-                                        </div>
+                                        </div>}
                                     </div>
-                                    <div class="mb-3 flex flex-wrap gap-1 border-b border-gray/60 dark:border-gray" role="tablist">
+                                    {previewUrl.value && <div class="mb-3 flex flex-wrap gap-1 border-b border-gray/60 dark:border-gray" role="tablist">
                                         {views.map((item) => (
                                             <button type="button" role="tab" aria-selected={view.value === item} onClick={() => { view.value = item; }}
                                                 class={`border-b-2 px-4 py-2 text-sm ${view.value === item ? 'border-green font-semibold dark:border-yellow' : 'border-transparent opacity-70'}`}>
                                                 {t(`presets.views.${item}`)}
                                             </button>
                                         ))}
-                                    </div>
+                                    </div>}
                                     <div class="flex h-[620px] justify-center overflow-hidden border border-gray/60 bg-white dark:border-gray" >
-                                        <iframe key={previewUrl.value} title={t('presets.previewTitle', { name: selected.value.name })}
+                                        {previewUrl.value ? <iframe key={previewUrl.value} title={t('presets.previewTitle', { name: selected.value.name })}
                                             src={previewUrl.value} class="h-full border-0 bg-white"
-                                            style={{ width: viewport.value === 'mobile' ? '390px' : '100%', maxWidth: '100%' }} />
+                                            style={{ width: viewport.value === 'mobile' ? '390px' : '100%', maxWidth: '100%' }} /> :
+                                            <div class="flex w-full flex-col"><img src={selected.value.heroImage} alt={selected.value.name} class="min-h-0 flex-1 object-cover" />
+                                                <p class="p-4 text-sm text-dark">{t('presets.publicPreviewHint')}</p></div>}
                                     </div>
                                 </section>
                             )}
@@ -228,7 +271,11 @@ export const PresetsView = defineComponent({
                                 )}
                                 {otherSite.value && <p class="mt-4 text-sm text-red">{t('presets.otherSite')}</p>}
                                 {conflicts.value.length > 0 && <p class="mt-4 text-sm text-red">{t('presets.conflict')}</p>}
-                                {installed.value ? <p class="mt-5 text-sm text-green dark:text-yellow">{t('presets.alreadyInstalled')}</p> : (
+                                {sameTemplate.value && !installed.value && selected.value.sourceCommit && <div class="mt-5">
+                                    <p class="mb-3 text-sm opacity-70">{t('presets.adoptHint', { version: selected.value.version })}</p>
+                                    <Button disabled={!canAdopt.value} onClick={adoptSelected}>{t('presets.adoptVersion', { version: selected.value.version })}</Button>
+                                </div>}
+                                {installed.value ? <p class="mt-5 text-sm text-green dark:text-yellow">{t('presets.alreadyInstalled')}</p> : !sameTemplate.value && (
                                     <div class="mt-6 flex flex-wrap items-end gap-5">
                                         <label class="block min-w-[220px] flex-1 text-sm">
                                             <span class="mb-1 block">{t('presets.siteName')}</span>
@@ -248,9 +295,9 @@ export const PresetsView = defineComponent({
                             </section>
                         )}
 
-                        {site.value?.status === 'ready' && site.value.presetId === selectedId.value &&
+                        {site.value?.status === 'ready' && site.value.presetId === selected.value?.id &&
                             <PageDraftEditor site={site.value} pageOptions={pageOptions.value} onSaved={refreshSite} />}
-                        {installed.value && <ReleaseManager onSaved={refreshSite} />}
+                        {sameTemplate.value && <ReleaseManager key={site.value!._id} onSaved={refreshSite} />}
 
                         {site.value && (
                             <section class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">

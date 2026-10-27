@@ -138,6 +138,18 @@ export const zhCN: typeof en = {
         "provenance": "复制自工作区 {workspace}，资源 {resource}，版本 {version}。此副本独立于源内容。"
     },
     presets: {
+        checkGatewayRelease: '校验待发布内容',
+        registryUnavailable: '暂时无法获取公开模板目录。已安装站点仍可继续编辑。',
+        publicSource: "公开模板",
+        builtinSource: "内置模板",
+        templateSource: "源码版本：",
+        publicPreviewHint: "模板展示图。导入后可在内容编辑器中修改页面，并校验发布。",
+        adoptHint: "采用 v{version} 会保留现有内容、页面和主题设置。发布后新模板才会在独立站生效。",
+        adoptVersion: "采用 v{version}",
+        versionAdopted: "已采用模板版本，现有内容已保留。",
+        gatewayReleaseHint: "先采用公开模板并保存内容，再校验发布。部署通过后会自动更新独立站。",
+        gatewayNotPublished: "尚未通过此发布流程发布。",
+        gatewayStatus: {"pending": "正在部署并检查首页，请稍候…", "ready": "发布成功，独立站已更新。", "failed": "发布失败，原有站点继续提供服务。"},
         title: '独立站预制模版',
         subtitle: '选择整站设计，并生成建站所需的内容模型。',
         colors: '主题颜色',

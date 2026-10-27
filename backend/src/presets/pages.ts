@@ -1,5 +1,5 @@
 import type { Entry } from '../entry/models/main';
-import { getPreset } from './catalog';
+import { resolveInstalledPreset } from './installed';
 import type { SiteInstallation, SitePage } from './site-model';
 
 const sectionOptions: Record<string, { allowed: string[]; required: string }> = {
@@ -63,8 +63,8 @@ export function updatePageDraft(
 ): SiteInstallation {
     const page = pageDraft(site, key);
     if (!page) throw new Error('Page not found');
-    const preset = getPreset(site.presetId, site.presetVersion);
-    if (!preset || !preset.pages.some((item) => item.key === (page.blueprintKey || key) &&
+    const preset = resolveInstalledPreset(site);
+    if (!preset.pages.some((item) => item.key === (page.blueprintKey || key) &&
         item.layout === page.layout && item.modelKey === page.modelKey)) {
         throw new Error('Unsupported preset page');
     }
@@ -123,8 +123,8 @@ export function createPageDraft(site: SiteInstallation, key: string,
     if (!/^[a-z0-9-]{1,80}$/.test(key) || site.pages.some((page) => page.key === key)) {
         throw new Error('Invalid or duplicate page key');
     }
-    const preset = getPreset(site.presetId, site.presetVersion);
-    const blueprint = preset?.pages.find((page) => page.key === input.blueprintKey);
+    const preset = resolveInstalledPreset(site);
+    const blueprint = preset.pages.find((page) => page.key === input.blueprintKey);
     if (!blueprint || blueprint.layout === 'home') throw new Error('Unsupported page blueprint');
     if (!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(input.path)) {
         if (reservedPathSegments.has(input.path.split('/')[1])) throw new Error('Page path is reserved');

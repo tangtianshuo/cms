@@ -1,6 +1,7 @@
 import type { Entry } from '../entry/models/main';
 import type { Media } from '../media/models/main';
-import { getPreset, type PresetManifest } from '../presets/catalog';
+import { type PresetManifest } from '../presets/catalog';
+import { resolveInstalledPreset } from '../presets/installed';
 import { pageDraft } from '../presets/pages';
 import type { SiteInstallation } from '../presets/site-model';
 
@@ -35,7 +36,7 @@ function fieldData(site: SiteInstallation, modelKey: string, entry: Entry | unde
     const meta = entry.meta.find((item) => item.lng === language);
     if (!meta) throw new Error('Entry has no data for selected language');
     const value = meta.props.find((item) => item.id === field.propId);
-    const preset = getPreset(site.presetId, site.presetVersion);
+    const preset = resolveInstalledPreset(site);
     const required = preset?.models.find((model) => model.key === modelKey)?.fields
         .find((item) => item.key === fieldKey)?.required;
     if (!value && required) throw new Error(`Missing bound field ${fieldKey}`);
@@ -81,9 +82,9 @@ function pointer(site: SiteInstallation, modelKey: string, entry: Entry | undefi
 export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePreview {
     const { site, entry, language } = input;
     if (site.status !== 'ready') throw new Error('Site import is not ready');
-    const manifest = getPreset(site.presetId, site.presetVersion);
+    const manifest = resolveInstalledPreset(site);
     const page = pageDraft(site, input.pageKey);
-    if (!manifest || !page) throw new Error('Unknown preset page');
+    if (!page) throw new Error('Unknown preset page');
     if (!input.availableLanguages.includes(language)) throw new Error('Invalid preview language');
     const selectedModel = site.models.find((model) => model.templateId === entry.templateId);
     if (!selectedModel || (selectedModel.key !== page.modelKey && selectedModel.key !== 'site-settings')) {

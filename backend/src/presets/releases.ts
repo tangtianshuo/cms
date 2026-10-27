@@ -6,7 +6,7 @@ import type { Media } from '../media/models/main';
 import { PropType } from '../prop/models/main';
 import type { Template } from '../template/models/main';
 import { previewPresetPage, type PresetPagePreview } from '../storefront/preset-preview';
-import { getPreset } from './catalog';
+import { resolveInstalledPreset } from './installed';
 import { pageDraft, updatePageDraft } from './pages';
 import type { SiteInstallation } from './site-model';
 
@@ -85,8 +85,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
     }
     const { site, language } = input;
     if (site.status !== 'ready') throw new Error('Site import is not ready');
-    const preset = getPreset(site.presetId, site.presetVersion);
-    if (!preset) throw new Error('Theme version is unavailable');
+    const preset = resolveInstalledPreset(site);
     if (!site.pages.some((page) => page.layout === 'home' && page.enabled !== false)) {
         throw new Error('Home page is required');
     }

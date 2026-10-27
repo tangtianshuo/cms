@@ -7,13 +7,18 @@ import { Repo } from '../repo';
 import { RP } from '../security/route-protection/main';
 import { buildChecklist } from './checklist';
 import { getPreset, listPresets } from './catalog';
-import { importPreset, planImport, type ImportSource } from './import';
+import { adoptPublicTemplate, importPreset, planImport, type ImportSource } from './import';
+import { getPublicRegistry, getPublicTemplate } from './registry';
 import { createPageDraft, pageDraft, pageSectionOptions, updatePageDraft } from './pages';
 
 const importBody = z.object({
     presetId: z.string().min(1),
-    siteName: z.string().trim().min(1).max(80),
-    includeDemo: z.boolean(),
+    presetVersion: z.string().regex(/^\d+\.\d+\.\d+$/).optional(),
+    manifestChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+    siteName: z.string().trim().min(1).max(80).optional(),
+    includeDemo: z.boolean().optional(),
+    mode: z.enum(['import', 'adopt']).optional(),
+    expectedUpdatedAt: z.number().int().nonnegative().optional(),
 }).strict();
 
 const pageBody = z.object({
@@ -65,13 +70,31 @@ export const PresetController = createController({
         return {
             catalog: createControllerMethod({
                 path: '/catalog', type: 'get',
-                async handler() { return { items: listPresets() }; },
+                async handler() {
+                    try {
+                        const registry = await getPublicRegistry(globalThis.fetch);
+                        const publicItems = registry.records.map((record) => ({
+                            id: record.id, version: record.version, name: record.manifest.name,
+                            description: record.manifest.description, theme: record.manifest.theme,
+                            heroImage: record.manifest.demo.hero.image, sourceCommit: record.sourceCommit,
+                            manifestChecksum: record.manifestChecksum, imageDigest: record.imageDigest,
+                            imageRepository: record.imageRepository,
+                        }));
+                        return { items: [...listPresets().filter((item) => !publicItems.some((publicItem) => publicItem.id === item.id && publicItem.version === item.version)), ...publicItems],
+                            publicRegistryAvailable: true, registryError: '' };
+                    } catch (cause) {
+                        return { items: listPresets(), publicRegistryAvailable: false,
+                            registryError: cause instanceof Error ? cause.message : 'Public template registry unavailable' };
+                    }
+                },
             }),
             manifest: createControllerMethod({
                 path: '/catalog/:presetId', type: 'get',
                 async handler({ request, errorHandler }) {
                     const { presetId } = request.params as { presetId: string };
-                    const preset = getPreset(presetId);
+                    const version = (request.query as { version?: string })?.version;
+                    const publicTemplate = version ? await getPublicTemplate(presetId, version, globalThis.fetch) : null;
+                    const preset = publicTemplate?.manifest || getPreset(presetId, version);
                     if (!preset) throw errorHandler(HttpStatus.NotFound, 'Preset not found');
                     return preset;
                 },
@@ -81,10 +104,15 @@ export const PresetController = createController({
                 preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, errorHandler }) {
                     const { presetId } = request.params as { presetId: string };
-                    const preset = getPreset(presetId);
+                    const version = (request.query as { version?: string })?.version;
+                    const publicTemplate = version ? await getPublicTemplate(presetId, version, globalThis.fetch) : null;
+                    const preset = publicTemplate?.manifest || getPreset(presetId, version);
                     if (!preset) throw errorHandler(HttpStatus.NotFound, 'Preset not found');
+                    const plan = await planImport(preset, importSource());
+                    if (publicTemplate) Object.assign(plan, { manifestChecksum: publicTemplate.manifestChecksum,
+                        sourceCommit: publicTemplate.sourceCommit, imageDigest: publicTemplate.imageDigest });
                     return {
-                        plan: await planImport(preset, importSource()),
+                        plan,
                         installedSite: await Repo.siteInstallation.methods.findSelected(),
                     };
                 },
@@ -169,10 +197,23 @@ export const PresetController = createController({
                 preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, errorHandler }) {
                     const parsed = importBody.safeParse(request.body);
-                    if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid import request');
+                    if (!parsed.success || (parsed.data.mode === 'adopt' && (!parsed.data.presetVersion || parsed.data.expectedUpdatedAt === undefined)) ||
+                        (parsed.data.mode !== 'adopt' && !parsed.data.siteName)) throw errorHandler(HttpStatus.BadRequest, 'Invalid import request');
                     if (workspaceId() !== 'default' && !workspaceContext()?.siteId) throw errorHandler(HttpStatus.BadRequest, 'Create and select a site before installation');
                     try {
-                        return await withWorkspaceCreation({ kind: 'preset-import', resourceId: workspaceContext()?.siteId || 'default' }, () => importPreset(parsed.data, importSource()));
+                        const mode = parsed.data.mode || 'import';
+                        const selected = parsed.data.presetVersion ? await getPublicTemplate(parsed.data.presetId, parsed.data.presetVersion, globalThis.fetch) : null;
+                        if (parsed.data.presetVersion && (!selected || selected.manifestChecksum !== parsed.data.manifestChecksum)) {
+                            throw new Error('Public template version changed; refresh the catalog');
+                        }
+                        if (mode === 'adopt') {
+                            if (!selected) throw new Error('Only verified public versions can be adopted');
+                            return await adoptPublicTemplate({ presetId: parsed.data.presetId, presetVersion: parsed.data.presetVersion!,
+                                expectedUpdatedAt: parsed.data.expectedUpdatedAt! }, importSource(), selected);
+                        }
+                        return await withWorkspaceCreation({ kind: 'preset-import', resourceId: workspaceContext()?.siteId || 'default' }, () =>
+                            importPreset({ presetId: parsed.data.presetId, presetVersion: parsed.data.presetVersion,
+                                siteName: parsed.data.siteName!, includeDemo: parsed.data.includeDemo ?? false }, importSource(), selected || undefined));
                     } catch (cause) {
                         const message = cause instanceof Error ? cause.message : 'Import failed';
                         throw errorHandler(HttpStatus.BadRequest, message);

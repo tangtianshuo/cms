@@ -137,6 +137,18 @@ export const en = {
     },
 
     presets: {
+        checkGatewayRelease: 'Validate content',
+        registryUnavailable: 'The public catalog is temporarily unavailable. You can still edit your installed site.',
+        publicSource: "Public template",
+        builtinSource: "Built-in template",
+        templateSource: "Source revision:",
+        publicPreviewHint: "Template image. Import to edit page content, validate it, and publish.",
+        adoptHint: "Adopt v{version} while keeping your content, pages, and theme settings. Publish to apply the new template to your storefront.",
+        adoptVersion: "Adopt v{version}",
+        versionAdopted: "Template adopted. Your content has been preserved.",
+        gatewayReleaseHint: "Adopt a public template and save your content, then validate and publish. The storefront updates after deployment checks pass.",
+        gatewayNotPublished: "No publication through this flow yet.",
+        gatewayStatus: {"pending": "Deploying and checking the homepage…", "ready": "Published. Your storefront has been updated.", "failed": "Publication failed. The previous site remains available."},
         title: 'Storefront presets',
         subtitle: 'Choose a complete storefront design and create the content models for your site.',
         colors: 'Theme colors',
