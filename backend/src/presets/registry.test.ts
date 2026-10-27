@@ -34,17 +34,23 @@ test('canonical JSON uses binary key ordering and preserves arrays', () => {
 test('registry resolves branch commit, fetches index and verifies immutable manifest checksum', async () => {
     const pinned = { ...record, manifestChecksum: sha(manifest) };
     const requests: string[] = [];
+    const registryCommit = 'b'.repeat(40);
+    const rawRoot = 'https://raw.githubusercontent.com/tangtianshuo/Independent-Website-Templates';
     const fetcher = async (input: string | URL | Request) => {
         const url = String(input); requests.push(url);
-        if (url.includes('/commits/registry')) return Response.json({ sha: sourceCommit });
-        if (url.endsWith('/registry/index.json')) return Response.json({ schemaVersion: 1, records: [pinned] });
-        if (url.endsWith('/template.json')) return Response.json(manifest);
+        if (url.includes('/commits/registry')) return Response.json({ sha: registryCommit });
+        if (url === `${rawRoot}/${registryCommit}/registry/index.json`) return Response.json({ schemaVersion: 1, records: [pinned] });
+        if (url === `${rawRoot}/${sourceCommit}/${record.manifestPath}`) return Response.json(manifest);
         throw new Error(`Unexpected URL ${url}`);
     };
     const result = await readPublicRegistry(fetcher);
     assert.equal(result.records[0].version, '1.0.1');
     assert.equal(result.records[0].manifest.theme.accent, '#4f7dff');
-    assert.ok(requests.every((url) => url.startsWith('https://api.github.com/') || url.startsWith(`https://raw.githubusercontent.com/tangtianshuo/Independent-Website-Templates/${sourceCommit}/`)));
+    assert.deepEqual(requests, [
+        'https://api.github.com/repos/tangtianshuo/Independent-Website-Templates/commits/registry',
+        `${rawRoot}/${registryCommit}/registry/index.json`,
+        `${rawRoot}/${sourceCommit}/${record.manifestPath}`,
+    ]);
 });
 
 test('registry rejects tampered manifest and invalid source locations', async () => {

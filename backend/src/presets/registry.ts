@@ -221,8 +221,8 @@ export async function readPublicRegistry(fetcher: typeof fetch = fetch): Promise
     const branch = await readJson(fetcher, `https://api.github.com/repos/${OWNER}/${REPOSITORY}/commits/registry`);
     if (!object(branch) || typeof branch.sha !== 'string' || !/^[a-f0-9]{40}$/.test(branch.sha)) throw new Error('Registry branch commit is invalid');
     const commit = branch.sha;
-    const base = `https://raw.githubusercontent.com/${OWNER}/${REPOSITORY}/${commit}`;
-    const index = await readJson(fetcher, `${base}/registry/index.json`);
+    const rawRoot = `https://raw.githubusercontent.com/${OWNER}/${REPOSITORY}`;
+    const index = await readJson(fetcher, `${rawRoot}/${commit}/registry/index.json`);
     if (!object(index) || !hasOnlyKeys(index, ['schemaVersion', 'records']) || index.schemaVersion !== 1 || !Array.isArray(index.records)) throw new Error('Public template index is invalid');
     const seen = new Set<string>();
     const records: VerifiedPublicTemplate[] = [];
@@ -232,7 +232,7 @@ export async function readPublicRegistry(fetcher: typeof fetch = fetch): Promise
         const key = `${record.id}@${record.version}`;
         if (seen.has(key)) throw new Error('Duplicate public template version');
         seen.add(key);
-        const manifestValue = await readJson(fetcher, `${base}/${record.sourceCommit}/${record.manifestPath}`);
+        const manifestValue = await readJson(fetcher, `${rawRoot}/${record.sourceCommit}/${record.manifestPath}`);
         const checksum = `sha256:${createHash('sha256').update(canonicalJson(manifestValue), 'utf8').digest('hex')}`;
         if (checksum !== record.manifestChecksum) throw new Error('Public template manifest checksum mismatch');
         records.push({ ...record, manifest: normalizeManifest(manifestValue, record) });
