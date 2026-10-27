@@ -10,6 +10,7 @@ export interface SiteInstallation extends MongoDBEntry {
     name: string;
     presetId: string;
     presetVersion: string;
+    language?: string;
     presetManifestSnapshot?: string;
     publishedTemplateRecord?: string;
     gatewayPublishIntent?: string;
@@ -67,6 +68,7 @@ export const SiteInstallationSchema: ObjectSchema = {
     name: { __type: 'string', __required: true },
     presetId: { __type: 'string', __required: true },
     presetVersion: { __type: 'string', __required: true },
+    language: { __type: 'string', __required: false },
     presetManifestSnapshot: { __type: 'string', __required: false },
     publishedTemplateRecord: { __type: 'string', __required: false },
     gatewayPublishIntent: { __type: 'string', __required: false },

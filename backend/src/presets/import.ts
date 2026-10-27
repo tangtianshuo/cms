@@ -24,7 +24,7 @@ export interface ImportSource {
     updateTemplate(template: Template): Promise<Template>;
     findEntry(id: string): Promise<Entry | null>;
     addEntry(entry: Entry): Promise<Entry>;
-    language(): Promise<string>;
+    ensureEnglish(): Promise<void>;
 }
 
 export interface ImportPlan {
@@ -100,7 +100,7 @@ function demoValues(preset: PresetManifest, siteName: string): Record<string, Re
 }
 
 async function seedDemo(site: SiteInstallation, preset: PresetManifest, source: ImportSource): Promise<void> {
-    const language = await source.language();
+    const language = site.language || 'en';
     const values = demoValues(preset, site.name);
     for (const model of preset.models) {
         const id = demoEntryId(site._id, model.key);
@@ -156,6 +156,7 @@ export async function importPreset(
     let site: SiteInstallation = current || {
         workspaceId: 'default', _id: new ObjectId().toString(), createdAt: Date.now(), updatedAt: Date.now(), slot: 'default',
         name: siteName, presetId: preset.id, presetVersion: preset.version, status: 'importing',
+        language: 'en',
         presetManifestSnapshot: selected ? JSON.stringify(preset) : undefined,
         publishedTemplateRecord: selected ? JSON.stringify(publicRecord(selected)) : undefined,
         importError: '', includeDemo: input.includeDemo, demoSeeded: false,
@@ -165,7 +166,7 @@ export async function importPreset(
     site.contentGroupId ||= site._id;
     if (!current) site.pages = site.pages.map((page) => pageDraft(site, page.key) as NonNullable<ReturnType<typeof pageDraft>>);
     if (current) {
-        site = { ...current, ...(current.status === 'empty' ? { name: siteName, presetId: preset.id, presetVersion: preset.version, includeDemo: input.includeDemo, theme: { ...preset.theme }, pages: preset.pages.map(page => ({ ...page, status: 'draft' as const })),
+        site = { ...current, language: current.language || 'en', ...(current.status === 'empty' ? { name: siteName, presetId: preset.id, presetVersion: preset.version, language: 'en', includeDemo: input.includeDemo, theme: { ...preset.theme }, pages: preset.pages.map(page => ({ ...page, status: 'draft' as const })),
             presetManifestSnapshot: selected ? JSON.stringify(preset) : undefined,
             publishedTemplateRecord: selected ? JSON.stringify(publicRecord(selected)) : undefined } : {}), status: 'importing', importError: '', updatedAt: Date.now() };
         site.pages = site.pages.map(page => pageDraft(site, page.key)!);
@@ -189,6 +190,7 @@ export async function importPreset(
         }
     }
     try {
+        await source.ensureEnglish();
         const templates = new Map<string, Template>();
         for (const model of preset.models) {
             const existing = await source.findTemplate(templateName(model.key, site.templateNamespace));

@@ -9,6 +9,7 @@ import fastifyMongo from '@fastify/mongodb';
 import { JWTManager, JWTEncode, JWTError } from '../_server/modules/jwt';
 import { Config } from '../config';
 import { Repo } from '../repo';
+import { LanguageFactory } from '../language/factory';
 import { StorefrontController } from '../storefront/controller';
 import { PresetController } from './controller';
 import { ReleaseController } from './release-controller';
@@ -18,6 +19,9 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
     skip: !process.env.STOREFRONT_TEST_MONGO,
     timeout: 60000,
 }, async (context) => {
+    const previousLanguage = Config.storefrontLanguage;
+    Object.defineProperty(Config, 'storefrontLanguage', { value: 'zh' });
+    context.after(() => { Object.defineProperty(Config, 'storefrontLanguage', { value: previousLanguage }); });
     const fastify = Fastify();
     const database = `storefront_release_test_${randomUUID().replaceAll('-', '')}`;
     let storefront: ChildProcess | undefined;
@@ -59,7 +63,17 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
         return fastify.inject({ url: `/api/v4/storefront/published?${new URLSearchParams({ path: pagePath })}`,
             headers: { 'x-storefront-host': Config.storefrontHost } });
     }
+    await Repo.language.add(LanguageFactory.create({ code: 'zh', name: 'Chinese', nativeName: '中文', userId: 'integration-admin', default: true }));
     const installed = await admin('/api/v4/presets/import', { presetId: 'atelier', siteName: 'Integration Store', includeDemo: true }) as SiteInstallation;
+    const english = await Repo.language.methods.findByCode('en');
+    assert.ok(english, 'Import registers English even when only Chinese was configured');
+    assert.equal((await Repo.language.methods.findByCode('zh'))?.default, true);
+    assert.equal((await Repo.siteInstallation.methods.findSelected())?.language, 'en');
+    for (const model of installed.models) {
+        const entries = await Repo.entry.methods.findAllByTemplateId(model.templateId);
+        assert.ok(entries.length > 0);
+        assert.ok(entries.every(entry => entry.meta[0].lng === 'en' && entry.content[0].lng === 'en'));
+    }
     assert.equal((await publicPage('/')).statusCode, 404);
     const legacy = await fastify.inject({ url: '/api/v4/storefront/products/featured-product',
         headers: { authorization, 'x-storefront-host': Config.storefrontHost } });
@@ -68,6 +82,8 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
     assert.equal(check.valid, true, JSON.stringify(check));
     const first = await admin('/api/v4/presets/releases/publish', { expectedReleaseId: '' });
     const original = (await publicPage('/')).json();
+    assert.equal(original.language, 'en');
+    assert.equal((await admin('/api/v4/storefront/site-preview')).language, 'en');
     assert.equal(original.releaseId, first.releaseId);
     const home = installed.models.find((model) => model.key === 'home')!;
     const entry = (await Repo.entry.methods.findAllByTemplateId(home.templateId))[0];

@@ -23,7 +23,7 @@ export function releaseSource(): GatewayReleaseSource {
                 entries.push(...await Repo.entry.methods.findAllByTemplateId(model.templateId));
             }
             return { templates, entries, media: await Repo.media.findAll(),
-                language: Config.storefrontLanguage, currency: Config.storefrontCurrency,
+                language: site.language || Config.storefrontLanguage, currency: Config.storefrontCurrency,
                 mediaOrigin: Config.storefrontMediaOrigin };
         },
         findRelease: (id) => Repo.storefrontRelease.findById(id),

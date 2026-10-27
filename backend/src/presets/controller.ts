@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { createController, createControllerMethod, HttpStatus } from '../_server';
 import { Repo } from '../repo';
 import { RP } from '../security/route-protection/main';
+import { LanguageFactory } from '../language/factory';
 import { buildChecklist } from './checklist';
 import { getPreset, listPresets } from './catalog';
 import { adoptPublicTemplate, importPreset, planImport, type ImportSource } from './import';
@@ -44,7 +45,13 @@ export function importSource(): ImportSource {
         updateTemplate: (template) => Repo.template.update(template),
         findEntry: (id) => Repo.entry.findById(id),
         addEntry: (entry) => Repo.entry.add(entry),
-        language: async () => (await Repo.language.findAll())[0]?.code || 'en',
+        async ensureEnglish() {
+            if (await Repo.language.methods.findByCode('en')) return;
+            await Repo.language.add(LanguageFactory.create({
+                code: 'en', name: 'English', nativeName: 'English', userId: '__preset',
+                default: (await Repo.language.findAll()).length === 0,
+            }));
+        },
     };
 }
 

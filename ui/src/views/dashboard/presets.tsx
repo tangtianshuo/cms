@@ -26,6 +26,7 @@ export const PresetsView = defineComponent({
     setup() {
         const { t } = useI18n();
         const sdk = window.bcms.sdk;
+        const [, setLanguage] = window.bcms.useLanguage();
         const catalog = ref<PresetSummary[]>([]);
         const selectedKey = ref('');
         const site = ref<SiteInstallation | null>(null);
@@ -59,11 +60,13 @@ export const PresetsView = defineComponent({
             ? `${origin}/presets/${encodeURIComponent(selected.value.id)}?view=${view.value}` : '');
 
         async function refreshSite() {
+            const wasImporting = site.value?.status === 'importing';
             const result = await sdk.send<{ site: SiteInstallation | null; checklist: ChecklistStep[];
                 pageOptions: Record<string, { allowed: string[]; required: string }> }>({
                 url: '/api/v4/presets/site', method: 'GET',
             });
             site.value = result.site;
+            if (wasImporting && result.site?.status === 'ready') await selectSiteLanguage(result.site);
             checklist.value = result.checklist;
             pageOptions.value = result.pageOptions;
             if (result.site?.publishedTemplateRecord && result.site.presetManifestSnapshot) {
@@ -76,6 +79,11 @@ export const PresetsView = defineComponent({
             }
             if (result.site) name.value = result.site.name;
             if (result.site && result.site.status !== 'empty') includeDemo.value = result.site.includeDemo;
+        }
+
+        async function selectSiteLanguage(installed: SiteInstallation) {
+            await sdk.language.getAll({ skipCache: true });
+            setLanguage(installed.language || 'en');
         }
 
         async function choosePreset(item: PresetSummary) {
@@ -108,6 +116,7 @@ export const PresetsView = defineComponent({
                         ...(selected.value!.sourceCommit ? { presetVersion: selected.value!.version, manifestChecksum: selected.value!.manifestChecksum } : {}) },
                 });
                 site.value = result;
+                if (result.status === 'ready') await selectSiteLanguage(result);
                 await sdk.template.getAll({ skipCache: true });
                 await refreshSite();
             } catch (cause) {

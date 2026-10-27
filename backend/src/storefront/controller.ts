@@ -219,7 +219,7 @@ export const StorefrontController = createController({
                             templates,
                             entries,
                             media: (await Repo.media.findAll()).map(withMediaAccess),
-                            language: Config.storefrontLanguage,
+                            language: site.language || Config.storefrontLanguage,
                             currency: Config.storefrontCurrency,
                             mediaOrigin: Config.storefrontMediaOrigin,
                         }, { preserveMediaCapabilities: true });

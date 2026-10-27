@@ -31,7 +31,7 @@ function memorySource() {
         },
         findEntry: async (id) => entries.get(id) || null,
         addEntry: async (value) => { entries.set(value._id, structuredClone(value)); return structuredClone(value); },
-        language: async () => 'en',
+        ensureEnglish: async () => {},
     };
     return { source, templates, entries, getSite: () => site, failNextCollection: () => { failCollectionOnce = true; } };
 }
@@ -40,6 +40,7 @@ test('one import creates complete CMS models and draft pages only once', async (
     const memory = memorySource();
     const first = await importPreset({ presetId: 'atelier', siteName: 'Studio', includeDemo: false }, memory.source);
     assert.equal(first.status, 'ready');
+    assert.equal(first.language, 'en');
     assert.equal(memory.templates.size, 5);
     assert.equal(first.models.length, 5);
     assert.deepEqual(first.pages.map((page) => page.path), ['/', '/collections', '/products/:slug', '/pages/:slug']);
@@ -116,6 +117,7 @@ test('demo content is seeded once and links into generated Templates', async () 
     for (const entry of memory.entries.values()) {
         assert.ok(site.models.some((model) => model.templateId === entry.templateId));
         assert.equal(entry.meta[0].lng, 'en');
+        assert.equal(entry.content[0].lng, 'en');
     }
     const contentTemplate = memory.templates.get('storefront-content-page');
     const contentEntry = [...memory.entries.values()].find((entry) => entry.templateId === contentTemplate?._id);
