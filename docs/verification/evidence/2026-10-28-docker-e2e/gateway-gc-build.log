@@ -1,0 +1,100 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 DONE 0.0s
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 682B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 214B done
+#3 DONE 0.0s
+
+#4 [1/5] FROM docker.io/library/node:22-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+#4 resolve docker.io/library/node:22-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 358.75kB 0.0s done
+#5 DONE 0.0s
+
+#6 [2/5] WORKDIR /app
+#6 CACHED
+
+#7 [3/5] RUN apt-get update     && apt-get install -y --no-install-recommends ca-certificates openssl     && rm -rf /var/lib/apt/lists/*
+#7 CACHED
+
+#8 [4/5] COPY . .
+#8 DONE 0.0s
+
+#9 [5/5] RUN npm ci --no-audit --no-fund     && npm run build --workspace @gateway/worker     && npm run build --workspace @gateway/control
+#9 39.08
+#9 39.08 added 129 packages in 39s
+#9 39.08 npm notice
+#9 39.08 npm notice New major version of npm available! 10.9.9 -> 12.2.1
+#9 39.08 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+#9 39.08 npm notice To update run: npm install -g npm@12.2.1
+#9 39.08 npm notice
+#9 39.15
+#9 39.15 > @gateway/worker@0.1.0 build
+#9 39.15 > tsc --project tsconfig.json
+#9 39.15
+#9 40.03
+#9 40.03 > @gateway/control@0.1.0 build
+#9 40.03 > next build
+#9 40.03
+#9 40.38    ▲ Next.js 15.5.28
+#9 40.38
+#9 40.39    Creating an optimized production build ...
+#9 43.25  ✓ Compiled successfully in 1799ms
+#9 43.25    Linting and checking validity of types ...
+#9 44.48    Collecting page data ...
+#9 45.04    Generating static pages (0/6) ...
+#9 45.23    Generating static pages (1/6)
+#9 45.23    Generating static pages (2/6)
+#9 45.25    Generating static pages (4/6)
+#9 45.25  ✓ Generating static pages (6/6)
+#9 45.50    Finalizing page optimization ...
+#9 45.50    Collecting build traces ...
+#9 48.53
+#9 48.54 Route (app)                                                     Size  First Load JS
+#9 48.54 ┌ ○ /                                                          152 B         103 kB
+#9 48.54 ├ ○ /_not-found                                                988 B         104 kB
+#9 48.54 ├ ƒ /api/v1/health/live                                        152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/health/ready                                       152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/sites/[siteId]                                     152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/sites/[siteId]/domains                             152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/sites/[siteId]/publication-state                   152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/sites/[siteId]/publish-operations                  152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/sites/[siteId]/publish-operations/[operationId]    152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/sites/[siteId]/published-release                   152 B         103 kB
+#9 48.54 ├ ƒ /api/v1/sites/[siteId]/releases                            152 B         103 kB
+#9 48.54 └ ƒ /api/v1/sites/[siteId]/template-pin                        152 B         103 kB
+#9 48.54 + First Load JS shared by all                                 103 kB
+#9 48.54   ├ chunks/18-8a0e9dadb94224f5.js                            46.6 kB
+#9 48.54   ├ chunks/87c73c54-24122e7b92478d00.js                      54.2 kB
+#9 48.54   └ other shared chunks (total)                              1.88 kB
+#9 48.54
+#9 48.54
+#9 48.54 ○  (Static)   prerendered as static content
+#9 48.54 ƒ  (Dynamic)  server-rendered on demand
+#9 48.54
+#9 DONE 49.0s
+
+#10 exporting to image
+#10 exporting layers
+#10 exporting layers 14.8s done
+#10 exporting manifest sha256:ca344ef63e672c3b1de602b0270fbe757c5c1f9c996301c6a117621244998f59 done
+#10 exporting config sha256:1e5081357f5bc1c591c8312facba43193347030a81c6145070a775081859de1f done
+#10 exporting attestation manifest sha256:56a58aaf176d1d05bb1ba86992824adb97487ce518554f4461e68fb163e3cd53 done
+#10 exporting manifest list sha256:5a0a3993286c621e80dea7225896e0e06b083b1f45797ed6ce8d357ca5fea1d7 done
+#10 naming to docker.io/local/gateway-e2e:20261028 done
+#10 unpacking to docker.io/local/gateway-e2e:20261028
+#10 unpacking to docker.io/local/gateway-e2e:20261028 3.6s done
+#10 DONE 18.5s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/i7np1gwhxt52zz92yg6fdtcrb

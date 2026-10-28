@@ -1,0 +1,98 @@
+{
+  "siteId": "ae04c072-049c-4658-b751-61279db41fcf",
+  "total": 13,
+  "unreferenced": 11,
+  "records": [
+    {
+      "id": "3537c40b04b8c7f4abea913b32c9e22d72b457df4a988b264e5a3a507f28350a",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-501e4255-b30a-4858-8655-09a55b626854",
+      "running": true,
+      "protected": true,
+      "safeToPrune": false
+    },
+    {
+      "id": "d135c98317a23e25d1e780e38b6666cbe49afa572ca85ff522c0b7e09eed0831",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-7e0215aa-23c7-4e51-9512-30bcc75b85ba",
+      "running": true,
+      "protected": true,
+      "safeToPrune": false
+    },
+    {
+      "id": "d3a4084551673a5f798411e11dae0fbe9386ae4c8344c75e53d33c89d899f633",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-f1eb83cb-bd78-409d-a5f2-d4b21f2bd29e",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "15039de433c30d77905486e7397fe1e7e3ca256b41775a95d5b26925323b29b2",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-4709842a-e1af-4972-aa98-8301c718691c",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "62ca1176af7a1d627333a9b6b1048a034e6863a7772f48c72206adb9387e945a",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-2b594eef-5970-4d50-abbe-3125742ab746",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "4fc374b687c87ee02d9d9eeee34c675f160370ab91007ab73610f496107e40e3",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-6c6a3c9b-c81a-4d6b-a44c-518e36291c1c",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "f3d85e7e5397f95dc9f4b927cb49cfcf9b8fd8e6174a5f0b8ff695afb6ae112d",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-7c30d1c8-4ea7-43ce-9300-5a45c5971995",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "99e3acdc5dc5b19067db8442f2e6e257f5fe2203cb716edfa5ca55d8927a403d",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-0aeb6276-785b-4c70-8692-c2e1264e2231",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "23d024a746d9a69d3f89e8c02e491ac249164b725fb077db2447a79a58b7a89b",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-6c495704-808b-4ac8-b91c-a2f151550e87",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "0530c3af36740771795d43e5a6049705190bdc2e559144521ad48c0b027e2b41",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-5bd4fbfb-d95a-4f71-b96b-45c78e2cc6f2",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "c5e54abc502588a2d67f4cc5ee53fe090b4bb8deb961183aed03fa54f0e3e440",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-a0779110-42fe-4b80-bf0e-4ee8837b0cfc",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "aa7f66f7c911bc6e6b685702b935690a9072e5ab8aa2fbd473f3c74dd3eec94f",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-79e5e959-71e4-4dcd-a9b9-4ae45f02ae15",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    },
+    {
+      "id": "c56229844fb5e83aba157dd186d5bc953c5eb5c9dbc975d0ef4a92f52493201b",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-f62a5ff4-8cb6-462b-bd40-1053fa2ee492",
+      "running": true,
+      "protected": false,
+      "safeToPrune": true
+    }
+  ]
+}

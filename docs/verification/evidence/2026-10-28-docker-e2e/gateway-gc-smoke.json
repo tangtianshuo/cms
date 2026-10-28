@@ -1,0 +1,30 @@
+{
+  "checkedAt": "2026-10-28T06:45:17.395Z",
+  "http": {
+    "cms": 200,
+    "gatewayReady": 200,
+    "builtin": 200,
+    "published:/": 200,
+    "published:/products/featured-product": 200,
+    "published:/collections": 200,
+    "published:/pages/about": 200,
+    "anonymousMedia": 200
+  },
+  "mediaMatchesFixture": true,
+  "containers": {
+    "total": 2,
+    "unreferenced": 0,
+    "protected": 2
+  },
+  "workerPid": 28808,
+  "gatewayImageBuilt": "sha256:5a0a3993286c621e80dea7225896e0e06b083b1f45797ed6ce8d357ca5fea1d7",
+  "controlRecreated": false,
+  "verification": {
+    "control": 95,
+    "contracts": 2,
+    "worker": 67,
+    "failures": 0,
+    "skipped": 0
+  },
+  "readOnlyReview": "no actionable findings"
+}

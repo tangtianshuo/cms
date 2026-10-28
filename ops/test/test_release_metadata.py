@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import yaml
 
 spec = importlib.util.spec_from_file_location("metadata", Path(__file__).parents[2] / ".github/scripts/release.py")
 metadata = importlib.util.module_from_spec(spec)
@@ -8,6 +9,14 @@ spec.loader.exec_module(metadata)
 
 
 class MetadataTests(unittest.TestCase):
+    def test_release_image_receives_explicit_preview_origins(self):
+        workflow = yaml.safe_load((Path(__file__).parents[2] / ".github/workflows/release.yml").read_text())
+        steps = workflow["jobs"]["publish-and-deploy"]["steps"]
+        build = next(step for step in steps if step.get("id") == "build")
+        args = build["with"]["build-args"]
+        for name in ("VITE_STOREFRONT_ORIGIN", "VITE_TEMPLATE_PREVIEW_ORIGIN"):
+            self.assertIn(f"{name}=${{{{ vars.{name} }}}}", args)
+
     def test_only_explicit_version_refs_publish(self):
         self.assertEqual(metadata.resolve("refs/heads/release/v1.2.3"), ("1.2.3", "true"))
         self.assertEqual(metadata.resolve("refs/tags/aeroframe-v1.0.1"), ("1.0.1", "true"))

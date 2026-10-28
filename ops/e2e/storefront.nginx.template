@@ -1,0 +1,16 @@
+# Disposable production-mode ingress. External host cannot forge private headers.
+server {
+    listen 80 default_server;
+    server_name _;
+    location / {
+        proxy_set_header Host builtin.localhost;
+        proxy_set_header X-Storefront-Host builtin.localhost;
+        proxy_set_header X-Storefront-Key "${STOREFRONT_GATEWAY_SECRET}";
+        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Forwarded-Proto "";
+        proxy_pass http://builtin-storefront:3000;
+        proxy_cache off;
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-store" always;
+    }
+}

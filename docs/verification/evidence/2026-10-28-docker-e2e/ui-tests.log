@@ -1,0 +1,208 @@
+TAP version 13
+# Subtest: canonical sections handle old content links and invalid query values
+ok 1 - canonical sections handle old content links and invalid query values
+  ---
+  duration_ms: 3.614458
+  type: 'test'
+  ...
+# Subtest: sidebar distinguishes Studio sections and honors model and entry deep links
+ok 2 - sidebar distinguishes Studio sections and honors model and entry deep links
+  ---
+  duration_ms: 0.12575
+  type: 'test'
+  ...
+# Subtest: administration matches nested routes on segment boundaries only
+ok 3 - administration matches nested routes on segment boundaries only
+  ---
+  duration_ms: 0.05475
+  type: 'test'
+  ...
+# Subtest: new editor state produces persisted metadata and content
+ok 4 - new editor state produces persisted metadata and content
+  ---
+  duration_ms: 1.878375
+  type: 'test'
+  ...
+# Subtest: lost publish response survives component reload and keeps the same request identity
+ok 5 - lost publish response survives component reload and keeps the same request identity
+  ---
+  duration_ms: 0.334542
+  type: 'test'
+  ...
+# Subtest: publishing another site cannot reuse or clear the first site request
+ok 6 - publishing another site cannot reuse or clear the first site request
+  ---
+  duration_ms: 0.067625
+  type: 'test'
+  ...
+# Subtest: a prior completed operation cannot clear a newer uncertain publish request
+ok 7 - a prior completed operation cannot clear a newer uncertain publish request
+  ---
+  duration_ms: 0.087334
+  type: 'test'
+  ...
+# Subtest: rollback identities remain distinct from publish and other rollback targets
+ok 8 - rollback identities remain distinct from publish and other rollback targets
+  ---
+  duration_ms: 0.056625
+  type: 'test'
+  ...
+# Subtest: Docker management policy permits its local storefront iframe
+ok 9 - Docker management policy permits its local storefront iframe
+  ---
+  duration_ms: 48.016583
+  type: 'test'
+  ...
+# Subtest: preview choices are limited to pages served by the generated model
+ok 10 - preview choices are limited to pages served by the generated model
+  ---
+  duration_ms: 1.411958
+  type: 'test'
+  ...
+# Subtest: preview request carries the unsaved Entry, selected page and language
+ok 11 - preview request carries the unsaved Entry, selected page and language
+  ---
+  duration_ms: 0.452708
+  type: 'test'
+  ...
+# Subtest: only the latest preview request may update the iframe
+ok 12 - only the latest preview request may update the iframe
+  ---
+  duration_ms: 0.331292
+  type: 'test'
+  ...
+# Subtest: preview message uses the exact configured target origin
+ok 13 - preview message uses the exact configured target origin
+  ---
+  duration_ms: 0.276291
+  type: 'test'
+  ...
+# Subtest: preview message can cross the iframe structured-clone boundary
+ok 14 - preview message can cross the iframe structured-clone boundary
+  ---
+  duration_ms: 0.194291
+  type: 'test'
+  ...
+# Subtest: renderer selection requires the explicitly supported identity/version and configured template origin
+ok 15 - renderer selection requires the explicitly supported identity/version and configured template origin
+  ---
+  duration_ms: 0.572
+  type: 'test'
+  ...
+# Subtest: legacy built-in templates retain their existing display preview with honest capability notice
+ok 16 - legacy built-in templates retain their existing display preview with honest capability notice
+  ---
+  duration_ms: 0.140542
+  type: 'test'
+  ...
+# Subtest: ready handshake only accepts the chosen origin and actual iframe source
+ok 17 - ready handshake only accepts the chosen origin and actual iframe source
+  ---
+  duration_ms: 0.082208
+  type: 'test'
+  ...
+# Subtest: unsaved single page overlays the saved snapshot without losing cards or mutating source
+ok 18 - unsaved single page overlays the saved snapshot without losing cards or mutating source
+  ---
+  duration_ms: 0.407917
+  type: 'test'
+  ...
+# Subtest: template handshake verifies the renderer version instead of trusting any ready message
+ok 19 - template handshake verifies the renderer version instead of trusting any ready message
+  ---
+  duration_ms: 0.115
+  type: 'test'
+  ...
+# Subtest: delivery sends selected snapshot path to exact origin without retaining Vue proxies
+ok 20 - delivery sends selected snapshot path to exact origin without retaining Vue proxies
+  ---
+  duration_ms: 0.351
+  type: 'test'
+  ...
+# Subtest: login rejection explains the credentials problem before the generic 401 fallback
+ok 21 - login rejection explains the credentials problem before the generic 401 fallback
+  ---
+  duration_ms: 0.626833
+  type: 'test'
+  ...
+# Subtest: network, timeout, session and permission failures have distinct actionable reasons
+ok 22 - network, timeout, session and permission failures have distinct actionable reasons
+  ---
+  duration_ms: 0.931583
+  type: 'test'
+  ...
+# Subtest: validation identifies the invalid page path and the accepted format
+ok 23 - validation identifies the invalid page path and the accepted format
+  ---
+  duration_ms: 0.058417
+  type: 'test'
+  ...
+# Subtest: title conflict explains its workspace, group and language scope
+ok 24 - title conflict explains its workspace, group and language scope
+  ---
+  duration_ms: 0.116666
+  type: 'test'
+  ...
+# Subtest: release validation preserves the exact field and page that need correction
+ok 25 - release validation preserves the exact field and page that need correction
+  ---
+  duration_ms: 0.217125
+  type: 'test'
+  ...
+# Subtest: known Chinese errors are preserved without duplicating their text
+ok 26 - known Chinese errors are preserved without duplicating their text
+  ---
+  duration_ms: 0.353667
+  type: 'test'
+  ...
+# Subtest: unknown errors remain honest and do not expose stacks, tokens or database details
+ok 27 - unknown errors remain honest and do not expose stacks, tokens or database details
+  ---
+  duration_ms: 0.749875
+  type: 'test'
+  ...
+# Subtest: Axios response data keeps the specific reason instead of its generic status text
+ok 28 - Axios response data keeps the specific reason instead of its generic status text
+  ---
+  duration_ms: 0.155583
+  type: 'test'
+  ...
+# Subtest: domain diagnostics explain each failed check instead of hiding combined causes
+ok 29 - domain diagnostics explain each failed check instead of hiding combined causes
+  ---
+  duration_ms: 0.488375
+  type: 'test'
+  ...
+# Subtest: entry validation identifies the language and field requiring a value
+ok 30 - entry validation identifies the language and field requiring a value
+  ---
+  duration_ms: 0.380542
+  type: 'test'
+  ...
+# Subtest: schema type errors explain which input has the wrong format
+ok 31 - schema type errors explain which input has the wrong format
+  ---
+  duration_ms: 0.178916
+  type: 'test'
+  ...
+# Subtest: template import conflicts identify the incompatible field
+ok 32 - template import conflicts identify the incompatible field
+  ---
+  duration_ms: 0.055417
+  type: 'test'
+  ...
+# Subtest: shared notifications translate warning and error paths, including push
+ok 33 - shared notifications translate warning and error paths, including push
+  ---
+  duration_ms: 15.320792
+  type: 'test'
+  ...
+1..33
+# tests 33
+# suites 0
+# pass 33
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 261.842958

@@ -1,0 +1,49 @@
+[
+  {
+    "path": "/assets/index-e9d9eaf4.js",
+    "run": 1,
+    "exit": 28,
+    "headers": [
+      "TIMING 0.000000 8.006022 0"
+    ],
+    "error": "curl: (28) SSL connection timeout"
+  },
+  {
+    "path": "/assets/index-e9d9eaf4.js",
+    "run": 2,
+    "exit": 28,
+    "headers": [
+      "HTTP/2 200 ",
+      "cache-control: public, max-age=31536000, immutable",
+      "cf-cache-status: MISS",
+      "content-encoding: gzip",
+      "cf-ray: a5128e3f58d26300-LAX",
+      "TIMING 2.858812 20.005179 174173"
+    ],
+    "error": "curl: (28) Operation timed out after 20005 milliseconds with 174173 bytes received"
+  },
+  {
+    "path": "/assets/index-136751e3.css",
+    "run": 1,
+    "exit": 28,
+    "headers": [
+      "TIMING 0.000000 8.005653 0"
+    ],
+    "error": "curl: (28) SSL connection timeout"
+  },
+  {
+    "path": "/assets/index-136751e3.css",
+    "run": 2,
+    "exit": 0,
+    "headers": [
+      "HTTP/2 200 ",
+      "cache-control: public, max-age=31536000, immutable",
+      "age: 166",
+      "cf-cache-status: HIT",
+      "content-encoding: gzip",
+      "cf-ray: a5128eeefc07534f-LAX",
+      "TIMING 1.484662 10.189225 13374"
+    ],
+    "error": ""
+  }
+]

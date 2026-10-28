@@ -7,3 +7,8 @@
 .vscode
 *.env
 .npmrc
+
+# Local delivery packages, manual render iterations and OS metadata.
+/deliverables/
+/manual-assets/
+.DS_Store

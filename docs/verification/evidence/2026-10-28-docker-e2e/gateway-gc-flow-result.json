@@ -1,0 +1,18 @@
+{
+  "first": {
+    "releaseId": "57f2e647-76b8-4aa4-9986-4e49581a01e5",
+    "operationId": "7befb05d-4da3-45f8-a5ee-44594f339bd7",
+    "status": "pending"
+  },
+  "second": {
+    "releaseId": "e2e5f67a-8f36-4ccc-9ac4-2eceb33e6836",
+    "operationId": "cc4b0a65-271b-4f66-ac8d-3b4f6e1e3d4d",
+    "status": "pending"
+  },
+  "restored": {
+    "releaseId": "df7fbd51-a6a8-4c5e-817f-b02d95e6fc46",
+    "operationId": "f69e494e-b336-4cb4-aa0c-e04df0beca17",
+    "status": "pending"
+  },
+  "historyCount": 17
+}

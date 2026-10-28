@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-10-28T06:03:04.116Z",
+  "http": {
+    "cms": 200,
+    "cmsHealth": 200,
+    "gatewayReady": 200,
+    "builtin": 200,
+    "privatePreview": 200,
+    "published:/": 200,
+    "published:/products/featured-product": 200,
+    "published:/collections": 200,
+    "published:/pages/about": 200,
+    "anonymousPublishedMedia": 200
+  },
+  "privatePreviewSSRContainsDraft": false,
+  "mediaUrl": "http://127.0.0.1:18080/api/v4/media/6ae18c1e210945a5e51f482c/bin/image",
+  "mediaMatchesFixture": true,
+  "images": {
+    "local/cms-e2e:20261028": "sha256:af8aa4113ec221ee808dc20a3dfe82a73171c68b87a6dd43ffbc9f638d46bcf7",
+    "local/gateway-e2e:20261028": "sha256:81b1e7b4b2abd8bda7297242a521298be2f4a66f413f8a2f5b4f95bf70e738aa",
+    "local/cms-storefront-e2e:20261028": "sha256:7d0cb10648abed2a551659ceab540d197efa0099d3fa40006a10b399a3e0fe44",
+    "local/aeroframe:1.0.3": "sha256:d83a7f86d25b2ede9f9dc373d6effddcb742afde21c84bfb71e5a090e101d707"
+  }
+}

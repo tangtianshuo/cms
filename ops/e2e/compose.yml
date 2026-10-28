@@ -1,0 +1,122 @@
+# Always pass an explicit --env-file containing disposable local test values.
+name: cms-e2e-20261028
+services:
+    mongo:
+        image: mongo:7
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: e2e
+            MONGO_INITDB_ROOT_PASSWORD: ${E2E_DB_PASSWORD:?}
+        ports: ['127.0.0.1:27029:27017']
+        volumes: [mongo-data:/data/db]
+        healthcheck:
+            test:
+                [
+                    CMD,
+                    mongosh,
+                    --quiet,
+                    --eval,
+                    "quit(db.adminCommand('ping').ok ? 0 : 1)",
+                ]
+            interval: 3s
+            timeout: 3s
+            retries: 30
+    postgres:
+        image: postgres:18-alpine
+        environment:
+            POSTGRES_USER: e2e
+            POSTGRES_PASSWORD: ${E2E_DB_PASSWORD:?}
+            POSTGRES_DB: gateway_e2e
+        ports: ['127.0.0.1:15432:5432']
+        volumes: [postgres-data:/var/lib/postgresql]
+        healthcheck:
+            test: [CMD-SHELL, 'pg_isready -U e2e -d gateway_e2e']
+            interval: 3s
+            timeout: 3s
+            retries: 30
+    cms:
+        image: local/cms-e2e:20261028
+        depends_on:
+            mongo: { condition: service_healthy }
+        environment:
+            NODE_ENV: production
+            DB_URL: mongodb://e2e:${E2E_DB_PASSWORD:?}@mongo:27017/cms_docker_e2e?authSource=admin
+            JWT_SECRET: ${E2E_JWT_SECRET:?}
+            JWT_SCOPE: 127.0.0.1:18080
+            JWT_EXP_IN: 3600000
+            STOREFRONT_ENABLED: 'true'
+            STOREFRONT_HOST: builtin.localhost
+            STOREFRONT_MEDIA_ORIGIN: http://127.0.0.1:18080
+            STOREFRONT_GATEWAY_SECRET: ${E2E_STOREFRONT_SECRET:?}
+            STOREFRONT_DOMAIN_SECRET: ${E2E_DOMAIN_SECRET:?}
+            GATEWAY_BASE_URL: http://127.0.0.1:18183
+            GATEWAY_WORKSPACE_ID: ${E2E_GATEWAY_WORKSPACE:?}
+            GATEWAY_SITE_ID: ${E2E_GATEWAY_SITE:?}
+            GATEWAY_CMS_WORKSPACE_ID: ${E2E_CMS_WORKSPACE:-}
+            GATEWAY_CMS_SITE_ID: ${E2E_CMS_SITE:-}
+            CMS_SERVICE_SECRET: ${E2E_SERVICE_SECRET:?}
+            GATEWAY_PUBLIC_SITE_URL: https://shop.localhost
+        ports: ['127.0.0.1:18183:18183']
+        volumes: [uploads:/app/backend/uploads, backups:/app/backend/backups]
+        healthcheck:
+            test:
+                [
+                    CMD,
+                    node,
+                    -e,
+                    "fetch('http://127.0.0.1:8080/api/v4/health-check',{method:'HEAD'}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+                ]
+            interval: 3s
+            timeout: 3s
+            retries: 40
+    gateway-control:
+        image: local/gateway-e2e:20261028
+        # CMS currently permits loopback HTTP only; share its network namespace.
+        network_mode: service:cms
+        depends_on:
+            cms: { condition: service_healthy }
+            postgres: { condition: service_healthy }
+        environment:
+            DATABASE_URL: postgresql://e2e:${E2E_DB_PASSWORD:?}@postgres:5432/gateway_e2e
+            CMS_SERVICE_SECRET: ${E2E_SERVICE_SECRET:?}
+            CMS_WORKSPACE_ID: ${E2E_GATEWAY_WORKSPACE:?}
+            ALLOWED_TEMPLATE_IDS: aeroframe
+            SNAPSHOT_STORAGE_PATH: /var/lib/gateway/snapshots
+        volumes: [gateway-snapshots:/var/lib/gateway/snapshots]
+    admin:
+        image: nginx:latest
+        depends_on:
+            cms: { condition: service_healthy }
+        ports: ['127.0.0.1:18080:80']
+        volumes: [./admin.nginx.conf:/etc/nginx/nginx.conf:ro]
+    builtin-storefront:
+        image: local/cms-storefront-e2e:20261028
+        depends_on:
+            cms: { condition: service_healthy }
+        environment:
+            NUXT_CMS_INTERNAL_ORIGIN: http://cms:8080
+            NUXT_PUBLIC_ADMIN_ORIGIN: http://127.0.0.1:18080
+            NUXT_PUBLIC_SITE_HOST: builtin.localhost
+            NUXT_GATEWAY_SECRET: ${E2E_STOREFRONT_SECRET:?}
+            NUXT_DOMAIN_SECRET: ${E2E_DOMAIN_SECRET:?}
+    builtin-ingress:
+        image: nginx:latest
+        depends_on: [builtin-storefront]
+        environment:
+            STOREFRONT_GATEWAY_SECRET: ${E2E_STOREFRONT_SECRET:?}
+            NGINX_ENVSUBST_FILTER: STOREFRONT_GATEWAY_SECRET
+        ports: ['127.0.0.1:13001:80']
+        volumes:
+            [
+                ./storefront.nginx.template:/etc/nginx/templates/default.conf.template:ro,
+            ]
+    template-preview:
+        image: local/aeroframe:1.0.3
+        environment:
+            NUXT_PUBLIC_PREVIEW_ADMIN_ORIGIN: http://127.0.0.1:18080
+        ports: ['127.0.0.1:18081:3000']
+volumes:
+    mongo-data:
+    postgres-data:
+    uploads:
+    backups:
+    gateway-snapshots:

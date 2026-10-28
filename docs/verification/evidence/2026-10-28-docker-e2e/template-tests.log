@@ -1,0 +1,200 @@
+
+> storefront-templates@1.0.0 test
+> node --test test/*.test.mjs
+
+TAP version 13
+# Subtest: standalone image renders only its bound published release via authenticated gateway
+ok 1 - standalone image renders only its bound published release via authenticated gateway
+  ---
+  duration_ms: 1927.571042
+  type: 'test'
+  ...
+# Subtest: matches the CMS canonical checksum fixture
+ok 2 - matches the CMS canonical checksum fixture
+  ---
+  duration_ms: 0.481459
+  type: 'test'
+  ...
+# Subtest: validates registry records and appends immutable versions
+ok 3 - validates registry records and appends immutable versions
+  ---
+  duration_ms: 1.12075
+  type: 'test'
+  ...
+# Subtest: reuses only a published digest tied to this exact source commit and manifest
+ok 4 - reuses only a published digest tied to this exact source commit and manifest
+  ---
+  duration_ms: 1.040708
+  type: 'test'
+  ...
+# Subtest: publishes an approved digest with exact available record and immutable path
+ok 5 - publishes an approved digest with exact available record and immutable path
+  ---
+  duration_ms: 6.031125
+  type: 'test'
+  ...
+# Subtest: rejects missing policy, untrusted identity, invalid signature and malformed digest
+ok 6 - rejects missing policy, untrusted identity, invalid signature and malformed digest
+  ---
+  duration_ms: 4.872666
+  type: 'test'
+  ...
+# Subtest: mutation while signature verification waits cannot change the published manifest
+ok 7 - mutation while signature verification waits cannot change the published manifest
+  ---
+  duration_ms: 5.274583
+  type: 'test'
+  ...
+# Subtest: rejects manifest properties lost at the JSON boundary
+ok 8 - rejects manifest properties lost at the JSON boundary
+  ---
+  duration_ms: 0.45125
+  type: 'test'
+  ...
+# Subtest: same version, checksum and digest is idempotent; changed bytes or digest conflict
+ok 9 - same version, checksum and digest is idempotent; changed bytes or digest conflict
+  ---
+  duration_ms: 8.729167
+  type: 'test'
+  ...
+# Subtest: same canonical checksum with different manifest bytes is not idempotent
+ok 10 - same canonical checksum with different manifest bytes is not idempotent
+  ---
+  duration_ms: 3.063417
+  type: 'test'
+  ...
+# Subtest: rejects invalid assets before uploading or writing index
+ok 11 - rejects invalid assets before uploading or writing index
+  ---
+  duration_ms: 7.901583
+  type: 'test'
+  ...
+# Subtest: idempotent publish accepts reordered fields in existing record
+ok 12 - idempotent publish accepts reordered fields in existing record
+  ---
+  duration_ms: 1.733542
+  type: 'test'
+  ...
+# Subtest: idempotent publish rejects index revision changed during artifact read
+ok 13 - idempotent publish rejects index revision changed during artifact read
+  ---
+  duration_ms: 2.159875
+  type: 'test'
+  ...
+# Subtest: idempotent publish rejects index data changed without revision change
+ok 14 - idempotent publish rejects index data changed without revision change
+  ---
+  duration_ms: 2.432166
+  type: 'test'
+  ...
+# Subtest: upload failure and corrupted read-back never expose an available record
+ok 15 - upload failure and corrupted read-back never expose an available record
+  ---
+  duration_ms: 1.757792
+  type: 'test'
+  ...
+# Subtest: stale revision cannot publish or overwrite a concurrent index update
+ok 16 - stale revision cannot publish or overwrite a concurrent index update
+  ---
+  duration_ms: 3.189666
+  type: 'test'
+  ...
+# Subtest: read-back JSON must exactly match source even when canonical checksum is unchanged
+ok 17 - read-back JSON must exactly match source even when canonical checksum is unchanged
+  ---
+  duration_ms: 1.305541
+  type: 'test'
+  ...
+# Subtest: resolves version from TEMPLATE_VERSION, release branch, and legacy tag
+ok 18 - resolves version from TEMPLATE_VERSION, release branch, and legacy tag
+  ---
+  duration_ms: 0.629208
+  type: 'test'
+  ...
+# Subtest: rejects malformed refs and mismatched version overrides
+ok 19 - rejects malformed refs and mismatched version overrides
+  ---
+  duration_ms: 0.53775
+  type: 'test'
+  ...
+# Subtest: rejects a release version that differs from the manifest
+ok 20 - rejects a release version that differs from the manifest
+  ---
+  duration_ms: 0.397542
+  type: 'test'
+  ...
+# Subtest: built 1.0.3 renders explicit paths, theme and section order, and keeps private preview empty on the server
+ok 21 - built 1.0.3 renders explicit paths, theme and section order, and keeps private preview empty on the server
+  ---
+  duration_ms: 417.304042
+  type: 'test'
+  ...
+# Subtest: canonical SHA-256 matches CMS UTF-8 and recursive key ordering
+ok 22 - canonical SHA-256 matches CMS UTF-8 and recursive key ordering
+  ---
+  duration_ms: 0.540958
+  type: 'test'
+  ...
+# Subtest: accepts a v1 manifest and verified local asset
+ok 23 - accepts a v1 manifest and verified local asset
+  ---
+  duration_ms: 10.935
+  type: 'test'
+  ...
+# Subtest: rejects unknown/missing fields and incompatible versions
+ok 24 - rejects unknown/missing fields and incompatible versions
+  ---
+  duration_ms: 6.727083
+  type: 'test'
+  ...
+# Subtest: rejects duplicate model/field/page keys and conflicting page paths
+ok 25 - rejects duplicate model/field/page keys and conflicting page paths
+  ---
+  duration_ms: 4.109042
+  type: 'test'
+  ...
+# Subtest: rejects invalid references, reserved routes and malformed routes
+ok 26 - rejects invalid references, reserved routes and malformed routes
+  ---
+  duration_ms: 6.015334
+  type: 'test'
+  ...
+# Subtest: rejects missing, tampered, mismatched or executable assets
+ok 27 - rejects missing, tampered, mismatched or executable assets
+  ---
+  duration_ms: 4.606917
+  type: 'test'
+  ...
+# Subtest: rejects symlinked asset files
+ok 28 - rejects symlinked asset files
+  ---
+  duration_ms: 3.017667
+  type: 'test'
+  ...
+# Subtest: rejects symlinked parent directories
+ok 29 - rejects symlinked parent directories
+  ---
+  duration_ms: 2.894084
+  type: 'test'
+  ...
+# Subtest: checked-in AeroFrame manifest retains the CMS field specs and page mappings
+ok 30 - checked-in AeroFrame manifest retains the CMS field specs and page mappings
+  ---
+  duration_ms: 1.168667
+  type: 'test'
+  ...
+# Subtest: requires CMS presentation data for a public template manifest
+ok 31 - requires CMS presentation data for a public template manifest
+  ---
+  duration_ms: 3.033291
+  type: 'test'
+  ...
+1..31
+# tests 31
+# suites 0
+# pass 31
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2101.354625
