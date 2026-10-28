@@ -2,15 +2,16 @@
 export function createPublicationAction(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>, scope: string, makeId: () => string) {
     const key = `bcms:gateway-publish:${scope}`;
     return {
-        request(): string {
+        request(identity = 'publish'): string {
             const saved = storage.getItem(key);
-            if (saved) return saved;
+            if (saved && (storage.getItem(`${key}:action`) || 'publish') === identity) return saved;
             const created = makeId();
             storage.setItem(key, created);
+            storage.setItem(`${key}:action`, identity);
             return created;
         },
         complete(status: string, requestKey?: string): void {
-            if ((status === 'ready' || status === 'failed') && requestKey && storage.getItem(key) === requestKey) storage.removeItem(key);
+            if ((status === 'ready' || status === 'failed') && requestKey && storage.getItem(key) === requestKey) { storage.removeItem(key); storage.removeItem(`${key}:action`); }
         },
     };
 }

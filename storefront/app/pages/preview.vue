@@ -33,7 +33,10 @@ function onPreviewMessage(event: MessageEvent) {
     }
 }
 
-onMounted(() => window.addEventListener('message', onPreviewMessage));
+onMounted(() => {
+    window.addEventListener('message', onPreviewMessage);
+    window.parent.postMessage({ type: 'storefront:preview-ready' }, new URL(config.public.adminOrigin).origin);
+});
 onBeforeUnmount(() => window.removeEventListener('message', onPreviewMessage));
 </script>
 

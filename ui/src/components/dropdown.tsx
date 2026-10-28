@@ -97,8 +97,10 @@ export const Dropdown = defineComponent({
                 <Button
                     id={props.id}
                     style={props.style}
-                    class={props.class}
+                    class={`cms-dropdown-trigger ${props.class || ""}`}
                     kind="ghost"
+                    aria-label="更多操作"
+                    aria-expanded={showDrop.value}
                     btnRef={btnRef}
                     onClick={(event) => {
                         event.preventDefault();
@@ -116,7 +118,7 @@ export const Dropdown = defineComponent({
                     <Teleport to={'body'}>
                         <div
                             ref={dropEl}
-                            class={`z-1000 ${
+                            class={`cms-dropdown-menu z-1000 ${
                                 props.fixed ? 'fixed' : 'absolute'
                             } flex flex-col bg-light dark:bg-darkGray rounded-xl w-full overflow-x-hidden overflow-y-auto z-100 shadow-2xl shadow-black`}
                             style={`max-width: ${maxWidth}px; max-height: ${maxHeight}px; ${

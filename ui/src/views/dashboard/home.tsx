@@ -30,10 +30,10 @@ export const HomeView = defineComponent({
         function getStatBox(num: number | string, text: string) {
             return (
                 <div
-                    class={`flex flex-col items-center justify-center text-center border border-green/50 px-3 py-14 rounded-[40px] bg-light/50 dark:border-yellow/30 dark:text-light dark:bg-darkGrey/50`}
+                    class="cms-panel flex flex-col items-start justify-center p-6"
                 >
                     <div
-                        class={`text-[50px] leading-none tracking-[-0.02em] mb-4`}
+                        class="text-3xl font-medium mb-4"
                     >
                         {num}
                     </div>
@@ -61,7 +61,7 @@ export const HomeView = defineComponent({
         });
 
         return () => (
-            <div class={`flex flex-col gap-20 w-full min-h-full max-w-[650px]`}>
+            <div class="cms-account-overview flex flex-col gap-8 w-full">
                 {loading.value ? (
                     <div class={`m-auto`}>
                         <Loader show />
@@ -71,7 +71,7 @@ export const HomeView = defineComponent({
                         <div class={`flex gap-4 w-full`}>
                             <div class={`flex flex-col gap-2`}>
                                 <div
-                                    class={`text-5xl leading-tight font-light tracking-[-0.02em] mb-1 dark:text-light`}
+                                    class="text-2xl font-semibold mb-1"
                                 >
                                     {t('views.home.greeting', {
                                         username: me.value?.username,
@@ -96,12 +96,12 @@ export const HomeView = defineComponent({
                         </div>
                         <div class={`flex flex-col gap-2`}>
                             <div
-                                class={`text-[28px] leading-tight tracking-[-0.01em] mb-10 dark:text-light`}
+                                class={`text-base font-medium mb-5 dark:text-light`}
                             >
                                 {t('views.home.statsTitle')}
                             </div>
                             <div
-                                class={`grid grid-cols-1 gap-5 desktop:grid-cols-[repeat(3,minmax(200px,1fr))] desktop:max-w-max`}
+                                class={`grid grid-cols-1 gap-5 sm:grid-cols-3`}
                             >
                                 {getStatBox(
                                     userStats.value?.entryCount || 0,
@@ -122,7 +122,7 @@ export const HomeView = defineComponent({
                         </div>
                         <div class="max-w-[500px]">
                             <div class="flex items-center justify-between mb-10">
-                                <h2 class="text-[28px] leading-tight tracking-[-0.01em] dark:text-light">
+                                <h2 class="text-base font-medium">
                                     {t('views.home.recentlyUploaded')}
                                 </h2>
                                 {recentMedia.value.length > 0 && (
@@ -170,7 +170,7 @@ export const HomeView = defineComponent({
                                 </div>
                             )}
                         </div>
-                        <UserList class={`w-full`} />
+                        <section class="cms-panel"><UserList class="w-full" /></section>
                     </>
                 )}
             </div>

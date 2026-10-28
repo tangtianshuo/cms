@@ -162,13 +162,14 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
     try {
         Object.assign(process.env, gatewayEnv);
         const calls: string[] = [];
-        globalThis.fetch = async (input) => { calls.push(String(input)); throw new Error('Unexpected Gateway call'); };
+        globalThis.fetch = async (input) => { calls.push(String(input)); if (String(input).endsWith('/publication-state')) return Response.json({ revision: 0, active: null }); throw new Error('Unexpected Gateway call'); };
         const rejected = await fastify.inject({ url: '/api/v4/presets/releases/publish', method: 'POST',
             headers: { authorization }, payload: { target: 'gateway', requestKey: randomUUID(), expectedReleaseId: first.releaseId } });
         assert.equal(rejected.statusCode, 400, rejected.body);
         assert.match(rejected.body, /Site has no verified public template/);
         assert.deepEqual(calls, []);
-        assert.equal((await admin('/api/v4/presets/releases/')).currentReleaseId, first.releaseId);
+        assert.equal((await admin('/api/v4/presets/releases/')).currentReleaseId, '', 'Gateway history does not claim a local release is deployed');
+        assert.equal((await Repo.siteInstallation.methods.findSelected())?.currentReleaseId, first.releaseId);
     } finally {
         globalThis.fetch = originalFetch;
         for (const [key, value] of Object.entries(originalEnv)) {

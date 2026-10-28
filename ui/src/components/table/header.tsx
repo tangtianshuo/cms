@@ -349,7 +349,7 @@ export const TableHeader = defineComponent({
             <div
                 id={props.id}
                 style={props.style}
-                class={`flex sticky top-0 z-20 after:absolute after:bottom-0 after:left-0 after:w-full after:h-px
+                class={`cms-table-header flex sticky top-0 z-20 after:absolute after:bottom-0 after:left-0 after:w-full after:h-px
                  ${props.class || ''}`}
             >
                 {props.items.map((headerItem, colIdx) => {

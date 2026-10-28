@@ -201,15 +201,11 @@ export const Select = defineComponent({
 
         function listOption(option: SelectOption, optionIdx: number) {
             return (
-                <li id={`select_item_${optionIdx}`}>
+                <li id={`select_item_${optionIdx}`} role="presentation">
                     <button
-                        class={`text-left ${
-                            highlightOptionIdx.value === optionIdx
-                                ? 'bg-gray text-dark dark:text-white'
-                                : option.value === props.selected
-                                ? 'bg-yellow'
-                                : 'bg-white dark:bg-darkGray text-black dark:text-white'
-                        } w-full px-4 py-2`}
+                        role="option"
+                        aria-selected={option.value === props.selected}
+                        class={`cms-select-option ${highlightOptionIdx.value === optionIdx ? "highlighted" : ""} ${option.value === props.selected ? "selected" : ""}`}
                         onClick={() => {
                             selectOption();
                             opened.value = false;
@@ -237,7 +233,11 @@ export const Select = defineComponent({
                 <div id={props.id}>
                     <button
                         ref={inputRef}
-                        class={`flex gap-2 items-center bg-white dark:bg-darkGray border border-gray rounded-2.5 px-3 py-2`}
+                        aria-expanded={opened.value}
+                        aria-haspopup="listbox"
+                        aria-controls={opened.value ? dropdownId : undefined}
+                        disabled={props.disabled}
+                        class="cms-select-trigger"
                         onClick={() => {
                             calcDropdownPosition();
                             opened.value = !opened.value;
@@ -285,11 +285,13 @@ export const Select = defineComponent({
                         <Teleport to={`body`}>
                             <ul
                                 id={dropdownId}
-                                class={`${props.fixed ? 'fixed' : 'absolute'} ${
+                                role="listbox"
+                                aria-label={typeof props.label === "string" ? props.label : props.placeholder}
+                                class={`cms-select-menu ${props.fixed ? 'fixed' : 'absolute'} ${
                                     dropdownPosition.value.visible
                                         ? ''
                                         : 'opacity-0'
-                                } z-1000 max-h-[300px] text-dark dark:text-white overflow-auto bg-white dark:bg-darkGray rounded-2.5 shadow-input max-w-[320px]`}
+                                } z-1000 max-h-[300px] text-dark dark:text-white overflow-auto max-w-[320px]`}
                                 style={{
                                     top: `${dropdownPosition.value.top}px`,
                                     left: `${dropdownPosition.value.left}px`,

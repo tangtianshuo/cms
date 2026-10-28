@@ -58,9 +58,11 @@ import { createCustomDependenciesInit } from '@bcms/selfhosted-backend/custom-de
 import { registerMcpEndpoint } from '@bcms/selfhosted-backend/mcp/main';
 import { StorefrontController } from '@bcms/selfhosted-backend/storefront/controller';
 import { ensureProductTemplate } from '@bcms/selfhosted-backend/storefront/setup';
+import { StudioController } from '@bcms/selfhosted-backend/studio/controller';
 import { PresetController } from '@bcms/selfhosted-backend/presets/controller';
 import { SiteDomainController } from './site-domains/controller';
 import { ReleaseController } from '@bcms/selfhosted-backend/presets/release-controller';
+import { createGatewayReconciliationJob } from './presets/gateway-jobs';
 
 async function main() {
     await createServer({
@@ -168,6 +170,7 @@ async function main() {
             PluginController,
             StorefrontController,
             PresetController,
+            StudioController,
             ReleaseController,
             SiteDomainController,
         ],
@@ -291,6 +294,7 @@ async function main() {
                 },
             },
             createBcmsJobs(),
+            createGatewayReconciliationJob(),
 
             createBcmsPlugins(),
         ],

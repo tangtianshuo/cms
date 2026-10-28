@@ -1,22 +1,27 @@
-import { defineComponent, onBeforeUnmount, onMounted, ref, Teleport } from 'vue';
-import { delay } from '@bcms/selfhosted-ui/util/delay';
-import { BgDashboard } from '@bcms/selfhosted-ui/components/bg-dashboard';
-import { DashboardLayoutAsideContent } from '@bcms/selfhosted-ui/layouts/dashboard/aside-content';
-import { BCMSLogo } from '@bcms/selfhosted-ui/components/logo';
-import { Icon } from '@bcms/selfhosted-ui/components/icon';
+import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { Dialog, DialogPanel, DialogTitle } from '@headlessui/vue';
+import { useRoute, RouterLink } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { DashboardLayoutAsideContent } from './aside-content';
+import { studioSection, studioSections } from './navigation';
+import { StudioIcon } from '../../components/studio/icon';
 
 export const DashboardLayout = defineComponent({
     setup(_, ctx) {
         const sdk = window.bcms.sdk;
-        const throwable = window.bcms.throwable;
-        const pageTransition = window.bcms.pageTransition();
+        const route = useRoute();
+        const { t } = useI18n();
         const [screen] = window.bcms.useScreenSize();
-
-        const mobileBrakePoint = 900;
         const mobileShowNav = ref(false);
-        const [t1State] = pageTransition.register(() => delay(300));
-        const [t2State] = pageTransition.register(() => delay(300));
-
+        const main = ref<HTMLElement>();
+        const section = computed(() => studioSections.find(item => item.key === studioSection(route.query.section))!);
+        const pageTitle = computed(() => route.name === 'StudioView' ? section.value.label : route.meta.titleKey ? t(route.meta.titleKey as string) : String(route.meta.title || 'CMS Studio'));
+        const template = computed(() => sdk.store.template.items().find(item => item._id === route.params.templateId));
+        watch(() => route.fullPath, () => {
+            mobileShowNav.value = false;
+            main.value?.scrollTo(0, 0);
+        });
+        watch(() => screen.value.width, width => { if (width >= 1024) mobileShowNav.value = false; });
         async function refreshMediaCapabilities() {
             if (document.visibilityState === 'visible' && sdk.context && sdk.store.media.items().length) {
                 try { await sdk.media.getAll(); } catch (cause) { console.error('Could not refresh media access', cause); }
@@ -29,82 +34,35 @@ export const DashboardLayout = defineComponent({
         });
         onMounted(async () => {
             document.addEventListener('visibilitychange', refreshMediaCapabilities);
-            await throwable(async () => {
+            await window.bcms.throwable(async () => {
                 await sdk.user.get('me');
                 if (sdk.context) await sdk.template.getAll();
             });
         });
-
-        return () => (
-            <div class={`flex`}>
-                <BgDashboard
-                    class={`transition-all duration-300 ${
-                        t1State.value === 'in' || t1State.value === 'in-done'
-                            ? 'opacity-100'
-                            : 'opacity-0'
-                    }`}
-                />
-                <div class={`relative flex w-full z-10`}>
-                    <main
-                        class={`relative ${
-                            t2State.value === 'in' ||
-                            t2State.value === 'in-done'
-                                ? 'top-0 opacity-100'
-                                : 'top-48 opacity-0'
-                        } transition-all duration-300 max-desktop:pl-6 pl-[338px] max-desktop:pt-[80px] py-[51px] pr-6 w-full min-h-screen text-black dark:text-white`}
-                    >
-                        {ctx.slots.default ? ctx.slots.default() : ''}
-                    </main>
-                    {screen.value.width > mobileBrakePoint ? (
-                        <aside
-                            class={`${
-                                t1State.value === 'in' ||
-                                t1State.value === 'in-done'
-                                    ? 'left-0'
-                                    : 'left-[-312px]'
-                            } transition-all duration-300 fixed top-0 flex flex-col h-screen overflow-y-auto overflow-x-hidden border-r border-r-gray/50 dark:border-r-darkGray/50 w-[312px]`}
-                        >
-                            <DashboardLayoutAsideContent />
-                        </aside>
-                    ) : (
-                        <div
-                            class={`fixed left-0 ${
-                                t1State.value === 'in' ||
-                                t1State.value === 'in-done'
-                                    ? 'top-0'
-                                    : 'top-[-312px]'
-                            } transition-all duration-300 w-screen border-b border-b-gray/50 dark:border-b-gray`}
-                        >
-                            <div class={`flex gap-2 px-6 py-4 backdrop-blur-lg bg-white/20 dark:bg-dark/20`}>
-                                <BCMSLogo />
-                                <button
-                                    class={`ml-auto`}
-                                    onClick={() => {
-                                        mobileShowNav.value =
-                                            !mobileShowNav.value;
-                                    }}
-                                >
-                                    <Icon
-                                        class={`w-6 text-dark dark:text-white fill-current`}
-                                        src={'/nav'}
-                                    />
-                                </button>
-                            </div>
-                            {mobileShowNav.value && (
-                                <Teleport to={`body`}>
-                                    <aside
-                                        class={`bg-white dark:bg-dark z-1000 transition-all duration-300 fixed top-0 flex flex-col gap-6 px-6 py-8 h-screen overflow-y-auto overflow-x-hidden border-r border-r-gray/50 dark:border-r-darkGray/50 w-full`}
-                                    >
-                                        <DashboardLayoutAsideContent onCloseNav={() => {
-                                            mobileShowNav.value = false;
-                                        }} />
-                                    </aside>
-                                </Teleport>
-                            )}
-                        </div>
-                    )}
-                </div>
+        return () => <div class="cms-shell">
+            <a class="cms-skip-link" href="#cms-main">跳转到主要内容</a>
+            <aside class="cms-sidebar cms-sidebar-desktop" aria-label="工作空间导航"><DashboardLayoutAsideContent /></aside>
+            <div class="cms-main-shell">
+                <header class="cms-topbar">
+                    <div class="cms-breadcrumbs">
+                        <button class="cms-icon-button cms-mobile-menu" type="button" aria-label="展开导航" aria-expanded={mobileShowNav.value} onClick={() => { mobileShowNav.value = true; }}><StudioIcon name="menu" /></button>
+                        <RouterLink to="/d/studio" class="cms-breadcrumb-workspace">{sdk.context?.site?.name || 'CMS Studio'}</RouterLink><StudioIcon name="chevron" size={14} /><span aria-current="page">{pageTitle.value}</span>
+                        {template.value && <><StudioIcon name="chevron" size={14} /><span class="cms-breadcrumb-detail">{template.value.label}</span></>}
+                    </div>
+                    <div class="cms-topbar-actions">
+                        {sdk.context?.site && <a class="cms-preview-link" href="/d/presets/site-preview" target="_blank" rel="noopener">预览网站<StudioIcon name="external" size={14} /></a>}
+                        <button class="cms-top-avatar" type="button" aria-label="个人设置" onClick={() => window.bcms.modalService.handlers.userAddEdit.open({ data: { userId: sdk.store.user.methods.me()?._id } })}>{sdk.store.user.methods.me()?.username?.slice(0, 1).toUpperCase() || 'U'}</button>
+                    </div>
+                </header>
+                <main id="cms-main" ref={main} tabindex={-1} class={['cms-main', `cms-route-${String(route.name)}`]}>
+                    <div class="cms-page-content">{ctx.slots.default?.()}</div>
+                    <footer class="cms-footer"><span>CMS Studio <span aria-hidden="true">·</span> 让内容管理回归简单</span><span>{sdk.context?.workspace.name}</span></footer>
+                </main>
             </div>
-        );
+            <Dialog open={mobileShowNav.value} onClose={() => { mobileShowNav.value = false; }} class="cms-mobile-dialog">
+                <div class="cms-nav-scrim" aria-hidden="true" />
+                <DialogPanel class="cms-sidebar cms-sidebar-mobile"><DialogTitle class="sr-only">工作空间导航</DialogTitle><DashboardLayoutAsideContent mobile onCloseNav={() => { mobileShowNav.value = false; }} /></DialogPanel>
+            </Dialog>
+        </div>;
     },
 });

@@ -173,7 +173,7 @@ export const TemplateView = defineComponent({
                             </div>
                         </div>
                         <div
-                            class={`flex flex-col desktop:flex-row gap-2 desktop:gep-4 desktop:mt-6`}
+                            class="cms-model-info"
                         >
                             <div>
                                 <div class={`text-2xl`}>

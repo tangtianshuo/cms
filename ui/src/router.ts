@@ -41,6 +41,7 @@ interface RouteRecordRawExtended
 }
 
 const routes: Array<RouteRecordRawExtended> = [
+    { path: '/d', redirect: '/d/studio?section=overview' },
     {
         path: '/',
         name: 'LoginView',
@@ -61,10 +62,10 @@ const routes: Array<RouteRecordRawExtended> = [
             import(/* webpackChunkName: "login" */ './views/signup-admin'),
     },
     {
-        path: '/d',
+        path: '/d/overview',
         name: 'HomeView',
         meta: {
-            titleKey: 'routes.home',
+            title: '账户概览',
             layout: 'DashboardLayout',
         },
         component: () =>
@@ -75,6 +76,12 @@ const routes: Array<RouteRecordRawExtended> = [
         meta: { titleKey: `workspace.${page}`, layout: 'DashboardLayout' as const },
         component: () => import(`./views/dashboard/${page}.tsx`),
     })),
+    {
+        path: '/d/studio',
+        name: 'StudioView',
+        meta: { title: 'CMS Studio', layout: 'DashboardLayout' },
+        component: () => import('./views/dashboard/studio'),
+    },
     {
         path: '/d/presets',
         name: 'PresetsView',

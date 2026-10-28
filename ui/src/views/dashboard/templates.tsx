@@ -29,7 +29,7 @@ export const TemplatesView = defineComponent({
             <div>
                 {templates.value.length > 0 ? (
                     <>
-                        <div class={`flex gap-2`}>
+                        <div class={`cms-admin-heading flex gap-2`}>
                             <h1 class={`font-medium text-xl`}>
                                 {t('routes.templates')}
                             </h1>
@@ -52,7 +52,7 @@ export const TemplatesView = defineComponent({
                             </div>
                         </div>
                         <EntityList
-                            class={`mt-[45px] max-w-[530px]`}
+                            class="mt-6 w-full"
                             items={templates.value.map((template) => {
                                 return {
                                     name: template.label,

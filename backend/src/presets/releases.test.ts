@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { snapshotFingerprint } from './release-fingerprint';
 import type { Entry } from '../entry/models/main';
 import type { Template } from '../template/models/main';
 import type { Media } from '../media/models/main';
 import { getPreset } from './catalog';
 import { createPageDraft } from './pages';
 import { pageDraft, updatePageDraft } from './pages';
-import type { SiteInstallation } from './site-model';
 import { buildRelease, publishRelease, rollbackRelease, type ReleaseSource,
     type ReleaseRecord, type ReleaseInput } from './releases';
 
@@ -49,6 +49,20 @@ test('release expands concrete routes and isolates saved content, theme and navi
     assert.equal(snapshot.pages[0].content.preset.demo.hero.title, 'Original headline');
     assert.equal(snapshot.pages[0].content.preset.theme.accent, '#176a58');
     assert.equal(snapshot.pages[1].content.items?.[0].path, '/products/bag');
+});
+
+test('preflight reports independent field problems with editable object locations', () => {
+    const input = fixture();
+    const product = input.entries.find(entry => entry.templateId === 'product')!;
+    product.meta[0].props.find(prop => prop.id === 'title')!.data = [];
+    product.meta[0].props.find(prop => prop.id === 'price')!.data = [-1];
+    assert.throws(() => buildRelease(input), (cause: unknown) => {
+        const issues = (cause as { issues?: Array<{ entryId: string; field: string; code: string }> }).issues;
+        assert.ok(issues, 'structured validation problems are returned together');
+        assert.ok(issues.some(issue => issue.entryId === product._id && issue.field === 'title'));
+        assert.ok(issues.some(issue => issue.entryId === product._id && issue.field === 'price'));
+        return true;
+    });
 });
 
 test('new fixed pages stay out of the old release and path changes create direct redirects', () => {
@@ -216,4 +230,13 @@ test('a fixed page can be retired after its bound Entry has been deleted', () =>
     assert.throws(() => updatePageDraft(input.site, 'delivery', {
         ...pageDraft(input.site, 'delivery')!, enabled: true,
     }, null), /binding/i);
+});
+
+test('local publication rejects a draft changed after preflight before retaining or activating it', async () => {
+    const state = memory();
+    const hash = snapshotFingerprint(buildRelease(state.input));
+    state.input.site.theme.accent = '#123456';
+    await assert.rejects(() => publishRelease(state.source, 'admin', '', hash), /changed after validation/);
+    assert.equal(state.records.length, 0);
+    assert.equal(state.input.site.currentReleaseId, undefined);
 });

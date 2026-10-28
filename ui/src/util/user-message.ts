@@ -1,5 +1,8 @@
 /** Translate API failures at the UI boundary; keep SDK errors intact for callers. */
 const messages: Record<string, string> = {
+    'Draft content changed after validation; check again before publishing': '检查后草稿已有变化，请重新检查后发布。',
+    'Gateway active deployment has not confirmed this publication': 'Gateway 尚未确认本次切流，请稍后刷新部署状态。',
+    'A newer Gateway deployment was already recorded; refresh': '已有更新的线上版本，请刷新后操作。',
     'Wrong email and/or password':
         '邮箱或密码不正确，请检查邮箱拼写及密码后重新登录。',
     'Invalid server token':
@@ -164,6 +167,16 @@ const messages: Record<string, string> = {
         '上一次发布仍在部署中，请等待部署完成后再发布。',
     'A Gateway publication is still pending; wait before adopting another version':
         '当前版本仍在发布中，请等待发布完成后再采用其他模板版本。',
+    CANDIDATE_CREATE_FAILED:
+        '未能准备本次部署所需的资源，请联系管理员检查模板镜像是否可用及服务器剩余资源，处理后重新检查并发布。',
+    CANDIDATE_START_FAILED:
+        '新版网站未能启动，请联系管理员检查网站运行配置与启动日志，处理后重新检查并发布。',
+    CANDIDATE_UNHEALTHY:
+        '新版网站未通过健康检查或首页访问检查，尚未切换上线。请联系管理员检查模板与发布内容，处理后重新检查并发布。',
+    ROUTE_SWITCH_FAILED:
+        '新版网站的访问切换未能完成，请先刷新发布状态并确认线上网站；如仍失败，请联系管理员检查网关路由后再发布。',
+    WORKER_INTERNAL_ERROR:
+        '发布服务处理本次部署时发生异常，请先刷新发布状态确认结果；如仍失败，请联系管理员检查发布服务日志后再发布。',
     revision_conflict:
         '发布版本已被其他操作更新，请刷新页面查看最新站点状态，重新校验后再发布。',
     'Gateway revision conflict; start a new publication after reviewing the current site state':

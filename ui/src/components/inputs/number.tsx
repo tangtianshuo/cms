@@ -91,6 +91,7 @@ export const NumberInput = defineComponent({
                 required={props.required}
             >
                 <input
+                        data-cms-control="true"
                     ref={inputRef}
                     type={props.type}
                     id={
@@ -100,15 +101,7 @@ export const NumberInput = defineComponent({
                             ? props.label
                             : ''
                     }
-                    class={`relative block w-full bg-white pr-6 border rounded-3.5 transition-all duration-300 shadow-none font-normal not-italic text-base leading-tight -tracking-0.01 text-dark h-11 py-0 px-4.5 outline-none placeholder-grey placeholder-opacity-100 pt-3 pb-[9px] pl-4.5 resize-none top-0 left-0 overflow-hidden hover:shadow-input focus-within:shadow-input ${
-                        props.error
-                            ? 'border-red hover:border-red focus-within:border-red'
-                            : 'border-grey'
-                    } ${
-                        props.disabled
-                            ? 'cursor-not-allowed opacity-40 shadow-none border-grey'
-                            : 'cursor-auto'
-                    } dark:bg-darkGrey dark:text-light`}
+                    class={`cms-text-control ${props.error ? "is-error" : ""}`}
                     placeholder={props.placeholder}
                     value={props.value}
                     disabled={props.disabled}

@@ -154,7 +154,7 @@ export const BackupList = defineComponent({
         return () => (
             <div id={props.id} style={props.style} class={props.class}>
                 <div class={`flex gap-4 items-center`}>
-                    <div class={`text-3xl`}>{t('backups.title')}</div>
+                    <h2 class="cms-section-title">{t('backups.title')}</h2>
                     <div class={`ml-auto flex gap-2 items-center`}>
                         <Button
                             kind={`ghost`}

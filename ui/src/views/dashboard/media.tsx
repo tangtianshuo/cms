@@ -68,16 +68,16 @@ export const MediaView = defineComponent({
         }
 
         return () => (
-            <div class={`min-h-full desktop:pb-15 desktop:pt-0`}>
-                <header class="flex flex-wrap justify-between mb-15">
-                    <a href="/d/shares?type=Media" class="mb-4 w-full text-sm underline">{t('shares.grant')}</a>
-                    <div class="relative flex border-b border-dark transition-colors duration-300 mb-5 w-full max-w-[500px] min-w-[250px] hover:border-green focus-within:border-green sm:mr-5 dark:border-light dark:hover:border-yellow dark:focus-within:border-yellow">
+            <div class="cms-media-page">
+                <div class="cms-admin-heading"><div><p class="cms-admin-eyebrow">MEDIA MANAGEMENT</p><h1>{t('routes.media')}</h1><p class="cms-page-description">上传、整理并复用网站的图片与文件。</p></div><a class="cms-admin-text-link" href="/d/shares?type=Media">{t('shares.grant')}</a></div>
+                <header class="cms-media-toolbar">
+                    <div class="cms-media-search">
                         <Icon
                             src={`/search`}
-                            class="absolute top-1/2 left-0 -translate-y-1/2 w-[18px] mr-2.5 text-dark fill-current dark:text-light"
+                            class="cms-media-search-icon"
                         />
                         <input
-                            class="w-full py-2.5 pl-[35px] text-base outline-none bg-transparent dark:text-light"
+                            aria-label={t('common.search')} class="cms-media-search-input"
                             type="text"
                             placeholder={t('common.search')}
                             onInput={(event) => {
@@ -98,7 +98,7 @@ export const MediaView = defineComponent({
                         </Button>
                         <Button
                             kind={'secondary'}
-                            class={`ml-5`}
+                            class=""
                             onClick={() => {
                                 modal.handlers.mediaCreateDir.open();
                             }}
@@ -109,7 +109,7 @@ export const MediaView = defineComponent({
                 </header>
                 {isEmpty.value ? (
                     <>
-                        <div class={`mt-20 text-2xl text-center`}>
+                        <div class="cms-media-empty-label">
                             {t('views.media.empty')}
                         </div>
                         <EmptyState
@@ -120,7 +120,7 @@ export const MediaView = defineComponent({
                         />
                     </>
                 ) : (
-                    <div class={`mt-15 pb-7.5`}>
+                    <div class="mt-6 pb-6">
                         <div class={`flex items-center justify-between`}>
                             {mediaActiveParent.value ? (
                                 <Breadcrumb
@@ -129,11 +129,7 @@ export const MediaView = defineComponent({
                                     }}
                                 />
                             ) : (
-                                <div class="flex flex-col space-y-5">
-                                    <h1 class="text-9.5 -tracking-0.03 leading-none dark:text-light">
-                                        {t('routes.media')}
-                                    </h1>
-                                </div>
+                                <h2 class="text-base font-medium">全部素材</h2>
                             )}
                             {sortFilesComponent()}
                         </div>

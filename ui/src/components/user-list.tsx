@@ -173,7 +173,7 @@ export const UserList = defineComponent({
         return () => (
             <div id={props.id} style={props.style} class={props.class}>
                 <div class={`flex gap-4 items-center`}>
-                    <div class={`text-3xl`}>{t('users.team')}</div>
+                    <h2 class="cms-section-title">{t('users.team')}</h2>
                     <Button
                         class={`ml-auto`}
                         onClick={() => {

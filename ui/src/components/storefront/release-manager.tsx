@@ -1,5 +1,6 @@
 import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { defineComponent, onBeforeUnmount, onMounted, ref, type PropType } from 'vue';
+import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Button } from '@bcms/selfhosted-ui/components/button';
 import { createPublicationAction } from './gateway-publication';
@@ -13,6 +14,8 @@ interface History {
     audit: Array<{ createdAt: number; actorId: string; operation: string; releaseId: string; error: string }>;
 }
 interface Preflight {
+    snapshotHash?: string;
+    issueDetails?: Array<{ code: string; message: string; modelKey?: string; entryId?: string; field?: string; pageKey?: string }>;
     valid: boolean;
     expectedReleaseId: string;
     issues: string[];
@@ -49,6 +52,7 @@ export const ReleaseManager = defineComponent({
             if (value.status === 'failed') preflight.value = null;
             if (value.status === 'ready' && notify) {
                 preflight.value = null;
+                await refreshHistory();
                 await props.onSaved();
                 window.bcms.notification.success(t('presets.releasePublished'));
             }
@@ -58,7 +62,7 @@ export const ReleaseManager = defineComponent({
             if (disposed || publication.value?.status !== 'pending') return;
             pollTimer = setTimeout(async () => {
                 const id = publication.value?.operationId;
-                if (!id) return;
+                if (!id) { await refresh().catch(cause => { error.value = userErrorMessage(cause); schedulePoll(); }); return; }
                 try {
                     const result = await sdk.send<{ id: string; releaseId: string; status: Publication['status']; failureCode?: string }>({
                         url: `/api/v4/presets/releases/gateway/operations/${encodeURIComponent(id)}`, method: 'GET',
@@ -73,20 +77,20 @@ export const ReleaseManager = defineComponent({
                 }
             }, 2500);
         }
+        async function refreshHistory() {
+            history.value = await sdk.send<History>({ url: '/api/v4/presets/releases/', method: 'GET' });
+        }
         async function refresh() {
-            const [local, info] = await Promise.all([
-                sdk.send<History>({ url: '/api/v4/presets/releases/', method: 'GET' }),
-                sdk.send<GatewayInfo>({ url: '/api/v4/presets/releases/gateway', method: 'GET' }),
-            ]);
-            history.value = local;
+            const info = await sdk.send<GatewayInfo>({ url: '/api/v4/presets/releases/gateway', method: 'GET' });
             gateway.value = info;
+            await refreshHistory();
             if (info.bound && info.publishStatus) await acceptPublication(info.publishStatus);
         }
-        async function run(action: () => Promise<void>) {
+        async function run(operation: () => Promise<void>) {
             if (busy.value) return;
             busy.value = true;
             error.value = '';
-            try { await action(); }
+            try { await operation(); }
             catch (cause) { error.value = userErrorMessage(cause); }
             finally { busy.value = false; }
         }
@@ -100,13 +104,14 @@ export const ReleaseManager = defineComponent({
         async function publish() {
             if (!preflight.value?.valid || !gateway.value || publication.value?.status === 'pending') return;
             const expectedReleaseId = preflight.value.expectedReleaseId;
+            const snapshotHash = preflight.value.snapshotHash;
             await run(async () => {
                 if (gateway.value?.bound) {
                     const requestKey = action.request();
                     let result: Publication;
                     try {
                         result = await sdk.send<Publication>({ url: '/api/v4/presets/releases/publish', method: 'POST',
-                            data: { expectedReleaseId, target: 'gateway', requestKey } });
+                            data: { expectedReleaseId, snapshotHash, target: 'gateway', requestKey } });
                     } catch (cause) {
                         await refresh().catch(() => undefined);
                         throw cause;
@@ -115,7 +120,7 @@ export const ReleaseManager = defineComponent({
                     preflight.value = null;
                     return;
                 }
-                await sdk.send({ url: '/api/v4/presets/releases/publish', method: 'POST', data: { expectedReleaseId } });
+                await sdk.send({ url: '/api/v4/presets/releases/publish', method: 'POST', data: { expectedReleaseId, snapshotHash } });
                 preflight.value = null;
                 await refresh();
                 await props.onSaved();
@@ -123,13 +128,18 @@ export const ReleaseManager = defineComponent({
             });
         }
         async function rollback(releaseId: string) {
+            if (publication.value?.status === 'pending') return;
             await run(async () => {
-                await sdk.send({ url: '/api/v4/presets/releases/rollback', method: 'POST',
-                    data: { releaseId, expectedReleaseId: history.value.currentReleaseId } });
-                preflight.value = null;
-                await refresh();
-                await props.onSaved();
-                window.bcms.notification.success(t('presets.releaseRestored'));
+                const requestKey = gateway.value?.bound ? action.request(`rollback/${releaseId}`) : undefined;
+                try {
+                    const result = await sdk.send<Publication>({ url: '/api/v4/presets/releases/rollback', method: 'POST',
+                        data: { releaseId, expectedReleaseId: history.value.currentReleaseId, ...(requestKey ? { requestKey } : {}) } });
+                    preflight.value = null;
+                    if (gateway.value?.bound) { await acceptPublication({ ...result, requestKey }, true); return; }
+                    await refresh();
+                    await props.onSaved();
+                    window.bcms.notification.success(t('presets.releaseRestored'));
+                } catch (cause) { await refresh().catch(() => undefined); throw cause; }
             });
         }
         onMounted(() => run(refresh));
@@ -141,13 +151,19 @@ export const ReleaseManager = defineComponent({
                 {publication.value ? t(`presets.gatewayStatus.${publication.value.status}`) : t('presets.gatewayNotPublished')}
                 {publication.value?.failureCode && <span class="ml-2">{userErrorMessage(publication.value.failureCode)}</span>}
             </p>}
-            {gateway.value && !gateway.value.bound && <p class="mt-3 text-sm">{history.value.currentReleaseId
+            {gateway.value?.bound && publication.value?.status === 'failed' && publication.value.failureCode &&
+                <details class="mt-2 text-sm">
+                    <summary class="cursor-pointer">{t('presets.publicationDiagnostics')}</summary>
+                    <p class="mt-2 break-all">{t('presets.publicationFailureCode')} <code>{publication.value.failureCode}</code></p>
+                    <p class="break-all">{t('presets.publicationOperationId')} <code>{publication.value.operationId}</code></p>
+                </details>}
+            {gateway.value && <p class="mt-3 text-sm">{history.value.currentReleaseId
                 ? t('presets.activeRelease', { id: history.value.currentReleaseId.slice(0, 8) }) : t('presets.noRelease')}</p>
             }
             <div class="mt-4 flex flex-wrap items-center gap-4">
-                <Button disabled={busy.value || publication.value?.status === 'pending'} onClick={check}>{t(gateway.value?.bound ? 'presets.checkGatewayRelease' : 'presets.checkRelease')}</Button>
+                <Button disabled={busy.value || publication.value?.status === 'pending'} kind="secondary" onClick={check}>{t(gateway.value?.bound ? 'presets.checkGatewayRelease' : 'presets.checkRelease')}</Button>
                 <Button disabled={busy.value || !gateway.value || !preflight.value?.valid || publication.value?.status === 'pending'} onClick={publish}>{t('presets.publishRelease')}</Button>
-                {gateway.value?.bound ? publication.value?.status === 'ready' && siteUrl() &&
+                {gateway.value?.bound ? history.value.currentReleaseId && siteUrl() &&
                     <a href={siteUrl()} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>
                     : history.value.currentReleaseId && <a href={origin} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
             </div>
@@ -155,8 +171,11 @@ export const ReleaseManager = defineComponent({
             {error.value && <p role="alert" class="mt-3 border-l-4 border-red bg-error px-3 py-2 text-sm leading-relaxed text-dark">{error.value}</p>}
             {preflight.value && <div class="mt-5 border border-gray/60 p-4 text-sm dark:border-gray">
                 <strong>{preflight.value.valid ? t('presets.releaseValid', { count: preflight.value.pageCount }) : t('presets.releaseInvalid')}</strong>
-                {preflight.value.issues.map((issue) => <p role="alert" class="mt-2 text-red">{userErrorMessage(issue)}</p>)}
-                {!gateway.value?.bound && preflight.value.diff && <div class="mt-3 grid gap-4 sm:grid-cols-3">
+                {(preflight.value.issueDetails?.length ? preflight.value.issueDetails : preflight.value.issues.map(message => ({ message }))).map((issue: { message: string; modelKey?: string; entryId?: string; field?: string; pageKey?: string }) => <div role="alert" class="mt-2 text-red">
+                    <p>{userErrorMessage(issue.message)}{issue.field && <span class="ml-2">({issue.field})</span>}</p>
+                    {(issue.modelKey || issue.pageKey) && <RouterLink class="underline" to={{ path: '/d/studio', query: { section: issue.pageKey ? 'pages' : 'content', modelKey: issue.modelKey, entryId: issue.entryId, pageKey: issue.pageKey } }}>定位并修正 →</RouterLink>}
+                </div>)}
+                {preflight.value.diff && <div class="mt-3 grid gap-4 sm:grid-cols-3">
                     {(['added', 'changed', 'removed'] as const).map((kind) => <div>
                         <p class="font-medium">{t(`presets.releaseDiff.${kind}`)}</p>
                         {preflight.value!.diff![kind].map((path) => <p class="mt-1 break-all">{path}</p>)}
@@ -169,19 +188,19 @@ export const ReleaseManager = defineComponent({
                     </div>}
                 </div>}
             </div>}
-            {gateway.value && !gateway.value.bound && !!history.value.items.length && <div class="mt-6 overflow-x-auto">
+            {gateway.value && !!history.value.items.length && <div class="mt-6 overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead><tr><th class="py-2">{t('presets.releaseVersion')}</th><th>{t('presets.releaseCreated')}</th>
                         <th>{t('presets.releaseActor')}</th><th>{t('presets.pagesTitle')}</th><th /></tr></thead>
                     <tbody>{history.value.items.map((item) => <tr class="border-t border-gray/40">
                         <td class="py-3">{item._id.slice(0, 8)} {item._id === history.value.currentReleaseId && t('presets.currentRelease')}</td>
                         <td>{new Date(item.createdAt).toLocaleString()}</td><td>{item.createdBy}</td><td>{item.pageCount}</td>
-                        <td>{item._id !== history.value.currentReleaseId && <Button disabled={busy.value}
+                        <td>{item._id !== history.value.currentReleaseId && <Button disabled={busy.value || publication.value?.status === 'pending'}
                             onClick={() => rollback(item._id)}>{t('presets.rollbackRelease')}</Button>}</td>
                     </tr>)}</tbody>
                 </table>
             </div>}
-            {gateway.value && !gateway.value.bound && !!history.value.audit.length && <details class="mt-5 text-sm">
+            {gateway.value && !!history.value.audit.length && <details class="mt-5 text-sm">
                 <summary class="cursor-pointer">{t('presets.releaseAudit')}</summary>
                 {history.value.audit.map((event) => <p class={`mt-2 ${event.error ? 'text-red' : ''}`}>
                     {new Date(event.createdAt).toLocaleString()} · {event.actorId} · {event.operation} · {event.releaseId.slice(0, 8)}

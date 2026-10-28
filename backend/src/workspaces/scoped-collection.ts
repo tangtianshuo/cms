@@ -23,7 +23,7 @@ export function stampOwnership<T extends { workspaceId?: string }>(document: T):
 
 /** All ordinary repository operations use this handle; raw handles are reserved
  * for specifically named identity lookups and startup migrations. */
-export function scopedCollection<T extends Document>(raw: Collection<T>, prepare?: (value: T) => Promise<void>, kind?: string, aroundWrite?: <R>(entries: T[], action: () => Promise<R>) => Promise<R>, invalidate: () => void = () => {}, database?: Db): Collection<T> {
+export function scopedCollection<T extends Document>(raw: Collection<T>, prepare?: (value: T) => Promise<void>, kind?: string, aroundWrite?: <R>(entries: T[], action: () => Promise<R>) => Promise<R>, invalidate: () => void = () => { /* No invalidation callback was supplied. */ }, database?: Db): Collection<T> {
     const filter = (value: Document = {}, operation: 'get' | 'post' | 'put' | 'delete' = 'get') => ({ $and: [contentFilter(kind, operation), value] });
     const visible = async (value: Document = {}, operation: 'get' | 'post' | 'put' | 'delete' = 'get') => ({ $and: [filter(value, operation), ...(database ? [await copyVisibility(database)] : [{ copyBatchId: { $exists: false } }])] });
     const update = (value: Document) => {

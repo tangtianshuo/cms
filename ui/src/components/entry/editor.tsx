@@ -206,12 +206,12 @@ export const EntryEditor = defineComponent({
             <div
                 id={props.id}
                 style={props.style}
-                class={`${props.class || ''}`}
+                class={`cms-entry-editor ${props.class || ''}`}
             >
                 {template.value && lngCode.value && lngIdx.value !== -1 ? (
-                    <div class={`flex flex-col gap-2 max-w-[600px]`}>
+                    <div class={`flex flex-col gap-2 max-w-[920px]`}>
                         <div
-                            class={`bg-light/50 dark:bg-darkGray/50 rounded-xl border border-gray/50 dark:border-gray p-5 mb-10`}
+                            class="cms-panel mb-6"
                         >
                             <TextAreaInput
                                 id={`entry.meta.${lngIdx.value}.props.0.data.0`}

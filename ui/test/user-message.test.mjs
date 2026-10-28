@@ -143,6 +143,25 @@ test('template import conflicts identify the incompatible field', () => {
     assert.match(errorMessage('revision_conflict'), /发布版本.*刷新/);
 });
 
+test('deployment failure codes explain the failed stage and a useful next step', () => {
+    const cases = [
+        ['CANDIDATE_CREATE_FAILED', /准备.*部署.*管理员.*镜像/],
+        ['CANDIDATE_START_FAILED', /启动.*管理员.*运行/],
+        ['CANDIDATE_UNHEALTHY', /健康检查.*首页.*管理员/],
+        ['ROUTE_SWITCH_FAILED', /切换.*刷新.*状态/],
+        ['WORKER_INTERNAL_ERROR', /发布服务.*异常.*刷新.*状态/],
+    ];
+    const messages = new Set();
+    for (const [code, expected] of cases) {
+        const message = errorMessage(code);
+        assert.match(message, expected);
+        assert.doesNotMatch(message, /CANDIDATE_|ROUTE_|WORKER_/);
+        messages.add(message);
+    }
+    assert.equal(messages.size, cases.length);
+    assert.match(errorMessage('UNRECOGNIZED_DEPLOYMENT_FAILURE'), /未能获取具体.*原因/);
+});
+
 test('shared notifications translate warning and error paths, including push', async () => {
     const { NotificationService } = await import(
         '../src/services/notification.ts'

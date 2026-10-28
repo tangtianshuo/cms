@@ -20,6 +20,10 @@ export const ReleaseRepo = createMongoDBRepository<ReleaseRecord, {
         createdBy: { __type: 'string', __required: true },
         previousReleaseId: { __type: 'string', __required: true },
         payload: { __type: 'string', __required: true },
+        target: { __type: 'string', __required: false },
+        templateRecord: { __type: 'string', __required: false },
+        requestKey: { __type: 'string', __required: false },
+        sourceReleaseId: { __type: 'string', __required: false },
     },
     indexes: [{ key: { siteId: 1, createdAt: -1 }, name: 'release_history' }],
     methods({ mdb, identityCollection }) {
@@ -30,7 +34,8 @@ export const ReleaseRepo = createMongoDBRepository<ReleaseRecord, {
                 const records = identityCollection.find({ payload: { $regex: escaped } });
                 for await (const record of records) {
                     const site = await Repo.siteInstallation.methods.findFresh(record.siteId);
-                    if (!site || ownerWorkspace(site) !== ownerWorkspace(record) || !(site.publishedReleaseIds || [site.currentReleaseId]).includes(record._id)) continue;
+                    const published = record.target === 'gateway' ? site?.gatewayPublishedReleaseIds || [] : site?.publishedReleaseIds || [site?.currentReleaseId];
+                    if (!site || ownerWorkspace(site) !== ownerWorkspace(record) || !published.includes(record._id)) continue;
                     let snapshot: ReleaseSnapshot;
                     try { snapshot = JSON.parse(record.payload); } catch { continue; }
                     if (snapshot.schemaVersion !== 1 || snapshot.siteId !== site._id || ownerWorkspace(snapshot) !== ownerWorkspace(record)) continue;
@@ -50,6 +55,7 @@ export const ReleaseRepo = createMongoDBRepository<ReleaseRecord, {
 
 export const ReleaseAuditRepo = createMongoDBRepository<ReleaseAudit, {
     findBySite(siteId: string): Promise<ReleaseAudit[]>;
+    record(event: ReleaseAudit): Promise<void>;
 }>({
     name: 'StorefrontReleaseAudit',
     collection: `${Config.storageScope}_storefront_release_audit`,
@@ -63,6 +69,9 @@ export const ReleaseAuditRepo = createMongoDBRepository<ReleaseAudit, {
     },
     indexes: [{ key: { siteId: 1, createdAt: -1 }, name: 'release_audit_history' }],
     methods({ mdb }) {
-        return { async findBySite(siteId) { return mdb.find({ siteId }).sort({ createdAt: -1 }).limit(50).toArray(); } };
+        return {
+            async record(event) { await mdb.updateOne({ _id: event._id }, { $setOnInsert: event }, { upsert: true }); },
+            async findBySite(siteId) { return mdb.find({ siteId }).sort({ createdAt: -1 }).limit(50).toArray(); },
+        };
     },
 });

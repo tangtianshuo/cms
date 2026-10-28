@@ -1,3 +1,4 @@
+import { snapshotFingerprint } from './release-fingerprint';
 import { ownerWorkspace } from '../workspaces/context';
 import { randomUUID } from 'node:crypto';
 import type { MongoDBEntry } from '../_server/modules/mongodb';
@@ -34,6 +35,10 @@ export interface ReleaseRecord extends MongoDBEntry {
     createdBy: string;
     previousReleaseId: string;
     payload: string;
+    target?: 'gateway';
+    templateRecord?: string;
+    requestKey?: string;
+    sourceReleaseId?: string;
 }
 export interface ReleaseAudit extends MongoDBEntry {
     workspaceId?: string;
@@ -60,6 +65,18 @@ export interface ReleaseSource {
     insertRelease(record: ReleaseRecord): Promise<void>;
     activate(site: SiteInstallation, releaseId: string): Promise<boolean>;
     audit(event: ReleaseAudit): Promise<void>;
+}
+
+export interface ReleaseIssue {
+    code: string;
+    message: string;
+    modelKey?: string;
+    entryId?: string;
+    field?: string;
+    pageKey?: string;
+}
+export class ReleaseValidationError extends Error {
+    constructor(readonly issues: ReleaseIssue[]) { super(issues[0]?.message || 'Validation failed'); }
 }
 
 export interface BuildReleaseOptions {
@@ -125,20 +142,21 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         }
     }
     const entries = availableEntries.filter((entry) => selectedIds.has(entry._id));
+    const issues: ReleaseIssue[] = [];
     for (const definition of preset.models) {
         const model = site.models.find((item) => item.key === definition.key);
         const template = input.templates.find((item) => item._id === model?.templateId);
-        if (!model || !template) throw new Error(`Missing model binding: ${definition.key}`);
+        if (!model || !template) { issues.push({ code: 'model-binding', message: `Missing model binding: ${definition.key}`, modelKey: definition.key }); continue; }
         for (const field of definition.fields) {
             const mapping = model.fields.find((item) => item.key === field.key);
             const prop = template.props.find((item) => item.id === mapping?.propId);
             if (!prop || prop.type !== field.type || prop.array !== field.array) {
-                throw new Error(`Invalid field binding: ${definition.key}.${field.key}`);
+                issues.push({ code: 'field-binding', message: `Invalid field binding: ${definition.key}.${field.key}`, modelKey: definition.key, field: field.key });
             }
         }
         const modelEntries = entries.filter((entry) => entry.templateId === model.templateId);
         if (definition.singleEntry && modelEntries.length !== 1) {
-            throw new Error(`Exactly one ${definition.key} Entry is required for language ${language}`);
+            issues.push({ code: 'single-entry', message: `Exactly one ${definition.key} Entry is required for language ${language}`, modelKey: definition.key });
         }
         for (const entry of modelEntries) {
             for (const field of definition.fields) {
@@ -146,17 +164,18 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
                 if (!Array.isArray(values) || (!field.array && values.length > 1) ||
                     (field.required && (!values.length || values.some((value) =>
                         value === null || value === undefined || typeof value === 'string' && !value.trim())))) {
-                    throw new Error(`Invalid required field ${definition.key}.${field.key} (${entry._id})`);
+                    issues.push({ code: 'required-field', message: `Invalid required field ${definition.key}.${field.key} (${entry._id})`, modelKey: definition.key, entryId: entry._id, field: field.key });
+                    continue;
                 }
                 for (const value of values) {
                     if (field.type === PropType.STRING && typeof value !== 'string' ||
                         field.type === PropType.NUMBER && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
-                        throw new Error(`Invalid value ${definition.key}.${field.key}`);
+                        issues.push({ code: 'field-value', message: `Invalid value ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
                     }
                     if (field.type === PropType.MEDIA) {
                         const id = (value as { _id?: string } | null)?._id;
                         if (!input.media.some((media) => media._id === id && media.mimetype.startsWith('image/'))) {
-                            throw new Error(`Missing image media: ${definition.key}.${field.key}`);
+                            issues.push({ code: 'media-missing', message: `Missing image media: ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
                         }
                     }
                     if (field.type === PropType.ENTRY_POINTER) {
@@ -164,13 +183,14 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
                         const target = site.models.find((item) => item.key === field.referenceModel);
                         if (!pointer || pointer.tid !== target?.templateId ||
                             !entries.some((item) => item._id === pointer.eid && item.templateId === pointer.tid)) {
-                            throw new Error(`Invalid related Entry: ${definition.key}.${field.key}`);
+                            issues.push({ code: 'entry-reference', message: `Invalid related Entry: ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
                         }
                     }
                 }
             }
         }
     }
+    if (issues.length) throw new ReleaseValidationError(issues);
     const pages: ReleasePage[] = [];
     for (const sourcePage of site.pages) {
         const page = pageDraft(site, sourcePage.key)!;
@@ -293,7 +313,7 @@ async function recordAudit(source: ReleaseSource, event: ReleaseAudit): Promise<
     catch (cause) { console.error('Storefront release audit failed', cause); }
 }
 
-export async function publishRelease(source: ReleaseSource, actorId: string, expectedReleaseId: string): Promise<ReleaseRecord> {
+export async function publishRelease(source: ReleaseSource, actorId: string, expectedReleaseId: string, snapshotHash?: string): Promise<ReleaseRecord> {
     const site = await currentSite(source, expectedReleaseId);
     const now = Date.now();
     const releaseId = randomUUID();
@@ -303,6 +323,7 @@ export async function publishRelease(source: ReleaseSource, actorId: string, exp
         const prior = previous ? JSON.parse(previous.payload) as ReleaseSnapshot : undefined;
         if (prior && (prior.siteId !== site._id || ownerWorkspace(prior) !== ownerWorkspace(site))) throw new Error('Release snapshot belongs to another site');
         const snapshot = buildRelease({ ...await source.loadContent(site), site, previous: prior });
+        if (snapshotHash && snapshotHash !== snapshotFingerprint(snapshot)) throw new Error('Draft content changed after validation; check again before publishing');
         const record: ReleaseRecord = { _id: releaseId, workspaceId: ownerWorkspace(site), siteId: site._id, createdAt: now, updatedAt: now,
             createdBy: actorId, previousReleaseId: site.currentReleaseId || '', payload: JSON.stringify(snapshot) };
         await source.insertRelease(record);

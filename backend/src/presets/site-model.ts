@@ -15,6 +15,9 @@ export interface SiteInstallation extends MongoDBEntry {
     publishedTemplateRecord?: string;
     gatewayPublishIntent?: string;
     gatewayPinnedTemplateRecord?: string;
+    gatewayCurrentReleaseId?: string;
+    gatewayPublishedReleaseIds?: string[];
+    gatewayActiveRevision?: number;
     status: 'empty' | 'importing' | 'ready' | 'failed';
     importError: string;
     includeDemo: boolean;
@@ -73,6 +76,9 @@ export const SiteInstallationSchema: ObjectSchema = {
     publishedTemplateRecord: { __type: 'string', __required: false },
     gatewayPublishIntent: { __type: 'string', __required: false },
     gatewayPinnedTemplateRecord: { __type: 'string', __required: false },
+    gatewayCurrentReleaseId: { __type: 'string', __required: false },
+    gatewayPublishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
+    gatewayActiveRevision: { __type: 'number', __required: false },
     status: { __type: 'string', __required: true },
     importError: { __type: 'string', __required: true },
     includeDemo: { __type: 'boolean', __required: true },

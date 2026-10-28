@@ -1,6 +1,7 @@
 import { ownerWorkspace, runWithWorkspace } from '../workspaces/context';
 import type { ReleaseRecord, ReleaseSnapshot } from '../presets/releases';
 import type { SiteInstallation } from '../presets/site-model';
+import type { DomainResolution } from '../site-domains/model';
 
 export async function publishedSite(host: string, expectedHost: string, source: {
     findSite(): Promise<SiteInstallation | null>;
@@ -17,7 +18,7 @@ export async function publishedSite(host: string, expectedHost: string, source: 
 }
 
 export async function publishedDomainSite(host: string, source: {
-    resolve(host: string): Promise<import('../site-domains/model').DomainResolution | null>;
+    resolve(hostname: string): Promise<DomainResolution | null>;
     findSiteById(id: string): Promise<SiteInstallation | null>;
     findRelease(id: string): Promise<ReleaseRecord | null>;
 }): Promise<(ReleaseSnapshot & { releaseId: string; primaryHostname: string; bindingRevision: number }) | null> {

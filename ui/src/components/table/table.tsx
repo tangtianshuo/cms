@@ -475,7 +475,7 @@ export const Table = defineComponent({
         }
 
         return () => (
-            <div>
+            <div class="cms-table">
                 {(props.searchable || props.title) && (
                     <div class="flex items-center justify-between flex-wrap gap-4 mb-6">
                         {props.title && (
@@ -497,7 +497,7 @@ export const Table = defineComponent({
                 )}
                 {props.rows.length > 0 ? (
                     <div
-                        class="overflow-hidden"
+                        class="cms-table-surface overflow-hidden"
                         style={{
                             maxHeight: isTableExpanded.value
                                 ? props.height
@@ -576,7 +576,7 @@ export const Table = defineComponent({
                 ) : (
                     <div
                         id={props.id}
-                        class="flex flex-col items-center justify-center text-center rounded-md px-8 bg-lightgray-100 py-12 h-[170px] dark:bg-slate"
+                        class="cms-table-empty flex flex-col items-center justify-center text-center rounded-md px-8 bg-lightgray-100 py-12 h-[170px] dark:bg-slate"
                     >
                         <Icon src="/sleep" class="w-6 h-6 text-silver mb-3" />
                         <div class="text-sm leading-none tracking-[-0.28px] font-semibold mb-2">

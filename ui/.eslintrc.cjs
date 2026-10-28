@@ -15,7 +15,7 @@ module.exports = {
   rules: {
     'no-console': 'off',
     'no-debugger': 'warn',
-    'no-shadow': 'error',
+    'no-shadow': ['error', { ignoreOnInitialization: true }],
     '@typescript-eslint/no-unused-vars': [
       2,
       { args: 'all', argsIgnorePattern: '^_' },

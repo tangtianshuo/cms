@@ -24,8 +24,12 @@ RUN npm ci --prefix ui --ignore-scripts
 
 COPY . /app
 
+ARG VITE_STOREFRONT_ORIGIN
+ARG VITE_TEMPLATE_PREVIEW_ORIGIN
+
 RUN npm run build:types \
-    && npm run build:ui \
+    && VITE_STOREFRONT_ORIGIN="${VITE_STOREFRONT_ORIGIN}" \
+       VITE_TEMPLATE_PREVIEW_ORIGIN="${VITE_TEMPLATE_PREVIEW_ORIGIN}" npm run build:ui \
     && npm run build:backend \
     && rm -rf _scripts node_modules cli client proxy ui/public ui/node_modules ui/src backend/plugins
 

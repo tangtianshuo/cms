@@ -8,7 +8,8 @@ import type { Entry } from '@bcms/selfhosted-backend/entry/models/main';
 import { Button } from '@bcms/selfhosted-ui/components/button';
 import { availablePreviewPages, buildPagePreviewRequest,
     type PreviewSiteContext } from '@bcms/selfhosted-ui/util/page-preview';
-import { createPreviewGate, sendPreview } from './preview-state';
+import { createPreviewGate } from './preview-state';
+import { isPreviewReady, overlayPagePreview, resolvePreviewTarget, sendRendererPreview } from '@bcms/selfhosted-ui/util/template-preview';
 
 export const PagePreview = defineComponent({
     props: {
@@ -18,7 +19,10 @@ export const PagePreview = defineComponent({
     },
     setup(props) {
         const { t } = useI18n();
-        const origin = new URL(import.meta.env.VITE_STOREFRONT_ORIGIN || 'http://localhost:3000').origin;
+        const config = {
+            templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
+            legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
+        };
         const pages = computed(() => availablePreviewPages(props.site, props.entry.templateId));
         const selectedPage = ref('');
         const viewport = ref<'desktop' | 'mobile'>('desktop');
@@ -28,6 +32,10 @@ export const PagePreview = defineComponent({
         const loading = ref(false);
         const error = ref('');
         const payload = ref<unknown>();
+        const selectedPath = ref<string>();
+        const connectionError = ref('');
+        const target = computed(() => resolvePreviewTarget(payload.value, config));
+        let connectionTimer: ReturnType<typeof setTimeout> | undefined;
         const gate = createPreviewGate();
         const refreshTick = ref(0);
         function refreshCapabilities() {
@@ -38,15 +46,44 @@ export const PagePreview = defineComponent({
         let timeout: ReturnType<typeof setTimeout> | undefined;
 
         function deliver() {
-            if (frameReady.value && frame.value && payload.value) {
-                sendPreview(frame.value, origin, payload.value);
+            if (frameReady.value && frame.value && payload.value && target.value.origin) {
+                sendRendererPreview(frame.value, target.value.origin, payload.value, selectedPath.value);
             }
         }
 
+        function onReady(event: MessageEvent) {
+            if (!isPreviewReady(event, frame.value, target.value.origin, target.value.mode === 'template')) return;
+            frameReady.value = true;
+            connectionError.value = '';
+            clearTimeout(connectionTimer);
+            deliver();
+        }
+        function onFrameLoad() {
+            if (frameReady.value) { deliver(); return; }
+            clearTimeout(connectionTimer);
+            connectionTimer = setTimeout(() => {
+                connectionError.value = '预览服务未完成版本握手。请关闭后重试；若持续失败，请管理员检查渲染器版本和嵌入策略。';
+            }, 10000);
+        }
+        function installPayload(value: unknown, path?: string) {
+            const next = resolvePreviewTarget(value, config);
+            if (next.origin !== target.value.origin || next.mode !== target.value.mode) {
+                frameReady.value = false;
+                connectionError.value = '';
+                clearTimeout(connectionTimer);
+            }
+            selectedPath.value = path;
+            payload.value = value;
+            deliver();
+        }
+        watch(frame, value => { if (value && !frameReady.value) onFrameLoad(); });
         function close() {
             open.value = false;
             gate.next();
             if (timeout) clearTimeout(timeout);
+            clearTimeout(connectionTimer);
+            connectionError.value = '';
+            selectedPath.value = undefined;
             frameReady.value = false;
             payload.value = undefined;
             loading.value = false;
@@ -74,14 +111,23 @@ export const PagePreview = defineComponent({
                         url: '/api/v4/storefront/page-preview', method: 'POST',
                         data: buildPagePreviewRequest(props.site, props.entry, selectedPage.value, props.language),
                     });
+                    let nextPayload: unknown = result;
+                    let path: string | undefined;
+                    if (resolvePreviewTarget(result, config).mode === 'template') {
+                        const saved = await window.bcms.sdk.send<unknown>({ url: '/api/v4/storefront/site-preview', method: 'GET' });
+                        const overlay = overlayPagePreview(saved, result, { pageKey: selectedPage.value,
+                            entryId: props.entry._id, language: props.language,
+                            settings: props.site.models.find(model => model.templateId === props.entry.templateId)?.key === 'site-settings' });
+                        nextPayload = overlay.payload;
+                        path = overlay.path;
+                    }
                     if (gate.isCurrent(sequence)) {
-                        payload.value = result;
+                        installPayload(nextPayload, path);
                         error.value = '';
-                        deliver();
                     }
                 } catch (cause) {
                     if (gate.isCurrent(sequence)) {
-                        payload.value = undefined;
+                        installPayload(undefined);
                         error.value = userErrorMessage(cause);
                     }
                 } finally {
@@ -90,12 +136,13 @@ export const PagePreview = defineComponent({
             }, 350);
         }, { deep: true });
 
-        onMounted(() => window.addEventListener('keydown', onKeydown));
+        onMounted(() => { window.addEventListener('keydown', onKeydown); window.addEventListener('message', onReady); });
         onBeforeUnmount(() => {
             clearInterval(capabilityRefresh);
             document.removeEventListener('visibilitychange', refreshCapabilities);
             close();
             window.removeEventListener('keydown', onKeydown);
+            window.removeEventListener('message', onReady);
         });
 
         return () => <>
@@ -118,7 +165,7 @@ export const PagePreview = defineComponent({
                         <div class="flex border border-white/30" role="group" aria-label={t('presets.viewport')}>
                             {(['desktop', 'mobile'] as const).map((value) => <button type="button"
                                 aria-pressed={viewport.value === value}
-                                class={`px-3 py-2 text-xs ${viewport.value === value ? 'bg-white text-dark' : 'text-white'}`}
+                                class={`min-h-[44px] px-3 py-2 text-xs ${viewport.value === value ? 'bg-white text-dark' : 'text-white'}`}
                                 onClick={() => { viewport.value = value; }}>
                                 {t(`presets.${value}`)}
                             </button>)}
@@ -126,16 +173,19 @@ export const PagePreview = defineComponent({
                         <span class="min-w-[75px] text-right text-xs" aria-live="polite">
                             {loading.value ? t('storefrontPreview.updating') : t('storefrontPreview.draft')}
                         </span>
-                        <button type="button" class="border border-white/30 px-3 py-2 text-xs" onClick={close}>
+                        <button type="button" class="min-h-[44px] border border-white/30 px-3 py-2 text-xs" onClick={close}>
                             {t('common.close')}
                         </button>
                     </div>
                     {error.value && <p class="m-0 border-l-4 border-red bg-error px-4 py-2 text-sm leading-relaxed text-dark" role="alert">{error.value}</p>}
-                    <div class="flex min-h-0 flex-1 justify-center overflow-auto bg-gray/30 p-3 sm:p-6">
-                        <iframe ref={frame} title={t('storefrontPreview.title')} src={`${origin}/preview`}
+                    {payload.value && <p role="status" class="m-0 border-b border-white/20 px-4 py-3 text-sm leading-relaxed">{target.value.mode === 'template' && !frameReady.value ? 'AeroFrame 1.0.3 · 正在核对预览服务，草稿尚未发送。' : target.value.notice}{target.value.mode === 'template' && frameReady.value && ' 当前页包含未保存的编辑；路径和关联卡片使用已保存的站点草稿。'}{target.value.mode === 'unsupported' && <a href="/d/presets" class="ml-3 underline">前往模板管理</a>}</p>}
+                    {connectionError.value && <p role="alert" class="m-0 border-b border-red bg-error px-4 py-3 text-sm text-dark">{connectionError.value}</p>}
+                    <div class="relative flex min-h-0 flex-1 justify-center overflow-auto bg-gray/30 p-3 sm:p-6">
+                        {target.value.origin && !frameReady.value && !connectionError.value && <p role="status" class="absolute left-0 right-0 top-0 z-10 bg-dark/90 p-3 text-center text-sm">正在连接并核对预览服务版本…</p>}
+                        {target.value.origin && payload.value && <iframe ref={frame} title={t('storefrontPreview.title')} src={`${target.value.origin}/preview`}
                             class="h-full min-h-[480px] max-w-full border-0 bg-white shadow-lg"
                             style={{ width: viewport.value === 'mobile' ? '390px' : '1100px' }}
-                            onLoad={() => { frameReady.value = true; deliver(); }} />
+                            onLoad={onFrameLoad} />}
                     </div>
                 </aside>
             </Teleport>}

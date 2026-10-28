@@ -38,6 +38,17 @@ export const ProductPreview = defineComponent({
             }
         }
 
+        function onFrameMessage(event: MessageEvent) {
+            if (event.origin !== origin || event.source !== frame.value?.contentWindow ||
+                event.data?.type !== 'storefront:preview-ready') {
+                return;
+            }
+            frameReady.value = true;
+            deliver();
+        }
+
+        window.addEventListener('message', onFrameMessage);
+
         watch(
             [() => props.entry, refreshTick],
             () => {
@@ -74,6 +85,7 @@ export const ProductPreview = defineComponent({
         );
 
         onBeforeUnmount(() => {
+            window.removeEventListener('message', onFrameMessage);
             clearInterval(capabilityRefresh);
             document.removeEventListener('visibilitychange', refreshCapabilities);
             gate.next();

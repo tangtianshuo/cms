@@ -13,7 +13,11 @@ test('Docker management policy permits its local storefront iframe', { skip: !or
         return [name, sources];
     }));
     const sources = directives.get('frame-src') || directives.get('default-src');
-    assert.ok(sources.includes('http://localhost:3000'), 'preview origin must be allowed');
+    const expectedOrigins = (process.env.STOREFRONT_E2E_PREVIEW_ORIGINS || 'http://localhost:3000').split(',');
+    for (const expected of expectedOrigins) {
+        assert.equal(new URL(expected).origin, expected, 'expected preview must be an exact origin');
+        assert.ok(sources.includes(expected), `preview origin must be allowed: ${expected}`);
+    }
     assert.ok(sources.includes("'self'"), 'same-origin frames must remain allowed');
     assert.ok(!sources.some((source) => ['*', 'http:', 'https:'].includes(source)),
         'preview must not allow arbitrary remote frames');

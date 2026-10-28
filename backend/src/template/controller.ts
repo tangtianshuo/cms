@@ -46,6 +46,8 @@ async function availableTemplateName(label: string, id: string) {
 }
 
 async function addTemplateWithUniqueName(template: Template): Promise<Template> {
+    // The loop terminates on a completed read or successful insert.
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         template.name = await availableTemplateName(
             template.label,

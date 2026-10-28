@@ -29,7 +29,7 @@ export const GroupsView = defineComponent({
             <div>
                 {groups.value.length > 0 ? (
                     <>
-                        <div class={`flex gap-2`}>
+                        <div class={`cms-admin-heading flex gap-2`}>
                             <h1 class={`font-medium text-xl`}>
                                 {t('routes.groups')}
                             </h1>
@@ -50,7 +50,7 @@ export const GroupsView = defineComponent({
                             </div>
                         </div>
                         <EntityList
-                            class={`mt-[45px] max-w-[530px]`}
+                            class="mt-6 w-full"
                             items={groups.value.map((group) => {
                                 return {
                                     name: group.label,

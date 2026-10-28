@@ -1,419 +1,73 @@
 import { computed, defineComponent, onMounted, ref } from 'vue';
-import { BCMSLogo } from '@bcms/selfhosted-ui/components/logo';
-import { Icon } from '@bcms/selfhosted-ui/components/icon';
-import { Tag } from '@bcms/selfhosted-ui/components/tag';
-import {
-    DashboardLayoutNavItem,
-    type DashboardLayoutNavItemProps,
-} from '@bcms/selfhosted-ui/layouts/dashboard/nav-item';
-import { UserAvatar } from '@bcms/selfhosted-ui/components/user-avatar';
-import { Dropdown } from '@bcms/selfhosted-ui/components/dropdown';
-import { isUserAdmin } from '@bcms/selfhosted-ui/util/user-role';
-import type { PluginList } from '@bcms/selfhosted-backend/plugin/models/controller';
+import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import {
-    getUiLanguage,
-    setUiLanguage,
-} from '@bcms/selfhosted-ui/i18n';
+import { Dropdown } from '../../components/dropdown';
+import { StudioIcon } from '../../components/studio/icon';
+import { isUserAdmin } from '../../util/user-role';
+import { getUiLanguage, setUiLanguage } from '../../i18n';
+import { studioSections, isDashboardLinkActive } from './navigation';
+import type { PluginList } from '@bcms/selfhosted-backend/plugin/models/controller';
 
 export const DashboardLayoutAsideContent = defineComponent({
-    emits: {
-        closeNav: () => true,
-    },
-    setup(_, ctx) {
+    props: { mobile: Boolean },
+    emits: { closeNav: () => true },
+    setup(props, ctx) {
         const { t } = useI18n();
         const sdk = window.bcms.sdk;
-        const modal = window.bcms.modalService;
+        const route = useRoute();
         const theme = window.bcms.useTheme();
-        const throwable = window.bcms.throwable;
-
         const me = computed(() => sdk.store.user.methods.me());
-        const templates = computed(() => sdk.store.template.items());
-        const baseUri = ref('/d');
+        const admin = computed(() => isUserAdmin(me.value || undefined));
         const plugins = ref<PluginList>();
-
-        const navItems = computed(() => {
-            const myPolicy = me.value?.customPool.policy;
-            if (!myPolicy) {
-                return [];
-            }
-            const isAdmin = isUserAdmin(me.value);
-            const items: DashboardLayoutNavItemProps[] = [];
-            items.push({
-                title: t('nav.administration'),
-                activeOnViews: [
-                    'HomeView',
-                    'TemplatesView',
-                    'PresetsView',
-                    'TemplateView',
-                    'GroupsView',
-                    'GroupView',
-                    'WidgetsView',
-                    'MediaView',
-                    'SettingsView',
-                    'ApiKeysView',
-                    'ApiKeyView',
-                ],
-                visible: true,
-                children: [
-                    ...(['workspaces', 'domains', 'entry-groups', 'shares'] as const).map((page) => ({
-                        title: t(`workspace.${page}`), href: `/d/${page}`, activeOnViews: [({ workspaces: 'WorkspacesView', domains: 'DomainsView', 'entry-groups': 'EntryGroupsView', shares: 'SharesView' } as const)[page]], visible: true,
-                        onClick() { ctx.emit('closeNav'); },
-                    })),
-                    {
-                        title: t('nav.presets'),
-                        href: '/d/presets',
-                        activeOnViews: ['PresetsView'],
-                        visible: !!sdk.context?.context.admin,
-                        onClick() { ctx.emit('closeNav'); },
-                        titleSlot: () => navItemSlot(t('nav.presets'), '/administration/template'),
-                    },
-                    {
-                        title: t('nav.templates'),
-                        href: `/d/template`,
-                        activeOnViews: ['TemplatesView', 'TemplateView'],
-                        visible: isAdmin,
-                        onClick() {
-                            ctx.emit('closeNav');
-                        },
-                        titleSlot: () =>
-                            navItemSlot(
-                                t('nav.templates'),
-                                '/administration/template',
-                            ),
-                    },
-                    {
-                        title: t('nav.groups'),
-                        href: `/d/group`,
-                        activeOnViews: ['GroupsView', 'GroupsView'],
-                        visible: isAdmin,
-                        onClick() {
-                            ctx.emit('closeNav');
-                        },
-                        titleSlot: () =>
-                            navItemSlot(
-                                t('nav.groups'),
-                                '/administration/group',
-                            ),
-                    },
-                    {
-                        title: t('nav.widgets'),
-                        href: `${baseUri.value}/widget`,
-                        activeOnViews: ['WidgetsView'],
-                        visible: isAdmin,
-                        onClick() {
-                            ctx.emit('closeNav');
-                        },
-                        titleSlot: () =>
-                            navItemSlot(
-                                t('nav.widgets'),
-                                '/administration/widget',
-                            ),
-                    },
-                    {
-                        title: t('nav.media'),
-                        href: `${baseUri.value}/media`,
-                        activeOnViews: ['MediaView'],
-                        visible: isAdmin || myPolicy.media.get,
-                        onClick() {
-                            ctx.emit('closeNav');
-                        },
-                        titleSlot: () =>
-                            navItemSlot(
-                                t('nav.media'),
-                                '/administration/media',
-                            ),
-                    },
-                    {
-                        title: t('nav.settings'),
-                        href: `${baseUri.value}/settings`,
-                        activeOnViews: ['SettingsView'],
-                        visible: isAdmin,
-                        onClick() {
-                            ctx.emit('closeNav');
-                        },
-                        titleSlot: () =>
-                            navItemSlot(t('nav.settings'), '/cog'),
-                    },
-                    {
-                        title: t('nav.apiKeys'),
-                        href: `${baseUri.value}/api-key`,
-                        activeOnViews: ['ApiKeysView', 'ApiKeyView'],
-                        visible: isAdmin,
-                        onClick() {
-                            ctx.emit('closeNav');
-                        },
-                        titleSlot: () =>
-                            navItemSlot(
-                                t('nav.keyManager'),
-                                '/administration/key',
-                            ),
-                    },
-                ],
-            });
-            if (plugins.value && plugins.value.list.length > 0) {
-                items.push({
-                    title: t('nav.plugins'),
-                    activeOnViews: ['PluginView'],
-                    visible: true,
-                    children: plugins.value.list.map((plugin) => {
-                        return {
-                            title: plugin.name,
-                            activeOnViews: [('PluginView' + plugin.id) as any],
-                            visible: true,
-                            href: `/d/plugin/${plugin.id}`,
-                            onClick() {
-                                ctx.emit('closeNav');
-                            },
-                            titleSlot: () => (
-                                <div class={'flex gap-2'}>
-                                    <div>{plugin.name}</div>
-                                </div>
-                            ),
-                        };
-                    }),
-                });
-            }
-            items.push({
-                title: t('nav.entries'),
-                activeOnViews: ['EntriesView', 'EntryView'],
-                visible: true,
-                children: templates.value
-                    .map((template) => {
-                        const templatePolicy = myPolicy.templates.find(
-                            (e) => e._id === template._id,
-                        );
-                        return {
-                            title: template.label,
-                            activeOnViews: [
-                                ('EntriesView' + template._id) as any,
-                                ('EntryView' + template._id) as any,
-                            ],
-                            visible:
-                                isAdmin || (!!template && templatePolicy?.get),
-                            href: `/d/template/${template._id}/entry`,
-                            onClick() {
-                                ctx.emit('closeNav');
-                            },
-                            titleSlot: () => (
-                                <div class={'flex gap-2'}>
-                                    <div>{template.label}</div>
-                                </div>
-                            ),
-                        };
-                    })
-                    .sort((a, b) =>
-                        a.title.toLowerCase() > b.title.toLowerCase() ? 1 : -1,
-                    ),
-            });
-            return items;
-        });
-
+        const advanced = computed(() => [
+            { title: t('workspace.workspaces'), href: '/d/workspaces', visible: true },
+            { title: t('workspace.domains'), href: '/d/domains', visible: true },
+            { title: t('workspace.entry-groups'), href: '/d/entry-groups', visible: true },
+            { title: t('workspace.shares'), href: '/d/shares', visible: true },
+            { title: t('nav.presets'), href: '/d/presets', visible: Boolean(sdk.context?.context.admin) },
+            { title: '内容模型结构', href: '/d/template', visible: admin.value },
+            { title: t('nav.groups'), href: '/d/group', visible: admin.value },
+            { title: t('nav.widgets'), href: '/d/widget', visible: admin.value },
+            { title: t('nav.media'), href: '/d/media', visible: admin.value || Boolean(me.value?.customPool.policy.media.get) },
+            { title: '成员、语言与备份', href: '/d/settings', visible: admin.value },
+            { title: t('nav.apiKeys'), href: '/d/api-key', visible: admin.value },
+            { title: '账户概览', href: '/d/overview', visible: true },
+        ].filter(item => item.visible));
+        const templates = computed(() => sdk.store.template.items().filter(item => admin.value || me.value?.customPool.policy.templates.find(policy => policy._id === item._id)?.get).sort((a,b) => a.label.localeCompare(b.label)));
+        const advancedOpen = computed(() => advanced.value.some(item => isDashboardLinkActive(route, item.href) && !['EntriesView', 'EntryView'].includes(String(route.name))));
         onMounted(async () => {
             if (!sdk.context) return;
-            await throwable(
-                async () => {
-                    return await sdk.plugin.getAll();
-                },
-                async (result) => {
-                    plugins.value = result;
-                },
-            );
+            await window.bcms.throwable(async () => sdk.plugin.getAll(), async result => { plugins.value = result; });
         });
-
-        function navItemSlot(name: string, src: string) {
-            return (
-                <div class={'flex gap-4 w-full '}>
-                    <div
-                        class={`group-hover:text-green dark:group-hover:text-yellow duration-300 transition-all`}
-                    >
-                        {name}
-                    </div>
-                    <div class={`ml-auto`}>
-                        <Icon
-                            class={`fill-current transition-all duration-300 w-5 h-5 group-hover:text-green group-focus-visible:text-green desktop:w-6 desktop:h-6 dark:group-hover:text-yellow dark:group-focus-visible:text-yellow`}
-                            src={src}
-                        />
-                    </div>
-                </div>
-            );
+        function profile() {
+            ctx.emit('closeNav');
+            window.bcms.modalService.handlers.userAddEdit.open({ data: { userId: me.value?._id } });
         }
-
-        async function logout() {
-            await throwable(
-                async () => {
-                    await sdk.auth.logout();
-                },
-                async () => {
-                    window.location.pathname = '/';
-                },
-            );
-        }
-
-        return () => (
-            <>
-                <div class={`flex gap-4 items-center px-6 pt-14`}>
-                    <BCMSLogo />
-                    <button
-                        class={`ml-auto hidden max-desktop:block`}
-                        onClick={() => {
-                            ctx.emit('closeNav');
-                        }}
-                    >
-                        <Icon
-                            class={`w-10 text-dark dark:text-white fill-current`}
-                            src={`/close`}
-                        />
-                    </button>
-                </div>
-                <a href="/d/workspaces" class="mx-6 mt-6 text-sm break-words">
-                    {sdk.context?.workspace.name || t('workspace.recover')}<br />
-                    <span class="text-xs opacity-70">{sdk.context?.site?.name || t('workspace.chooseSite')}</span>
-                </a>
-                <button
-                    class={`mt-14 px-6 mx-6 border border-gray dark:border-darkGray bg-white/50 dark:bg-dark/50 text-black dark:text-white rounded-2.5 flex gap-2 items-center py-[10px]`}
-                >
-                    <Icon
-                        class={`w-3 h-3 text-dark dark:text-white fill-current`}
-                        src={'/search'}
-                    />
-                    <div>{t('nav.search')}</div>
-                    <Tag
-                        class={`flex-shrink-0 ml-auto mt-auto mb-auto text-black`}
-                    >
-                        {t('nav.ctrlK')}
-                    </Tag>
-                </button>
-                <div class={`relative h-full flex flex-col overflow-hidden`}>
-                    <div
-                        class={`flex flex-col gap-6 h-full overflow-y-auto overflow-x-hidden mt-10 px-6 pb-6 w-full bcmsScrollbar`}
-                    >
-                        {navItems.value.map((item) => {
-                            return (
-                                <DashboardLayoutNavItem
-                                    class={`w-full`}
-                                    item={item}
-                                />
-                            );
-                        })}
-                    </div>
-                </div>
-                <div
-                    class={`flex gap-8 pt-[24px] mx-6 mb-8 border-t border-t-gray/50 dark:border-t-darkGray/50`}
-                >
-                    <button
-                        class={`flex gap-2 items-center text-left`}
-                        onClick={() => {
-                            ctx.emit('closeNav');
-                            modal.handlers.userAddEdit.open({
-                                data: {
-                                    userId: me.value?._id,
-                                },
-                            });
-                        }}
-                    >
-                        <UserAvatar
-                            fullName={me.value?.username}
-                            image={me.value?.customPool.personal.avatarUri}
-                        />
-                        <div class={'flex flex-col'}>
-                            <div
-                                class={`text-sm text-darkGray dark:text-gray font-bold`}
-                            >
-                                {me.value?.username}
-                            </div>
-                            <div class={`text-xs text-darkGray dark:text-gray`}>
-                                {me.value?.email}
-                            </div>
-                        </div>
-                    </button>
-                    <Dropdown
-                        class={`ml-auto`}
-                        fixed
-                        items={[
-                            {
-                                text: t('userMenu.settings'),
-                                icon: '/cog',
-                                onClick: async () => {
-                                    ctx.emit('closeNav');
-                                    modal.handlers.userAddEdit.open({
-                                        data: {
-                                            userId: me.value?._id,
-                                        },
-                                    });
-                                },
-                            },
-                            {
-                                text:
-                                    theme.active.value === 'light'
-                                        ? t('userMenu.darkMode')
-                                        : t('userMenu.lightMode'),
-                                border: true,
-                                onClick: () => {
-                                    theme.set(
-                                        theme.active.value === 'light'
-                                            ? 'dark'
-                                            : 'light',
-                                    );
-                                },
-                            },
-                            {
-                                text: (
-                                    <div
-                                        class={`flex items-center gap-4 w-full`}
-                                    >
-                                        <span>{t('language.label')}</span>
-                                        <span class={`ml-auto text-gray`}>
-                                            {t(
-                                                getUiLanguage() === 'zh-CN'
-                                                    ? 'language.zhCN'
-                                                    : 'language.en',
-                                            )}
-                                        </span>
-                                    </div>
-                                ),
-                                onClick: () => {
-                                    setUiLanguage(
-                                        getUiLanguage() === 'zh-CN'
-                                            ? 'en'
-                                            : 'zh-CN',
-                                    );
-                                },
-                            },
-                            {
-                                text: t('userMenu.twitter'),
-                                onClick: () => {
-                                    window.location.href =
-                                        'https://x.com/@thebcms';
-                                },
-                            },
-                            {
-                                text: t('userMenu.terms'),
-                                onClick: () => {
-                                    window.location.href =
-                                        'https://thebcms.com/terms-and-conditions';
-                                },
-                            },
-                            {
-                                text: t('userMenu.support'),
-                                border: true,
-                                onClick: () => {
-                                    window.location.href =
-                                        'https://thebcms.com/contact';
-                                },
-                            },
-                            {
-                                text: t('userMenu.logout'),
-                                icon: '/sign-out',
-                                onClick: async () => {
-                                    ctx.emit('closeNav');
-                                    await logout();
-                                },
-                            },
-                        ]}
-                    />
-                </div>
-            </>
-        );
+        const navLink = (title: string, href: string, icon?: string) => <div onClick={() => ctx.emit('closeNav')}><RouterLink to={href} class={['cms-nav-link', { active: isDashboardLinkActive(route, href) }]} aria-current={isDashboardLinkActive(route, href) ? 'page' : undefined}>{icon && <StudioIcon name={icon} />}<span>{title}</span></RouterLink></div>;
+        return () => <>
+            <div class="cms-brand-row" onClick={() => ctx.emit('closeNav')}><RouterLink class="cms-wordmark" to="/d/studio"><span class="cms-brand-symbol" aria-hidden="true">c<span /></span><strong>cms<span> studio</span></strong></RouterLink>{props.mobile && <button type="button" class="cms-icon-button" aria-label="关闭导航" onClick={() => ctx.emit('closeNav')}><StudioIcon name="close" /></button>}</div>
+            <div class="cms-workspace-label"><span>工作空间</span><span>CMS</span></div>
+            <div onClick={() => ctx.emit('closeNav')}><RouterLink class="cms-site-picker" to="/d/workspaces" aria-label="切换工作空间或网站"><span class="cms-site-avatar">{sdk.context?.site?.name?.slice(0, 1) || 'W'}</span><span class="cms-site-name">{sdk.context?.site?.name || t('workspace.chooseSite')}<small>{sdk.context?.workspace.name || t('workspace.recover')}</small></span><StudioIcon name="chevron" size={14} /></RouterLink></div>
+            <div class="cms-sidebar-scroll">
+                <p class="cms-nav-label">内容管理</p>
+                <nav aria-label="主导航">{studioSections.filter(item => item.key !== 'release').map(item => navLink(item.label, `/d/studio?section=${item.key}`, item.icon))}</nav>
+                <div class="cms-nav-divider" />
+                <nav aria-label="发布">{navLink('发布中心', '/d/studio?section=release', 'release')}</nav>
+                <details class="cms-nav-group" open={advancedOpen.value} key={String(advancedOpen.value)}><summary>高级管理<StudioIcon name="chevron" size={13} /></summary><nav aria-label="高级管理">{advanced.value.map(item => navLink(item.title, item.href))}</nav></details>
+                {templates.value.length > 0 && <details class="cms-nav-group" open={route.name === 'EntriesView' || route.name === 'EntryView'} key={`models-${String(route.name)}`}><summary>完整内容模型<span class="cms-nav-count">{templates.value.length}</span><StudioIcon name="chevron" size={13} /></summary><nav aria-label="完整内容模型">{templates.value.map(item => navLink(item.label, `/d/template/${item._id}/entry`))}</nav></details>}
+                {plugins.value && plugins.value.list.length > 0 && <details class="cms-nav-group" open={route.name === 'PluginView'}><summary>{t('nav.plugins')}<StudioIcon name="chevron" size={13} /></summary><nav aria-label="插件">{plugins.value.list.map(item => navLink(item.name, `/d/plugin/${item.id}`))}</nav></details>}
+            </div>
+            <div class="cms-sidebar-profile"><button type="button" class="cms-profile-button" onClick={profile}><span class="cms-user-avatar">{me.value?.username?.slice(0, 1).toUpperCase() || 'U'}</span><span><strong>{me.value?.username || '用户'}</strong><small>{me.value?.email}</small></span></button>
+                <Dropdown fixed items={[
+                    { text: t('userMenu.settings'), icon: '/cog', onClick: profile },
+                    { text: theme.active.value === 'light' ? t('userMenu.darkMode') : t('userMenu.lightMode'), onClick: () => { theme.set(theme.active.value === 'light' ? 'dark' : 'light'); } },
+                    { text: `${t('language.label')} · ${getUiLanguage() === 'zh-CN' ? '中文' : 'English'}`, onClick: () => setUiLanguage(getUiLanguage() === 'zh-CN' ? 'en' : 'zh-CN') },
+                    { text: t('userMenu.support'), onClick: () => { window.open('https://thebcms.com/contact', '_blank', 'noopener'); } },
+                    { text: t('userMenu.terms'), onClick: () => { window.open('https://thebcms.com/terms-and-conditions', '_blank', 'noopener'); } },
+                    { text: t('userMenu.twitter'), onClick: () => { window.open('https://x.com/@thebcms', '_blank', 'noopener'); } },
+                    { text: t('userMenu.logout'), icon: '/sign-out', border: true, onClick: async () => { await window.bcms.throwable(async () => sdk.auth.logout(), async () => { window.location.pathname = '/'; }); } },
+                ]} />
+            </div>
+        </>;
     },
 });

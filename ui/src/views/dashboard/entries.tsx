@@ -38,6 +38,7 @@ export const EntriesView = defineComponent({
         const confirm = window.bcms.confirm;
         const notification = window.bcms.notification;
         const [lngCode] = window.bcms.useLanguage();
+        const [screen] = window.bcms.useScreenSize();
 
         const router = useRouter();
         const route = useRoute();
@@ -65,7 +66,7 @@ export const EntriesView = defineComponent({
         const tableContainer = ref<HTMLDivElement>();
         const tableData = computed(() => {
             const dynamicRowWidth = tableContainer.value
-                ? tableContainer.value.offsetWidth - 96 - 150 - 150 - 250 - 150
+                ? Math.max(200, tableContainer.value.offsetWidth - 96 - 150 - 150 - 250 - 150)
                 : 300;
             const output: {
                 header: TableHeaderItem[];
@@ -298,7 +299,7 @@ export const EntriesView = defineComponent({
                     </div>
                 ) : (
                     <div class={`min-w-full h-full`}>
-                        <div class={`flex gap-2 items-center`}>
+                        <div class="cms-admin-heading flex flex-wrap gap-2 items-center">
                             <h1 class={`font-medium text-xl`}>
                                 {template.value.label}
                             </h1>
@@ -332,18 +333,16 @@ export const EntriesView = defineComponent({
                                     title={''}
                                     subtitle={t('views.entries.empty')}
                                     ctaText={t('views.entries.createNew')}
+                                    clickHandler={() => router.push({ path: `${route.path}/create`, query: selectedGroup.value ? { group: selectedGroup.value } : {} })}
                                 />
                             ) : (
                                 <div class={`mt-10`}>
                                     <Table
-                                        class={`absolute`}
+                                        class=""
                                         name={`entries_${template.value._id}`}
                                         rowHeight={80}
                                         height={
-                                            tableContainer.value
-                                                ? tableContainer.value
-                                                      .offsetHeight - 100
-                                                : 500
+                                            Math.max(320, screen.value.height - 350)
                                         }
                                         searchable
                                         header={tableData.value.header}

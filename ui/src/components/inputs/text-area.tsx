@@ -64,6 +64,11 @@ export const TextAreaInput = defineComponent({
                 }),
             ],
             editable: !props.disabled,
+            editorProps: { attributes: {
+                id: props.id || (typeof props.label === 'string' ? props.label : ''),
+                role: 'textbox', 'aria-multiline': 'true',
+                'aria-label': typeof props.label === 'string' ? props.label : props.placeholder || t('components.text.placeholder'),
+            } },
         });
         let yProvider: EntryContentSyncProvider | null = null;
         if (props.entrySync) {
@@ -180,17 +185,8 @@ export const TextAreaInput = defineComponent({
                 required={props.required}
             >
                 <div
-                    id={props.id}
                     style={props.style}
-                    class={`bcmsTextArea relative block w-full bg-white pr-6 border rounded-3.5 transition-all duration-300 shadow-none font-normal not-italic text-base leading-tight -tracking-0.01 text-dark h-11 py-0 px-4.5 outline-none placeholder-grey placeholder-opacity-100 pt-3 pb-[9px] pl-4.5 resize-none top-0 left-0 overflow-hidden hover:shadow-input focus-within:shadow-input ${
-                        props.error
-                            ? 'border-red hover:border-red focus-within:border-red'
-                            : 'border-grey'
-                    } ${
-                        props.disabled
-                            ? 'cursor-not-allowed opacity-40 shadow-none border-grey'
-                            : 'cursor-auto'
-                    } dark:bg-darkGrey dark:text-light`}
+                    class={`bcmsTextArea cms-text-control ${props.error ? "is-error" : ""}`}
                 >
                     <EditorContent editor={editor.value} />
                 </div>

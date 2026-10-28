@@ -31,7 +31,7 @@ function memorySource() {
         },
         findEntry: async (id) => entries.get(id) || null,
         addEntry: async (value) => { entries.set(value._id, structuredClone(value)); return structuredClone(value); },
-        ensureEnglish: async () => {},
+        ensureEnglish: async () => { /* No invalidation callback was supplied. */ },
     };
     return { source, templates, entries, getSite: () => site, failNextCollection: () => { failCollectionOnce = true; } };
 }

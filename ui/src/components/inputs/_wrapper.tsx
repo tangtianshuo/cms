@@ -30,7 +30,7 @@ export const InputWrapper = defineComponent({
     setup(props, ctx) {
         return () => (
             <div
-                class={`flex flex-col ${props.class || ''}`}
+                class={`cms-input-wrapper flex flex-col ${props.class || ''}`}
                 style={props.style}
                 onClick={(event) => {
                     ctx.emit('click', event);
@@ -48,11 +48,7 @@ export const InputWrapper = defineComponent({
                         }
                     >
                         <div
-                            class={`font-normal not-italic text-xs leading-normal tracking-0.06 select-none uppercase block ${
-                                props.error
-                                    ? 'text-error-800 dark:text-error-800'
-                                    : 'dark:text-white'
-                            }`}
+                            class={`cms-input-label ${props.error ? "is-error" : ""}`}
                         >
                             <span>
                                 {typeof props.label === 'string'
@@ -79,6 +75,7 @@ export const InputWrapper = defineComponent({
                 </div>
                 {props.error && (
                     <div
+                        id={`${props.id || props.label}-error`}
                         // class={`flex font-normal not-italic text-xs leading-normal tracking-0.06 select-none text-error-800 dark:text-error-800 mt-1.5`}
                         class={`flex font-normal not-italic text-xs leading-normal tracking-0.06 select-none text-red dark:text-red mt-1.5`}
                     >

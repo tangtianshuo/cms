@@ -45,27 +45,17 @@ export const PasswordInput = defineComponent({
                     error={props.error}
                 >
                     <div
-                        class={`flex ${
+                        class={`cms-password-field flex ${
                             props.error
                                 ? 'border border-red hover:border-red focus-within:border-red'
                                 : ''
                         }`}
                     >
                         <input
+                        data-cms-control="true"
+                            aria-label={typeof props.label === "string" ? props.label : undefined}
                             id={props.id}
-                            class={`relative block w-full bg-white border rounded-3.5 transition-all duration-300 shadow-none font-normal not-italic text-base leading-tight -tracking-0.01 text-dark h-11 py-0 px-4.5 outline-none placeholder-grey placeholder-opacity-100 pt-3 pb-[9px] pl-4.5 resize-none top-0 left-0 overflow-hidden hover:shadow-input focus-within:shadow-input ${
-                                props.error
-                                    ? 'border-red hover:border-red focus-within:border-red pr-17.5'
-                                    : 'pr-[35px]'
-                            } ${
-                                props.error
-                                    ? ''
-                                    : 'border-grey hover:border-grey hover:border-opacity-50 focus-within:border-grey focus-within:border-opacity-50'
-                            } ${
-                                props.disabled
-                                    ? 'cursor-not-allowed opacity-40 shadow-none border-grey'
-                                    : 'cursor-auto'
-                            } dark:bg-darkGrey dark:text-light`}
+                            class={`cms-text-control ${props.error ? "is-error" : ""}`}
                             placeholder={props.placeholder}
                             value={props.value}
                             type={showRef.value ? 'text' : 'password'}
@@ -80,7 +70,8 @@ export const PasswordInput = defineComponent({
                             readonly={props.readonly}
                         />
                         <button
-                            class={`absolute top-3 ${
+                            aria-label={showRef.value ? "隐藏密码" : "显示密码"}
+                            class={`cms-password-toggle absolute top-3 ${
                                 props.error ? 'right-10.5' : 'right-3'
                             }`}
                             type="button"

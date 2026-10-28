@@ -20,12 +20,14 @@ import WorkspacesView from './dashboard/workspaces';
 import DomainsView from './dashboard/domains';
 import EntryGroupsView from './dashboard/entry-groups';
 import SharesView from './dashboard/shares';
+import StudioView from './dashboard/studio';
 import SitePreviewView from './dashboard/site-preview';
 
 export const views = {
     LoginView,
     SignupAdminView,
     HomeView,
+    StudioView,
 
     TemplatesView,
     PresetsView,

@@ -66,7 +66,7 @@ export interface MongoDBRepository<Entry extends MongoDBEntry, Methods> {
      * Update existing entity in the database. `createdAt` and `updatedAt`
      * properties will be overwritten.
      */
-    update(entity: Entry, manualCU?: boolean): Promise<Entry>;
+    update(entity: Entry, manualCU?: boolean, expectedUpdatedAt?: number): Promise<Entry>;
     /**
      * Update existing entities in the database. `createdAt` and `updatedAt`
      * properties will be overwritten.
@@ -279,20 +279,22 @@ export function createMongoDBRepository<
             return entries;
         },
 
-        async update(entry, manualCU) {
-            if (!manualCU) {
-                entry.updatedAt = Date.now();
-            }
+        async update(entry, manualCU, expectedUpdatedAt) {
             if (scoped) { stampOwnership(entry); assertContentWrite(); if (!canWriteContent(config.name, entry, 'put')) throw new ContentScopeError('Resource update denied'); }
             const previous = await intf.findOne({ _id: entry._id } as Filter<Entry>);
             if (!previous) throw new ContentScopeError('Resource not found in workspace');
+            if (expectedUpdatedAt !== undefined && previous.updatedAt !== expectedUpdatedAt) throw Object.assign(new Error('Content changed; refresh before saving'), { status: 409 });
+            if (!manualCU) entry.updatedAt = Math.max(Date.now(), previous.updatedAt + 1);
             if (entry.copyBatchId !== previous.copyBatchId || JSON.stringify(entry.provenance) !== JSON.stringify(previous.provenance)) throw new ContentScopeError('Copy provenance cannot be changed');
             if (scoped && !canWriteContent(config.name, previous, 'put')) throw new ContentScopeError('Resource update denied');
             const perform = async () => {
                 await config.prepareWrite?.(entry);
-                const write = () => raw.updateOne((scoped ? { $and: [contentFilter(config.name, 'put'), { _id: entry._id }] } : { _id: entry._id }) as Filter<Entry>, { $set: entry, ...(config.name === 'Entry' && !('titleKeys' in entry) ? { $unset: { titleKeys: '' } } : {}) } as UpdateFilter<Entry>);
+                const write = () => raw.updateOne((scoped ? { $and: [contentFilter(config.name, 'put'), { _id: entry._id, ...(expectedUpdatedAt !== undefined ? { updatedAt: expectedUpdatedAt } : {}) }] } : { _id: entry._id, ...(expectedUpdatedAt !== undefined ? { updatedAt: expectedUpdatedAt } : {}) }) as Filter<Entry>, { $set: entry, ...(config.name === 'Entry' && !('titleKeys' in entry) ? { $unset: { titleKeys: '' } } : {}) } as UpdateFilter<Entry>);
                 const result = config.aroundWrite ? await config.aroundWrite([entry], write) : await write();
-                if (result.matchedCount !== 1) throw new ContentScopeError('Resource not found in workspace');
+                if (result.matchedCount !== 1) {
+                    if (expectedUpdatedAt !== undefined) throw Object.assign(new Error('Content changed; refresh before saving'), { status: 409 });
+                    throw new ContentScopeError('Resource not found in workspace');
+                }
                 invalidate(); self.cache.set(entry);
             };
             try {

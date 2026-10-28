@@ -90,7 +90,7 @@ test('real Mongo unique domain ownership, primary concurrency, HTTP trust and im
         for (let i = 0; i < 100; i++) {
             try { await fetch(origin); break; } catch { await new Promise((resolve) => setTimeout(resolve, 50)); }
         }
-        async function gatewayFetch(url: string, options: { headers?: Record<string, string>; redirect?: string } = {}): Promise<Response> {
+        const gatewayFetch = async (url: string, options: { headers?: Record<string, string>; redirect?: string } = {}): Promise<Response> => {
             return new Promise((resolve, reject) => {
                 const req = httpRequest(url, { headers: options.headers }, (res) => {
                     const chunks: Buffer[] = [];
@@ -99,7 +99,7 @@ test('real Mongo unique domain ownership, primary concurrency, HTTP trust and im
                 });
                 req.on('error', reject); req.end();
             });
-        }
+        };
         const gatewayHeaders = (host: string) => ({ host, 'x-storefront-host': host, 'x-storefront-key': Config.storefrontGatewaySecret });
         const apiFirst = await gatewayFetch(`${origin}/api/published?path=/`, { headers: gatewayHeaders(primary.hostname) });
         assert.equal(apiFirst.status, 200, await apiFirst.text());

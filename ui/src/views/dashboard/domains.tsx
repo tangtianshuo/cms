@@ -44,12 +44,12 @@ export default defineComponent({
                 url: '/api/v4/site-domains',
             });
         }
-        async function run(action: () => Promise<unknown>) {
+        async function run(operation: () => Promise<unknown>) {
             if (busy.value) return;
             busy.value = true;
             error.value = '';
             try {
-                await action();
+                await operation();
             } catch (cause) {
                 const value = cause as { status?: number };
                 error.value = `${errorMessage(cause)}${

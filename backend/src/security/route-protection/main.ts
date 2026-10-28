@@ -1,6 +1,6 @@
 import { Repo } from '../../repo';
 import { verifyRequestWorkspace } from '../../workspaces/auth';
-import { verifiedWorkspace } from '../../workspaces/context';
+import { verifiedWorkspace, type WorkspaceContext } from '../../workspaces/context';
 import { HttpStatus } from '../../_server';
 import type { UserJwt } from '@bcms/selfhosted-backend/user/models/main';
 import type { ApiKey } from '@bcms/selfhosted-backend/api-key/models/main';
@@ -83,7 +83,7 @@ export class RP {
     static createWorkspaceAdminCheck(): ControllerMethodPreRequestHandler<RPJwtCheckResult> {
         return async (data) => {
             const result = await this.createJwtCheck(['USER'])(data);
-            const context = (result as RPJwtCheckResult & { [verifiedWorkspace]: import('../../workspaces/context').WorkspaceContext })[verifiedWorkspace];
+            const context = (result as RPJwtCheckResult & { [verifiedWorkspace]: WorkspaceContext })[verifiedWorkspace];
             if (!context.admin) throw data.errorHandler(HttpStatus.Forbidden, 'Workspace administrator required');
             return result;
         };

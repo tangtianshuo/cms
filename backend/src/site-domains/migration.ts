@@ -1,4 +1,4 @@
-import { DomainService } from './service';
+import type { DomainService } from './service';
 
 // Explicit operator action for an existing, already externally provisioned host.
 // No release or draft data is changed. Pending/foreign rows are never promoted.

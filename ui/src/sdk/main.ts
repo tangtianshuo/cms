@@ -20,6 +20,7 @@ import { BackupHandler } from '@bcms/selfhosted-sdk/handlers/backup';
 import { ApiKeyHandler } from '@bcms/selfhosted-sdk/handlers/api-key';
 import { FunctionHandler } from '@bcms/selfhosted-sdk/handlers/functions';
 import { TemplateOrganizerHandler } from '@bcms/selfhosted-sdk/handlers/template-organizer';
+import { StudioHandler } from './handlers/studio';
 import { PluginHandler } from '@bcms/selfhosted-sdk/handlers/plugin';
 import { TypeGeneratorHandler } from '@bcms/selfhosted-sdk/handlers/type-generator';
 
@@ -123,6 +124,7 @@ export class Sdk {
     fn = new FunctionHandler(this);
     backup = new BackupHandler(this);
     plugin = new PluginHandler(this);
+    studio = new StudioHandler(this);
 
     constructor(
         public store: SdkStore,

@@ -1,82 +1,17 @@
 import { defineComponent, type PropType } from 'vue';
-import { Button } from '@bcms/selfhosted-ui/components/button';
-import { DefaultComponentProps } from '@bcms/selfhosted-ui/components/default';
+import { Button } from './button';
+import { DefaultComponentProps } from './default';
+import { StudioIcon } from './studio/icon';
 import { useI18n } from 'vue-i18n';
-
 export const EmptyState = defineComponent({
     props: {
         ...DefaultComponentProps,
-        maxWidth: {
-            type: String,
-            required: false,
-            default: '100%',
-        },
-        maxHeight: {
-            type: String,
-            required: false,
-            default: '100%',
-        },
-        src: {
-            type: String,
-            required: true,
-        },
-        alt: {
-            type: String,
-            required: false,
-        },
-        title: {
-            required: false,
-            type: String,
-        },
-        subtitle: {
-            required: false,
-            type: String,
-        },
-        clickHandler: {
-            required: false,
-            type: Function as PropType<(_: MouseEvent) => any>,
-        },
-        ctaText: {
-            required: false,
-            type: String,
-        },
+        maxWidth: { type: String, default: '100%' }, maxHeight: { type: String, default: '100%' },
+        src: { type: String, required: true }, alt: String, title: String, subtitle: String,
+        clickHandler: Function as PropType<(_: MouseEvent) => any>, ctaText: String,
     },
     setup(props) {
         const { t } = useI18n();
-        return () => (
-            <div class="mt-7 desktop:mt-0">
-                <div class="flex items-start justify-between">
-                    <div class="flex flex-col space-y-5">
-                        {props.title && (
-                            <h1 class="text-9.5 -tracking-0.03 leading-none dark:text-light">
-                                {props.title}
-                            </h1>
-                        )}
-                        {props.subtitle && (
-                            <div class="leading-tight -tracking-0.01 dark:text-grey">
-                                {props.subtitle}
-                            </div>
-                        )}
-                    </div>
-                    {props.clickHandler && (
-                        <Button onClick={props.clickHandler}>
-                            {props.ctaText}
-                        </Button>
-                    )}
-                </div>
-                <img
-                    class={`flex object-contain max-w-full mx-auto ${
-                        props.class || ''
-                    }`}
-                    style={{
-                        maxWidth: props.maxWidth,
-                        maxHeight: props.maxHeight,
-                    }}
-                    src={`${window.bcms.origin}/assets/empty-state-illustrations/${props.src}`}
-                    alt={props.alt || t('common.empty')}
-                    draggable={false}
-                />
-            </div>
-        );
+        return () => <section class="cms-empty-state"><span class="cms-empty-symbol" aria-hidden="true"><StudioIcon name={props.src.includes('media') ? 'media' : 'pages'} size={28} /></span>{props.title && <h1>{props.title}</h1>}<p>{props.subtitle || t('common.empty')}</p>{props.clickHandler && <Button onClick={props.clickHandler}>{props.ctaText}</Button>}</section>;
     },
 });

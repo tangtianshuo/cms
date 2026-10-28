@@ -203,6 +203,8 @@ async function readJson(fetcher: typeof fetch, url: string): Promise<unknown> {
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let size = 0;
+    // The loop terminates on a completed read or successful insert.
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;

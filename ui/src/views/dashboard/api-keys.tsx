@@ -30,7 +30,7 @@ export const ApiKeysView = defineComponent({
             <div>
                 {apiKeys.value.length > 0 ? (
                     <>
-                        <div class={`flex gap-2`}>
+                        <div class={`cms-admin-heading flex gap-2`}>
                             <h1 class={`font-medium text-xl`}>
                                 {t('routes.apiKeys')}
                             </h1>
@@ -51,7 +51,7 @@ export const ApiKeysView = defineComponent({
                             </div>
                         </div>
                         <EntityList
-                            class={`mt-[45px] max-w-[530px]`}
+                            class="mt-6 w-full"
                             items={apiKeys.value.map((apiKey) => {
                                 return {
                                     name: apiKey.name,

@@ -103,6 +103,7 @@ export const DateInput = defineComponent({
             >
                 <div class={`flex items-center gap-3`}>
                     <input
+                        data-cms-control="true"
                         ref={inputRef}
                         type="date"
                         id={

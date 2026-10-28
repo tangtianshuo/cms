@@ -9,7 +9,9 @@ import { Config } from '../config';
 import { type SiteInstallation, SiteInstallationSchema } from './site-model';
 
 function installationDraft(site: SiteInstallation) {
-    const { currentReleaseId: _release, publishedReleaseIds: _history, primaryDomainId: _primary, domainRevision: _revision,
+    const { currentReleaseId: _release, publishedReleaseIds: _history,
+        gatewayCurrentReleaseId: _gatewayRelease, gatewayPublishedReleaseIds: _gatewayHistory, gatewayActiveRevision: _gatewayRevision,
+        primaryDomainId: _primary, domainRevision: _revision,
         domainMutationToken: _token, domainMutationUntil: _until, domainAuditOutbox: _outbox, workspaceId: _workspace, slot: _slot, templateNamespace: _namespace, contentGroupId: _group, ...draft } = site;
     return draft;
 }
@@ -28,6 +30,7 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
     updateImport(site: SiteInstallation): Promise<SiteInstallation>;
     saveDraft(site: SiteInstallation, expectedUpdatedAt: number): Promise<boolean>;
     activate(site: SiteInstallation, releaseId: string): Promise<boolean>;
+    projectGatewayRelease(site: SiteInstallation, releaseId: string, revision: number): Promise<boolean>;
 }>({
     name: 'SiteInstallation',
     collection: `${Config.storageScope}_site_installations`,
@@ -97,6 +100,15 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                 });
                 cache.remove(site._id);
                 if (result.matchedCount === 1) site.updatedAt = updatedAt;
+                return result.matchedCount === 1;
+            },
+            async projectGatewayRelease(site, releaseId, revision) {
+                const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id,
+                    $or: [{ gatewayActiveRevision: { $exists: false } }, { gatewayActiveRevision: { $lt: revision } },
+                        { gatewayActiveRevision: revision, gatewayCurrentReleaseId: releaseId }],
+                }, { $set: { gatewayCurrentReleaseId: releaseId, gatewayActiveRevision: revision },
+                    $addToSet: { gatewayPublishedReleaseIds: releaseId } });
+                cache.remove(site._id);
                 return result.matchedCount === 1;
             },
             async activate(site, releaseId) {

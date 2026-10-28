@@ -98,7 +98,7 @@ const component = defineComponent({
                                             ? 'alert'
                                             : 'status'
                                     }
-                                    class={`w-full flex items-center py-1 pl-6 pr-3 rounded-lg min-h-[48px] mb-2.5 ${messageTypeClass(
+                                    class={`cms-notification w-full flex items-center py-1 pl-6 pr-3 rounded-lg min-h-[48px] mb-2.5 ${messageTypeClass(
                                         message.type,
                                     )}`}
                                 >

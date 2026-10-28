@@ -102,7 +102,7 @@ export const SettingsView = defineComponent({
         function lngCard(lng: Language) {
             return (
                 <div
-                    class={`relative flex flex-col gap-2 items-center justify-center px-7 py-6 border border-gray rounded-2xl bg-light dark:bg-darkGray`}
+                    class="cms-language-card relative flex flex-col gap-2 items-center justify-center px-7 py-6 border rounded-lg"
                 >
                     <img
                         class={`w-6 rounded-full`}
@@ -128,13 +128,13 @@ export const SettingsView = defineComponent({
         }
 
         return () => (
-            <div class={`flex flex-col gap-10 max-w-[640px]`}>
+            <div class="cms-admin-settings flex flex-col gap-6">
                 <h1 class={`font-medium text-xl`}>
                     {t('views.settings.title')}
                 </h1>
-                <div class={`flex flex-col gap-2`}>
+                <div class="cms-panel flex flex-col gap-4">
                     <div class={`flex gap-2`}>
-                        <div class={`text-2xl`}>
+                        <div class="text-base font-medium">
                             {t('views.settings.languages')}
                         </div>
                     </div>
@@ -160,8 +160,8 @@ export const SettingsView = defineComponent({
                         </div>
                     </div>
                 </div>
-                <UserList />
-                <BackupList />
+                <section class="cms-panel"><UserList /></section>
+                <section class="cms-panel"><BackupList /></section>
             </div>
         );
     },

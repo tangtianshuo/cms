@@ -25,7 +25,7 @@ export default defineComponent({
         const current = ref(sdk.context?.workspace);
         const instanceAdmin = () =>
             sdk.accessToken?.payload.rls.some(
-                (role) => role === 'ADMIN' || role === 'SUDO',
+                (assignedRole) => assignedRole === 'ADMIN' || assignedRole === 'SUDO',
             );
         const admin = () => !!sdk.context?.context.admin;
 

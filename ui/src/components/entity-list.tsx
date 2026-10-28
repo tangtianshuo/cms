@@ -28,7 +28,7 @@ export const EntityList = defineComponent({
             <div
                 id={props.id}
                 style={props.style}
-                class={`flex flex-col gap-2 ${props.class || ''}`}
+                class={`cms-entity-list flex flex-col gap-2 ${props.class || ''}`}
             >
                 {props.items
                     .map((item) => item)
@@ -38,7 +38,7 @@ export const EntityList = defineComponent({
                     .map((item) => {
                         return (
                             <Link
-                                class={`flex gap-2 items-center py-3 px-5 text-sm rounded-2.5 bg-light dark:bg-darkGray dark:hover:bg-gray border border-gray/50 dark:border-gray dark:hover:border-white/50`}
+                                class="cms-entity-row"
                                 href={item.href}
                                 title={`${item.name}${
                                     item.desc ? `\n\n${item.desc}` : ''

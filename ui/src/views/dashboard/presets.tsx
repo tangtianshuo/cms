@@ -82,9 +82,9 @@ export const PresetsView = defineComponent({
             if (result.site && result.site.status !== 'empty') includeDemo.value = result.site.includeDemo;
         }
 
-        async function selectSiteLanguage(installed: SiteInstallation) {
+        async function selectSiteLanguage(installedSite: SiteInstallation) {
             await sdk.language.getAll({ skipCache: true });
-            setLanguage(installed.language || 'en');
+            setLanguage(installedSite.language || 'en');
         }
 
         async function choosePreset(item: PresetSummary) {
@@ -172,7 +172,7 @@ export const PresetsView = defineComponent({
         const views: DemoView[] = ['home', 'collection', 'product', 'page'];
 
         return () => (
-            <div class="px-4 pb-16 pt-8 md:px-8">
+            <div class="cms-presets">
                 <div class="mb-5 text-sm"><strong>{sdk.context?.workspace.name}</strong> · {site.value?.name || t('workspace.chooseSite')} <a class="ml-3 underline" href="/d/workspaces">{t('workspace.changeSelection')}</a></div>
                 {!sdk.context?.context.siteId && <p class="mb-5 text-sm">{t('workspace.selectBeforeInstall')}</p>}
                 <div class="mb-8 flex flex-wrap items-end justify-between gap-4">

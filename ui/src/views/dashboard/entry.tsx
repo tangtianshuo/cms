@@ -13,7 +13,7 @@ import {
     ref,
     shallowRef,
 } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import type { Entry } from '@bcms/selfhosted-backend/entry/models/main';
 import { EntrySync } from '@bcms/selfhosted-ui/services/entry-sync';
 import { PropValidator } from '@bcms/selfhosted-ui/util/prop-validation';
@@ -306,10 +306,11 @@ export const EntryView = defineComponent({
             <div>
                 {template.value && entry.value && lngIdx.value !== -1 ? (
                     <div
-                        class={`flex flex-col mt-8 pl-8 ${
+                        class={`cms-full-editor flex flex-col ${
                             loading.value ? 'opacity-0' : ''
                         }`}
                     >
+                        <header class="cms-admin-heading"><div><RouterLink class="cms-admin-text-link" to="/d/studio?section=products">← 返回商品与内容</RouterLink><p class="cms-admin-eyebrow">CONTENT EDITOR</p><h1>{(entry.value.meta[lngIdx.value].props[0].data as string[])[0] || t('routes.entry')}</h1><p class="cms-page-description">保存内容后预览确认，再通过发布中心更新网站。</p></div></header>
                         <div class="mb-5 flex flex-wrap items-center gap-3">
                             <label class="text-sm">{t('entryGroups.selection')} <select class={formClass} value={entry.value.groupId || ''} disabled={saving.value} onChange={event => { if (entry.value) entry.value.groupId = (event.target as HTMLSelectElement).value; }}>
                                 <option value="" disabled>{t('entryGroups.choose')}</option>{groups.value.map(group => <option value={group._id}>{group.name}</option>)}
@@ -322,10 +323,10 @@ export const EntryView = defineComponent({
                             <EntrySyncElements entrySync={entrySync.value} />
                         )}
                         <div
-                            class={`desktop:fixed desktop:right-6 desktop:top-6 flex gap-2 items-center top-0 max-desktop:top-14 z-20 pb-8`}
+                            class="cms-entry-actions"
                         >
                             <div
-                                class={`ml-auto flex max-desktop:flex-col gap-4 items-center max-desktop:items-end`}
+                                class="cms-entry-action-controls"
                             >
                                 <div
                                     id={`entrySync-connected-users-container`}

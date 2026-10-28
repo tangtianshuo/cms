@@ -30,7 +30,7 @@ export const WidgetsView = defineComponent({
                 <a href="/d/shares?type=Widget" class="mb-4 inline-block text-sm underline">{t('shares.grant')}</a>
                 {widgets.value.length > 0 ? (
                     <>
-                        <div class={`flex gap-2`}>
+                        <div class={`cms-admin-heading flex gap-2`}>
                             <h1 class={`font-medium text-xl`}>
                                 {t('routes.widgets')}
                             </h1>
@@ -51,7 +51,7 @@ export const WidgetsView = defineComponent({
                             </div>
                         </div>
                         <EntityList
-                            class={`mt-[45px] max-w-[530px]`}
+                            class="mt-6 w-full"
                             items={widgets.value.map((widget) => {
                                 return {
                                     name: widget.label,

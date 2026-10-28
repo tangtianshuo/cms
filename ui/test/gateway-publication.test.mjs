@@ -31,3 +31,12 @@ test('a prior completed operation cannot clear a newer uncertain publish request
  const current=action.request(); action.complete('ready','older-request');
  assert.equal(action.request(),current);
 });
+
+test('rollback identities remain distinct from publish and other rollback targets', () => {
+ const saved=storage();let seq=0;const make=()=>`request-${++seq}`;
+ const action=createPublicationAction(saved,'site',make);
+ const publish=action.request();const rollback=action.request('rollback/release-a');
+ assert.notEqual(rollback,publish);
+ assert.equal(createPublicationAction(saved,'site',make).request('rollback/release-a'),rollback);
+ assert.notEqual(action.request('rollback/release-b'),rollback);
+});

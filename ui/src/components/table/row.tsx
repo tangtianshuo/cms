@@ -55,7 +55,7 @@ export const TableRow = defineComponent({
                 id={props.id}
                 href={props.href}
                 style={props.style}
-                class={`relative ${
+                class={`cms-table-row relative ${
                     props.tag === 'button' || props.tag.__name === 'Link'
                         ? props.theme === 'lighter'
                             ? 'w-max min-w-full hover:bg-lightgray dark:hover:bg-lightgray-500'

@@ -1,4 +1,5 @@
-import { defineComponent, onMounted, type PropType, ref, Teleport } from 'vue';
+import { defineComponent, onMounted, type PropType, ref } from 'vue';
+import { Dialog, DialogPanel, DialogTitle } from '@headlessui/vue';
 import type { JSX } from 'vue/jsx-runtime';
 import { type DefaultComponentPropsType } from '@bcms/selfhosted-ui/components/default';
 import type {
@@ -93,16 +94,18 @@ export const ModalWrapper = defineComponent({
 
         function header() {
             return (
-                <div class={`flex items-center mb-7.5 px-5 pt-5`}>
+                <div class="cms-modal-header">
                     {props.header ? (
                         props.header()
                     ) : props.title ? (
-                        <div class={`text-4xl font-medium`}>{props.title}</div>
+                        <DialogTitle class="cms-modal-title">{props.title}</DialogTitle>
                     ) : (
                         ''
                     )}
                     <button
-                        class={`flex-shrink-0 ml-auto mb-auto p-3 flex items-center justify-center text-dark dark:text-white hover:text-red dark:hover:text-red`}
+                        type="button"
+                        aria-label="关闭弹窗"
+                        class="cms-icon-button"
                         onClick={async () => {
                             if (await props.handler._onCancel()) {
                                 await props.handler.close();
@@ -117,11 +120,11 @@ export const ModalWrapper = defineComponent({
 
         function footer() {
             return (
-                <div class={`mt-auto px-5 pb-5`}>
+                <div class="cms-modal-footer">
                     {props.footer ? (
                         props.footer()
                     ) : (
-                        <div class={`flex justify-end gap-2 mt-7.5`}>
+                        <div class="flex flex-wrap justify-end gap-2">
                             <Button
                                 kind={`secondary`}
                                 onClick={async () => {
@@ -149,34 +152,16 @@ export const ModalWrapper = defineComponent({
             );
         }
 
-        return () => (
-            <>
-                {show.value ? (
-                    <Teleport to={`body`}>
-                        <div
-                            class={`fixed top-0 left-0 z-100 w-screen h-screen bg-dark/50 flex items-center justify-center text-dark dark:text-white`}
-                            onClick={() => {
-                                props.handler.close();
-                            }}
-                        >
-                            <div
-                                class={`flex flex-col bg-white dark:bg-darkGray rounded-xl shadow-xl max-w-[500px] w-full max-h-full overflow-auto`}
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                }}
-                            >
-                                {header()}
-                                <div class={`overflow-y-auto p-5`}>
-                                    {ctx.slots.default?.()}
-                                </div>
-                                {footer()}
-                            </div>
-                        </div>
-                    </Teleport>
-                ) : (
-                    ''
-                )}
-            </>
-        );
+        async function cancel() {
+            if (await props.handler._onCancel()) await props.handler.close();
+        }
+        return () => <Dialog open={show.value} onClose={cancel} class="cms-modal" aria-label={props.title || '编辑设置'}>
+            <div class="cms-modal-backdrop" aria-hidden="true" />
+            <div class="cms-modal-position"><DialogPanel class="cms-modal-panel">
+                {header()}
+                <div class="cms-modal-content">{ctx.slots.default?.()}</div>
+                {footer()}
+            </DialogPanel></div>
+        </Dialog>;
     },
 });

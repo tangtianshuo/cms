@@ -4,35 +4,17 @@ import { createController, createControllerMethod, HttpStatus } from '../_server
 import { Config } from '../config';
 import { Repo } from '../repo';
 import { RP } from '../security/route-protection/main';
-import type { ReleaseInput, ReleaseSource, ReleaseSnapshot } from './releases';
-import { buildRelease, publishRelease, releaseDiff, rollbackRelease } from './releases';
+import type { ReleaseSnapshot } from './releases';
+import { buildRelease, publishRelease, releaseDiff, rollbackRelease, ReleaseValidationError } from './releases';
 import { gatewayBound, gatewayPublishConfig, GatewayRevisionConflict, publishGatewayRelease, readGatewayOperation,
-    type GatewayReleaseSource } from './gateway-publish';
+    publicRecord } from './gateway-publish';
+import { releaseSource } from './release-source';
+export { releaseSource } from './release-source';
+import { reconcileGatewayState, snapshotFingerprint } from './gateway-state';
+import { recoverGatewayPublication } from './gateway-recovery';
 
-const publishBody = z.object({ expectedReleaseId: z.string(), target: z.literal('gateway').optional(), requestKey: z.string().optional() }).strict();
-
-export function releaseSource(): GatewayReleaseSource {
-    return {
-        findSite: () => Repo.siteInstallation.methods.findSelected(),
-        async loadContent(site) {
-            const templates: ReleaseInput['templates'] = [];
-            const entries: ReleaseInput['entries'] = [];
-            for (const model of site.models) {
-                const template = await Repo.template.findById(model.templateId);
-                if (template) templates.push(template);
-                entries.push(...await Repo.entry.methods.findAllByTemplateId(model.templateId));
-            }
-            return { templates, entries, media: await Repo.media.findAll(),
-                language: site.language || Config.storefrontLanguage, currency: Config.storefrontCurrency,
-                mediaOrigin: Config.storefrontMediaOrigin };
-        },
-        findRelease: (id) => Repo.storefrontRelease.findById(id),
-        async insertRelease(record) { await Repo.storefrontRelease.add(record, true); },
-        activate: (site, releaseId) => Repo.siteInstallation.methods.activate(site, releaseId),
-        saveSite: (site, expectedUpdatedAt) => Repo.siteInstallation.methods.saveDraft(site, expectedUpdatedAt),
-        async audit(event) { await Repo.storefrontReleaseAudit.add(event, true); },
-    };
-}
+const publishBody = z.object({ expectedReleaseId: z.string(), target: z.literal('gateway').optional(), requestKey: z.string().optional(),
+    snapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict();
 
 export const ReleaseController = createController({
     name: 'StorefrontReleases',
@@ -44,14 +26,14 @@ export const ReleaseController = createController({
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const config = gatewayPublishConfig();
-                    const site = await Repo.siteInstallation.methods.findSelected();
+                    let site = await Repo.siteInstallation.methods.findSelected();
+                    if (site && gatewayBound(site, config)) site = await recoverGatewayPublication(releaseSource(), config);
                     let publishStatus: { operationId: string; releaseId: string; requestKey: string; status: string; failureCode?: string } | null = null;
                     if (site?.gatewayPublishIntent) {
                         try {
                             const intent = JSON.parse(site.gatewayPublishIntent);
                             if (typeof intent.requestKey === 'string' && typeof intent.releaseId === 'string' &&
-                                ['pending', 'ready', 'failed'].includes(intent.status) &&
-                                (intent.operationId || intent.status === 'failed')) {
+                                ['pending', 'ready', 'failed'].includes(intent.status)) {
                                 publishStatus = { operationId: typeof intent.operationId === 'string' ? intent.operationId : '',
                                     releaseId: intent.releaseId, requestKey: intent.requestKey,
                                     status: intent.status, ...(intent.failureCode ? { failureCode: intent.failureCode } : {}) };
@@ -79,14 +61,18 @@ export const ReleaseController = createController({
                 path: '/', type: 'get', preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
-                    const site = await Repo.siteInstallation.methods.findSelected();
+                    let site = await Repo.siteInstallation.methods.findSelected();
+                    const config = gatewayPublishConfig();
+                    const bound = gatewayBound(site, config);
+                    if (site && bound) site = await recoverGatewayPublication(releaseSource(), config);
                     if (!site) return { currentReleaseId: '', items: [], audit: [] };
-                    const published = site.publishedReleaseIds || [site.currentReleaseId];
+                    const published = bound ? site.gatewayPublishedReleaseIds || [] : site.publishedReleaseIds || [site.currentReleaseId];
                     const records = await Repo.storefrontRelease.methods.findBySite(site._id);
-                    return { currentReleaseId: site.currentReleaseId || '',
+                    return { currentReleaseId: (bound ? site.gatewayCurrentReleaseId : site.currentReleaseId) || '',
                         items: records.filter((record) => published.includes(record._id)).map((record) => ({
                             _id: record._id, createdAt: record.createdAt, createdBy: record.createdBy,
                             pageCount: (JSON.parse(record.payload) as ReleaseSnapshot).pages.length,
+                            templateVersion: record.templateRecord ? JSON.parse(record.templateRecord).version : site.presetVersion,
                         })), audit: await Repo.storefrontReleaseAudit.methods.findBySite(site._id) };
                 },
             }),
@@ -99,16 +85,22 @@ export const ReleaseController = createController({
                     try {
                         if (!Config.storefrontEnabled) throw new Error('Storefront is disabled');
                         if (!site) throw new Error('Site is not installed');
-                        const current = site.currentReleaseId ? await source.findRelease(site.currentReleaseId) : null;
+                        const config = gatewayPublishConfig();
+                        const bound = gatewayBound(site, config);
+                        if (bound) await reconcileGatewayState(source, site, config);
+                        const currentId = bound ? site.gatewayCurrentReleaseId : site.currentReleaseId;
+                        const current = currentId ? await source.findRelease(currentId) : null;
                         if (current && (current.siteId !== site._id || ownerWorkspace(current) !== ownerWorkspace(site))) throw new Error('Release belongs to another site');
                         const previous = current ? JSON.parse(current.payload) as ReleaseSnapshot : undefined;
                         if (previous && (previous.siteId !== site._id || ownerWorkspace(previous) !== ownerWorkspace(site))) throw new Error('Release snapshot belongs to another site');
                         const snapshot = buildRelease({ ...await source.loadContent(site), site, previous });
-                        return { valid: true, issues: [], expectedReleaseId: site.currentReleaseId || '',
+                        return { valid: true, issues: [], issueDetails: [], expectedReleaseId: currentId || '',
+                            snapshotHash: snapshotFingerprint(snapshot, bound ? publicRecord(site) : undefined),
                             pageCount: snapshot.pages.length, diff: releaseDiff(previous, snapshot) };
                     } catch (cause) {
-                        return { valid: false, issues: [cause instanceof Error ? cause.message : 'Validation failed'],
-                            expectedReleaseId: site?.currentReleaseId || '', pageCount: 0, diff: null };
+                        const issueDetails = cause instanceof ReleaseValidationError ? cause.issues : [{ code: 'release-invalid', message: cause instanceof Error ? cause.message : 'Validation failed' }];
+                        return { valid: false, issues: issueDetails.map(issue => issue.message), issueDetails,
+                            expectedReleaseId: (gatewayBound(site, gatewayPublishConfig()) ? site?.gatewayCurrentReleaseId : site?.currentReleaseId) || '', pageCount: 0, diff: null };
                     }
                 },
             }),
@@ -122,9 +114,10 @@ export const ReleaseController = createController({
                         if (parsed.data.target === 'gateway') {
                             if (!parsed.data.requestKey) throw new Error('Gateway publication requestKey is required');
                             return await publishGatewayRelease(releaseSource(), token.payload.userId,
-                                parsed.data.expectedReleaseId, parsed.data.requestKey, gatewayPublishConfig());
+                                parsed.data.expectedReleaseId, parsed.data.requestKey, gatewayPublishConfig(), fetch, buildRelease,
+                                { snapshotHash: parsed.data.snapshotHash });
                         }
-                        const record = await publishRelease(releaseSource(), token.payload.userId, parsed.data.expectedReleaseId);
+                        const record = await publishRelease(releaseSource(), token.payload.userId, parsed.data.expectedReleaseId, parsed.data.snapshotHash);
                         return { releaseId: record._id };
                     } catch (cause) {
                         throw errorHandler(cause instanceof GatewayRevisionConflict ? HttpStatus.Conflict : HttpStatus.BadRequest,
@@ -138,10 +131,14 @@ export const ReleaseController = createController({
                     reply.header('Cache-Control', 'no-store');
                     const parsed = publishBody.extend({ releaseId: z.string().min(1) }).safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid rollback request');
-                    if (gatewayBound(await Repo.siteInstallation.methods.findSelected(), gatewayPublishConfig())) {
-                        throw errorHandler(HttpStatus.BadRequest, 'Gateway publications cannot be restored through local release rollback');
-                    }
                     try {
+                        const config = gatewayPublishConfig();
+                        if (gatewayBound(await Repo.siteInstallation.methods.findSelected(), config)) {
+                            if (!parsed.data.requestKey) throw new Error('Gateway rollback requestKey is required');
+                            return await publishGatewayRelease(releaseSource(), token.payload.userId,
+                                parsed.data.expectedReleaseId, parsed.data.requestKey, config, fetch, buildRelease,
+                                { restoreReleaseId: parsed.data.releaseId });
+                        }
                         await rollbackRelease(releaseSource(), token.payload.userId, parsed.data.releaseId, parsed.data.expectedReleaseId);
                         return { releaseId: parsed.data.releaseId };
                     } catch (cause) {
