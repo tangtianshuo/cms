@@ -212,6 +212,16 @@ const valueTypes: Record<string, string> = {
     array: '列表',
 };
 
+const gatewayMessages: Record<string, string> = {
+    invalid_template: '公开模板未通过核验，请刷新模板目录后重新检查；如仍失败，请联系管理员检查模板版本及目录服务。',
+    template_not_found: '公开模板目录中找不到所选版本，请刷新目录确认该版本已发布，再重新检查发布。',
+    invalid_release: '发布快照未通过网关校验，请重新检查内容后发布；如仍失败，请联系管理员检查模板与快照兼容性。',
+    request_too_large: '发布快照超过网关大小限制，请联系管理员检查内容体积后重新发布。',
+    site_not_found: '发布网关中找不到当前绑定站点，请联系管理员检查站点与工作区绑定。',
+    release_not_found: '发布网关中找不到本次发布版本，请刷新发布状态；如仍失败，请联系管理员检查快照上传结果。',
+    publish_pending: '当前站点仍有部署任务，请等待完成后刷新发布状态，再重新检查发布。',
+};
+
 function fieldName(value: string): string {
     const [model, ...fields] = value.split('.');
     return [modelNames[model] || model, ...fields].join(' / ');
@@ -366,7 +376,9 @@ export function userErrorMessage(cause: unknown): string {
     ) {
         return '请求超时，未能及时收到服务器响应。请稍后刷新页面确认操作结果，再决定是否重试。';
     }
-    if (/^Gateway request failed \(\d+\)$/.test(message)) {
+    if ((match = message.match(/^Gateway request failed \(\d+\)(?:: ([a-z_]+))?$/))) {
+        const reason = gatewayMessages[match[1]];
+        if (typeof reason === 'string') return reason;
         return '发布网关未能完成请求，请稍后查看发布状态；如持续失败，请联系管理员检查网关服务。';
     }
     if (

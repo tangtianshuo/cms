@@ -10,6 +10,13 @@ export interface GatewayPublishConfig {
 
 export class GatewayRevisionConflict extends Error {}
 
+const publicFailureCodes = new Set([
+    'invalid_template', 'template_not_found', 'invalid_release', 'template_pin_mismatch',
+    'release_conflict', 'request_too_large', 'site_not_found', 'release_not_found',
+    'template_pin_unavailable', 'release_unavailable', 'invalid_request', 'publish_pending',
+    'publication_state_unavailable',
+]);
+
 export function gatewayPublishConfig(env: NodeJS.ProcessEnv = process.env): GatewayPublishConfig {
     return {
         gatewayBaseUrl: env.GATEWAY_BASE_URL || '', workspaceId: env.GATEWAY_WORKSPACE_ID || '',
@@ -41,7 +48,14 @@ export async function gatewayRequest(fetcher: typeof fetch, url: string, secret:
     const response = await fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000),
         headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json', ...init.headers } });
     if (response.status === 409) throw new GatewayRevisionConflict('Gateway rejected a concurrent change; refresh the site state and retry');
-    if (!response.ok) throw new Error(`Gateway request failed (${response.status})`);
+    if (!response.ok) {
+        let code = '';
+        try {
+            const failure = await response.json();
+            if (typeof failure?.error === 'string' && publicFailureCodes.has(failure.error)) code = failure.error;
+        } catch { /* Non-JSON and unrecognized diagnostics remain private. */ }
+        throw new Error(`Gateway request failed (${response.status})${code ? `: ${code}` : ''}`);
+    }
     const body = await response.json();
     return body;
 }

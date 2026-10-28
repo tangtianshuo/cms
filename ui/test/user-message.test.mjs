@@ -162,6 +162,14 @@ test('deployment failure codes explain the failed stage and a useful next step',
     assert.match(errorMessage('UNRECOGNIZED_DEPLOYMENT_FAILURE'), /未能获取具体.*原因/);
 });
 
+test('Gateway request failures explain verified codes and keep unknown diagnostics private', () => {
+    assert.match(errorMessage('Gateway request failed (400): invalid_template'), /模板.*核验.*管理员/);
+    assert.match(errorMessage('Gateway request failed (400): invalid_release'), /发布快照.*校验/);
+    const unknown = errorMessage('Gateway request failed (502): unrecognized_code');
+    assert.match(unknown, /发布网关.*状态/);
+    assert.doesNotMatch(unknown, /unrecognized_code/);
+});
+
 test('shared notifications translate warning and error paths, including push', async () => {
     const { NotificationService } = await import(
         '../src/services/notification.ts'
