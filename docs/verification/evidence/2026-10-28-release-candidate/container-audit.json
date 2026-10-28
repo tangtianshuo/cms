@@ -1,0 +1,21 @@
+{
+  "siteId": "ae04c072-049c-4658-b751-61279db41fcf",
+  "total": 2,
+  "unreferenced": 0,
+  "records": [
+    {
+      "id": "0add484a56877ac7b16fca80ca18b9ee3b2379c6eb091854f445f9275b034d30",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-72ccbef5-a077-4e63-9a22-9bdfe232e938",
+      "running": true,
+      "protected": true,
+      "safeToPrune": false
+    },
+    {
+      "id": "83d7c4ed32948713ccba65f38af246475758d626d28d3f411282cbbf040f1887",
+      "name": "/gateway-ae04c072-049c-4658-b751-61279db41fcf-0ae0b338-b1b7-40ad-8227-c40804654dd5",
+      "running": true,
+      "protected": true,
+      "safeToPrune": false
+    }
+  ]
+}

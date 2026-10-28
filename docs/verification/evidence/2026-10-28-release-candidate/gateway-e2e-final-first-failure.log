@@ -1,0 +1,34 @@
+TAP version 13
+# Subtest: Docker CMS → Gateway → approved image: draft isolation, publish, idempotency, stale rejection and rollback
+not ok 1 - Docker CMS → Gateway → approved image: draft isolation, publish, idempotency, stale rejection and rollback
+  ---
+  duration_ms: 18821.017292
+  type: 'test'
+  location: '/Users/445101599qq.com/Projects/cms/ops/e2e/gateway-flow.test.mjs:8:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    {"message":"Gateway request failed (400): invalid_template"}
+
+    400 !== 200
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 200
+  actual: 400
+  operator: 'strictEqual'
+  stack: |-
+    api (file:///Users/445101599qq.com/Projects/cms/ops/e2e/gateway-flow.test.mjs:38:20)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (file:///Users/445101599qq.com/Projects/cms/ops/e2e/gateway-flow.test.mjs:123:26)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18876.653834

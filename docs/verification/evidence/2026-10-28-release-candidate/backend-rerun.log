@@ -1,0 +1,856 @@
+TAP version 13
+# Subtest: new entry saves valid language values and derives content text
+ok 1 - new entry saves valid language values and derives content text
+  ---
+  duration_ms: 0.672375
+  type: 'test'
+  ...
+# Subtest: new entry rejects invalid values before any write
+ok 2 - new entry rejects invalid values before any write
+  ---
+  duration_ms: 0.535625
+  type: 'test'
+  ...
+# Subtest: legacy empty entry creation remains valid
+ok 3 - legacy empty entry creation remains valid
+  ---
+  duration_ms: 0.391792
+  type: 'test'
+  ...
+# Subtest: MCP API forwards authentication and workspace selectors for DELETE
+ok 4 - MCP API forwards authentication and workspace selectors for DELETE
+  ---
+  duration_ms: 1.779625
+  type: 'test'
+  ...
+# Subtest: MCP API returns the backend message for failed requests
+ok 5 - MCP API returns the backend message for failed requests
+  ---
+  duration_ms: 11.301167
+  type: 'test'
+  ...
+# Subtest: MCP API encodes binary controller responses as base64
+ok 6 - MCP API encodes binary controller responses as base64
+  ---
+  duration_ms: 0.501791
+  type: 'test'
+  ...
+# Subtest: MCP file upload builds a multipart file field from base64 bytes
+ok 7 - MCP file upload builds a multipart file field from base64 bytes
+  ---
+  duration_ms: 0.65875
+  type: 'test'
+  ...
+# Subtest: MCP protocol lists domain tools and forwards selected workspace headers
+ok 8 - MCP protocol lists domain tools and forwards selected workspace headers
+  ---
+  duration_ms: 115.870625
+  type: 'test'
+  ...
+# Subtest: a later missing image leaves no orphaned pins on an earlier image
+ok 9 - a later missing image leaves no orphaned pins on an earlier image
+  ---
+  duration_ms: 258.556959
+  type: 'test'
+  ...
+# Subtest: a later deleting image leaves no orphaned pins on an earlier image
+ok 10 - a later deleting image leaves no orphaned pins on an earlier image
+  ---
+  duration_ms: 143.725209
+  type: 'test'
+  ...
+# Subtest: a failed attempt preserves existing successful release pins
+ok 11 - a failed attempt preserves existing successful release pins
+  ---
+  duration_ms: 155.77475
+  type: 'test'
+  ...
+# Subtest: a failing concurrent attempt cannot remove a confirmed pin with the same release ID
+ok 12 - a failing concurrent attempt cannot remove a confirmed pin with the same release ID
+  ---
+  duration_ms: 126.223791
+  type: 'test'
+  ...
+# Subtest: an unknown write outcome conservatively retains every acquired media lock
+ok 13 - an unknown write outcome conservatively retains every acquired media lock
+  ---
+  duration_ms: 127.048208
+  type: 'test'
+  ...
+# Subtest: catalog exposes three complete storefront variants
+ok 14 - catalog exposes three complete storefront variants
+  ---
+  duration_ms: 1.010083
+  type: 'test'
+  ...
+# Subtest: catalog rejects unknown versions and cannot be changed by consumers
+ok 15 - catalog rejects unknown versions and cannot be changed by consumers
+  ---
+  duration_ms: 0.184708
+  type: 'test'
+  ...
+# Subtest: checklist links to generated editors and counts only valid entries
+ok 16 - checklist links to generated editors and counts only valid entries
+  ---
+  duration_ms: 0.624709
+  type: 'test'
+  ...
+# Subtest: checklist accepts a Gateway-ready publication without changing local release state
+ok 17 - checklist accepts a Gateway-ready publication without changing local release state
+  ---
+  duration_ms: 0.094042
+  type: 'test'
+  ...
+# Subtest: public catalog lists selectable presets without CMS credentials
+ok 18 - public catalog lists selectable presets without CMS credentials
+  ---
+  duration_ms: 23.659458
+  type: 'test'
+  ...
+# Subtest: public catalog keeps builtin presets available when GitHub is unavailable
+ok 19 - public catalog keeps builtin presets available when GitHub is unavailable
+  ---
+  duration_ms: 0.414791
+  type: 'test'
+  ...
+# Subtest: site import and preflight require an admin token
+ok 20 - site import and preflight require an admin token
+  ---
+  duration_ms: 4.047625
+  type: 'test'
+  ...
+# Subtest: preview context requires a user token
+ok 21 - preview context requires a user token
+  ---
+  duration_ms: 0.19225
+  type: 'test'
+  ...
+# Subtest: Gateway failures preserve a recognized error code without returning response details
+ok 22 - Gateway failures preserve a recognized error code without returning response details
+  ---
+  duration_ms: 192.108625
+  type: 'test'
+  ...
+# Subtest: Gateway failures discard unknown codes and non-JSON error responses
+ok 23 - Gateway failures discard unknown codes and non-JSON error responses
+  ---
+  duration_ms: 0.466083
+  type: 'test'
+  ...
+# Subtest: Gateway conflict responses retain the existing revision-conflict behavior
+ok 24 - Gateway conflict responses retain the existing revision-conflict behavior
+  ---
+  duration_ms: 0.125334
+  type: 'test'
+  ...
+# Subtest: real Mongo and anonymous HTTP keep Gateway candidates private and retain active/history media
+ok 25 - real Mongo and anonymous HTTP keep Gateway candidates private and retain active/history media
+  ---
+  duration_ms: 1301.270667
+  type: 'test'
+  ...
+# Subtest: Gateway submission retains a CMS-identity immutable snapshot and actor before uploading
+ok 26 - Gateway submission retains a CMS-identity immutable snapshot and actor before uploading
+  ---
+  duration_ms: 9.382958
+  type: 'test'
+  ...
+# Subtest: a failed durable media/snapshot write prevents uploading or starting the publication
+ok 27 - a failed durable media/snapshot write prevents uploading or starting the publication
+  ---
+  duration_ms: 0.557792
+  type: 'test'
+  ...
+# Subtest: an operation ready response alone cannot grant public access without the active deployment
+ok 28 - an operation ready response alone cannot grant public access without the active deployment
+  ---
+  duration_ms: 1.61175
+  type: 'test'
+  ...
+# Subtest: confirmed active deployment projects history while preserving local publishing and original actor
+ok 29 - confirmed active deployment projects history while preserving local publishing and original actor
+  ---
+  duration_ms: 6.200417
+  type: 'test'
+  ...
+# Subtest: reconciliation recovers a legacy publication with CMS identities and refuses stale route revisions
+ok 30 - reconciliation recovers a legacy publication with CMS identities and refuses stale route revisions
+  ---
+  duration_ms: 1.281083
+  type: 'test'
+  ...
+# Subtest: checked content cannot silently change before Gateway publication
+ok 31 - checked content cannot silently change before Gateway publication
+  ---
+  duration_ms: 0.341
+  type: 'test'
+  ...
+# Subtest: Gateway restoration uses only a published historical snapshot and ignores edited draft content
+ok 32 - Gateway restoration uses only a published historical snapshot and ignores edited draft content
+  ---
+  duration_ms: 20.415375
+  type: 'test'
+  ...
+# Subtest: Gateway publication pins the persisted version, reads revision and persists a stable intent
+ok 33 - Gateway publication pins the persisted version, reads revision and persists a stable intent
+  ---
+  duration_ms: 1.092375
+  type: 'test'
+  ...
+# Subtest: same request key reuses the exact release intent without additional Gateway writes
+ok 34 - same request key reuses the exact release intent without additional Gateway writes
+  ---
+  duration_ms: 0.955083
+  type: 'test'
+  ...
+# Subtest: publication carries the timestamp returned by each CAS save into the next save
+ok 35 - publication carries the timestamp returned by each CAS save into the next save
+  ---
+  duration_ms: 0.614792
+  type: 'test'
+  ...
+# Subtest: a persisted request key cannot be retried with a changed immutable record for the same version
+ok 36 - a persisted request key cannot be retried with a changed immutable record for the same version
+  ---
+  duration_ms: 0.503958
+  type: 'test'
+  ...
+# Subtest: a ready intent from an adopted older version can be replaced by the next version publication
+ok 37 - a ready intent from an adopted older version can be replaced by the next version publication
+  ---
+  duration_ms: 0.551
+  type: 'test'
+  ...
+# Subtest: Gateway revision conflict becomes terminal and a new explicit action reads a fresh revision
+ok 38 - Gateway revision conflict becomes terminal and a new explicit action reads a fresh revision
+  ---
+  duration_ms: 0.564333
+  type: 'test'
+  ...
+# Subtest: wrong CMS site and mismatched Gateway pin are rejected before release upload
+ok 39 - wrong CMS site and mismatched Gateway pin are rejected before release upload
+  ---
+  duration_ms: 0.395292
+  type: 'test'
+  ...
+# Subtest: publication requires explicit CMS binding and public URL configuration
+ok 40 - publication requires explicit CMS binding and public URL configuration
+  ---
+  duration_ms: 0.058667
+  type: 'test'
+  ...
+# Subtest: background recovery resumes a lost submit response with the original frozen bytes and actor
+ok 41 - background recovery resumes a lost submit response with the original frozen bytes and actor
+  ---
+  duration_ms: 0.693417
+  type: 'test'
+  ...
+# Subtest: background recovery records a failed operation without promoting its private candidate
+ok 42 - background recovery records a failed operation without promoting its private candidate
+  ---
+  duration_ms: 0.7615
+  type: 'test'
+  ...
+# Subtest: lost reply can recover when the frozen release has already become active
+ok 43 - lost reply can recover when the frozen release has already become active
+  ---
+  duration_ms: 2.490792
+  type: 'test'
+  ...
+# Subtest: reconciliation compares immutable template values independently of registry key order
+ok 44 - reconciliation compares immutable template values independently of registry key order
+  ---
+  duration_ms: 1.385792
+  type: 'test'
+  ...
+# Subtest: losing the durable publication CAS cannot change the external Gateway template pin
+ok 45 - losing the durable publication CAS cannot change the external Gateway template pin
+  ---
+  duration_ms: 0.694959
+  type: 'test'
+  ...
+# Subtest: a cached pin cannot suppress confirmation of the Gateway pin when a frozen submission resumes
+ok 46 - a cached pin cannot suppress confirmation of the Gateway pin when a frozen submission resumes
+  ---
+  duration_ms: 1.283167
+  type: 'test'
+  ...
+# Subtest: an interrupted immutable upload remains reserved for its original request key
+ok 47 - an interrupted immutable upload remains reserved for its original request key
+  ---
+  duration_ms: 1.141
+  type: 'test'
+  ...
+# Subtest: an unverified installed template is rejected before any Gateway reconciliation request
+ok 48 - an unverified installed template is rejected before any Gateway reconciliation request
+  ---
+  duration_ms: 0.56725
+  type: 'test'
+  ...
+# Subtest: a submit ready response stays pending until the authoritative active deployment confirms it
+ok 49 - a submit ready response stays pending until the authoritative active deployment confirms it
+  ---
+  duration_ms: 2.468334
+  type: 'test'
+  ...
+# Subtest: replaying a legacy ready intent still verifies its active deployment
+ok 50 - replaying a legacy ready intent still verifies its active deployment
+  ---
+  duration_ms: 0.648333
+  type: 'test'
+  ...
+# Subtest: one request key cannot be replayed with another baseline or restoration target
+ok 51 - one request key cannot be replayed with another baseline or restoration target
+  ---
+  duration_ms: 0.874125
+  type: 'test'
+  ...
+# Subtest: a deterministic missing-media failure releases the reservation for a corrected explicit action
+ok 52 - a deterministic missing-media failure releases the reservation for a corrected explicit action
+  ---
+  duration_ms: 0.440583
+  type: 'test'
+  ...
+# Subtest: one import creates complete CMS models and draft pages only once
+ok 53 - one import creates complete CMS models and draft pages only once
+  ---
+  duration_ms: 2.313042
+  type: 'test'
+  ...
+# Subtest: import plan refuses an unrelated product Template collision
+ok 54 - import plan refuses an unrelated product Template collision
+  ---
+  duration_ms: 0.289584
+  type: 'test'
+  ...
+# Subtest: import reuses and extends the existing storefront product Template
+ok 55 - import reuses and extends the existing storefront product Template
+  ---
+  duration_ms: 27.770375
+  type: 'test'
+  ...
+# Subtest: failed import resumes without duplicating previously created models
+ok 56 - failed import resumes without duplicating previously created models
+  ---
+  duration_ms: 2.369459
+  type: 'test'
+  ...
+# Subtest: demo content is seeded once and links into generated Templates
+ok 57 - demo content is seeded once and links into generated Templates
+  ---
+  duration_ms: 1.388916
+  type: 'test'
+  ...
+# Subtest: concurrent import returns the installation that won the unique slot
+ok 58 - concurrent import returns the installation that won the unique slot
+  ---
+  duration_ms: 0.196
+  type: 'test'
+  ...
+# Subtest: site namespaces keep independent installations and repeat demo titles
+ok 59 - site namespaces keep independent installations and repeat demo titles
+  ---
+  duration_ms: 1.447333
+  type: 'test'
+  ...
+# Subtest: explicit public adoption changes only the installed version metadata and preserves edits and IDs
+ok 60 - explicit public adoption changes only the installed version metadata and preserves edits and IDs
+  ---
+  duration_ms: 44.304375
+  type: 'test'
+  ...
+# Subtest: public adoption rejects an optimistic concurrency conflict without changing the installed version
+ok 61 - public adoption rejects an optimistic concurrency conflict without changing the installed version
+  ---
+  duration_ms: 1.104375
+  type: 'test'
+  ...
+# Subtest: public adoption is blocked while Gateway publication outcome is unresolved
+ok 62 - public adoption is blocked while Gateway publication outcome is unresolved
+  ---
+  duration_ms: 0.972875
+  type: 'test'
+  ...
+# Subtest: installed public snapshots remain authoritative after builtin catalog versions change
+ok 63 - installed public snapshots remain authoritative after builtin catalog versions change
+  ---
+  duration_ms: 0.454709
+  type: 'test'
+  ...
+# Subtest: Mongo null metadata on a builtin installation uses its catalog version
+ok 64 - Mongo null metadata on a builtin installation uses its catalog version
+  ---
+  duration_ms: 0.061875
+  type: 'test'
+  ...
+# Subtest: a missing or mismatched imported snapshot fails closed
+ok 65 - a missing or mismatched imported snapshot fails closed
+  ---
+  duration_ms: 0.33575
+  type: 'test'
+  ...
+# Subtest: old installations receive page configuration defaults without mutation
+ok 66 - old installations receive page configuration defaults without mutation
+  ---
+  duration_ms: 0.686792
+  type: 'test'
+  ...
+# Subtest: a valid page update saves SEO and selected sections while preserving its draft state
+ok 67 - a valid page update saves SEO and selected sections while preserving its draft state
+  ---
+  duration_ms: 0.248333
+  type: 'test'
+  ...
+# Subtest: page updates reject unsupported sections and routes that collide with another blueprint
+ok 68 - page updates reject unsupported sections and routes that collide with another blueprint
+  ---
+  duration_ms: 0.39525
+  type: 'test'
+  ...
+# Subtest: home Entry binding requires an Entry from the generated home model
+ok 69 - home Entry binding requires an Entry from the generated home model
+  ---
+  duration_ms: 0.199417
+  type: 'test'
+  ...
+# Subtest: fixed product route still allows SEO and section edits
+ok 70 - fixed product route still allows SEO and section edits
+  ---
+  duration_ms: 0.111958
+  type: 'test'
+  ...
+# Subtest: additional pages reuse installed blueprints and bind only their own model
+ok 71 - additional pages reuse installed blueprints and bind only their own model
+  ---
+  duration_ms: 0.258916
+  type: 'test'
+  ...
+# Subtest: canonical JSON uses binary key ordering and preserves arrays
+ok 72 - canonical JSON uses binary key ordering and preserves arrays
+  ---
+  duration_ms: 0.515166
+  type: 'test'
+  ...
+# Subtest: registry resolves branch commit, fetches index and verifies immutable manifest checksum
+ok 73 - registry resolves branch commit, fetches index and verifies immutable manifest checksum
+  ---
+  duration_ms: 18.401833
+  type: 'test'
+  ...
+# Subtest: registry rejects tampered manifest and invalid source locations
+ok 74 - registry rejects tampered manifest and invalid source locations
+  ---
+  duration_ms: 1.426875
+  type: 'test'
+  ...
+# Subtest: registry verifies presentation as part of the pinned canonical manifest checksum
+ok 75 - registry verifies presentation as part of the pinned canonical manifest checksum
+  ---
+  duration_ms: 1.895875
+  type: 'test'
+  ...
+# Subtest: registry streams and rejects responses over the byte limit
+ok 76 - registry streams and rejects responses over the byte limit
+  ---
+  duration_ms: 0.874209
+  type: 'test'
+  ...
+# Subtest: release validation, history, publishing and rollback require an administrator
+ok 77 - release validation, history, publishing and rollback require an administrator
+  ---
+  duration_ms: 8.688375
+  type: 'test'
+  ...
+# Subtest: MongoDB and HTTP publication lifecycle preserves public content until activation and rollback
+ok 78 - MongoDB and HTTP publication lifecycle preserves public content until activation and rollback
+  ---
+  duration_ms: 2359.230625
+  type: 'test'
+  ...
+# Subtest: release expands concrete routes and isolates saved content, theme and navigation
+ok 79 - release expands concrete routes and isolates saved content, theme and navigation
+  ---
+  duration_ms: 15.017083
+  type: 'test'
+  ...
+# Subtest: preflight reports independent field problems with editable object locations
+ok 80 - preflight reports independent field problems with editable object locations
+  ---
+  duration_ms: 0.441792
+  type: 'test'
+  ...
+# Subtest: new fixed pages stay out of the old release and path changes create direct redirects
+ok 81 - new fixed pages stay out of the old release and path changes create direct redirects
+  ---
+  duration_ms: 1.542083
+  type: 'test'
+  ...
+# Subtest: release rejects missing required values, broken fields, media, links and duplicate paths
+ok 82 - release rejects missing required values, broken fields, media, links and duplicate paths
+  ---
+  duration_ms: 0.918958
+  type: 'test'
+  ...
+# Subtest: publication stores the snapshot before activation and failed publication preserves the pointer
+ok 83 - publication stores the snapshot before activation and failed publication preserves the pointer
+  ---
+  duration_ms: 3.496833
+  type: 'test'
+  ...
+# Subtest: rollback restores an immutable snapshot and rejects another site or a failed candidate
+ok 84 - rollback restores an immutable snapshot and rejects another site or a failed candidate
+  ---
+  duration_ms: 1.119792
+  type: 'test'
+  ...
+# Subtest: snapshot storage failure preserves the current release
+ok 85 - snapshot storage failure preserves the current release
+  ---
+  duration_ms: 0.644459
+  type: 'test'
+  ...
+# Subtest: an audit outage after activation does not turn a successful publication into a failure
+ok 86 - an audit outage after activation does not turn a successful publication into a failure
+  ---
+  duration_ms: 0.564209
+  type: 'test'
+  ...
+# Subtest: removing a page checks rich text internal links and related published pages
+ok 87 - removing a page checks rich text internal links and related published pages
+  ---
+  duration_ms: 0.621958
+  type: 'test'
+  ...
+# Subtest: a fixed collection page retains its bound description and cover
+ok 88 - a fixed collection page retains its bound description and cover
+  ---
+  duration_ms: 0.638125
+  type: 'test'
+  ...
+# Subtest: unpublished content does not block release with obsolete internal links or incomplete fields
+ok 89 - unpublished content does not block release with obsolete internal links or incomplete fields
+  ---
+  duration_ms: 0.428333
+  type: 'test'
+  ...
+# Subtest: a fixed page can be retired after its bound Entry has been deleted
+ok 90 - a fixed page can be retired after its bound Entry has been deleted
+  ---
+  duration_ms: 0.451208
+  type: 'test'
+  ...
+# Subtest: local publication rejects a draft changed after preflight before retaining or activating it
+ok 91 - local publication rejects a draft changed after preflight before retaining or activating it
+  ---
+  duration_ms: 0.932042
+  type: 'test'
+  ...
+# Subtest: real Mongo unique domain ownership, primary concurrency, HTTP trust and immutable publication
+ok 92 - real Mongo unique domain ownership, primary concurrency, HTTP trust and immutable publication
+  ---
+  duration_ms: 1596.769042
+  type: 'test'
+  ...
+# Subtest: normalizes IDNA, case and trailing dot, rejects URLs, ports, IPs and invalid labels
+ok 93 - normalizes IDNA, case and trailing dot, rejects URLs, ports, IPs and invalid labels
+  ---
+  duration_ms: 7.498791
+  type: 'test'
+  ...
+# Subtest: global ownership, scoped IDs, expiring credentials and new credentials after unbind
+ok 94 - global ownership, scoped IDs, expiring credentials and new credentials after unbind
+  ---
+  duration_ms: 2.378208
+  type: 'test'
+  ...
+# Subtest: checks separate ownership and connection, preserves primary on failure, prevents primary disable/delete
+ok 95 - checks separate ownership and connection, preserves primary on failure, prevents primary disable/delete
+  ---
+  duration_ms: 0.691334
+  type: 'test'
+  ...
+# Subtest: concurrent primary switches conflict; disabled aliases stop resolving immediately
+ok 96 - concurrent primary switches conflict; disabled aliases stop resolving immediately
+  ---
+  duration_ms: 0.354708
+  type: 'test'
+  ...
+# Subtest: explicit migration preserves release data and cannot claim another binding
+ok 97 - explicit migration preserves release data and cannot claim another binding
+  ---
+  duration_ms: 7.777625
+  type: 'test'
+  ...
+# Subtest: failed recheck keeps established domain routing and last success while returning the error
+ok 98 - failed recheck keeps established domain routing and last success while returning the error
+  ---
+  duration_ms: 2.007959
+  type: 'test'
+  ...
+# Subtest: a failed mandatory primary audit leaves the established primary unchanged
+ok 99 - a failed mandatory primary audit leaves the established primary unchanged
+  ---
+  duration_ms: 0.6985
+  type: 'test'
+  ...
+# Subtest: migration retry completes an interrupted initial promotion and preserves an established primary
+ok 100 - migration retry completes an interrupted initial promotion and preserves an established primary
+  ---
+  duration_ms: 0.384167
+  type: 'test'
+  ...
+# Subtest: initial-only migration promotion preserves a primary established during its earlier reads
+ok 101 - initial-only migration promotion preserves a primary established during its earlier reads
+  ---
+  duration_ms: 0.52525
+  type: 'test'
+  ...
+# Subtest: custom host context requires shared gateway secret; production fails closed without config
+ok 102 - custom host context requires shared gateway secret; production fails closed without config
+  ---
+  duration_ms: 2.568375
+  type: 'test'
+  ...
+# Subtest: SSRF filter rejects private, loopback, link local, multicast and IPv4 mapped IPv6
+ok 103 - SSRF filter rejects private, loopback, link local, multicast and IPv4 mapped IPv6
+  ---
+  duration_ms: 3.41575
+  type: 'test'
+  ...
+# Subtest: TXT ownership and signed HTTPS challenge work behind a proxy without matching origin IP
+ok 104 - TXT ownership and signed HTTPS challenge work behind a proxy without matching origin IP
+  ---
+  duration_ms: 29.200334
+  type: 'test'
+  ...
+# Subtest: DNS timeout is bounded and keeps ownership independent of connection
+ok 105 - DNS timeout is bounded and keeps ownership independent of connection
+  ---
+  duration_ms: 4007.815292
+  type: 'test'
+  ...
+# Subtest: IPv4 exclusions are precise CIDRs and retain adjacent public addresses
+ok 106 - IPv4 exclusions are precise CIDRs and retain adjacent public addresses
+  ---
+  duration_ms: 0.961333
+  type: 'test'
+  ...
+# Subtest: public lookup returns saved data only for the configured host and slug
+ok 107 - public lookup returns saved data only for the configured host and slug
+  ---
+  duration_ms: 1.894084
+  type: 'test'
+  ...
+# Subtest: demo entries from a preset import stay off the public product route
+ok 108 - demo entries from a preset import stay off the public product route
+  ---
+  duration_ms: 0.089791
+  type: 'test'
+  ...
+# Subtest: preview maps unsaved entry without mutating the saved entry
+ok 109 - preview maps unsaved entry without mutating the saved entry
+  ---
+  duration_ms: 0.518167
+  type: 'test'
+  ...
+# Subtest: preview endpoint rejects requests without a CMS access token
+ok 110 - preview endpoint rejects requests without a CMS access token
+  ---
+  duration_ms: 11.830167
+  type: 'test'
+  ...
+# Subtest: unsaved homepage values and CMS media are rendered in the installed theme
+ok 111 - unsaved homepage values and CMS media are rendered in the installed theme
+  ---
+  duration_ms: 1.208292
+  type: 'test'
+  ...
+# Subtest: collection and product previews map their own Entry fields without catalog demo content
+ok 112 - collection and product previews map their own Entry fields without catalog demo content
+  ---
+  duration_ms: 21.207083
+  type: 'test'
+  ...
+# Subtest: content page preview uses rich text from the selected language
+ok 113 - content page preview uses rich text from the selected language
+  ---
+  duration_ms: 4.240833
+  type: 'test'
+  ...
+# Subtest: preview rejects a wrong template, unavailable language, and missing bound field IDs
+ok 114 - preview rejects a wrong template, unavailable language, and missing bound field IDs
+  ---
+  duration_ms: 0.409042
+  type: 'test'
+  ...
+# Subtest: maps product fields by stable prop IDs and selected language
+ok 115 - maps product fields by stable prop IDs and selected language
+  ---
+  duration_ms: 2.096625
+  type: 'test'
+  ...
+# Subtest: rejects unknown sections and unbound template fields
+ok 116 - rejects unknown sections and unbound template fields
+  ---
+  duration_ms: 0.632792
+  type: 'test'
+  ...
+# Subtest: rejects missing required content and mismatched template
+ok 117 - rejects missing required content and mismatched template
+  ---
+  duration_ms: 0.297166
+  type: 'test'
+  ...
+# Subtest: public lookup reads only the site-owned active snapshot and enforces host identity
+ok 118 - public lookup reads only the site-owned active snapshot and enforces host identity
+  ---
+  duration_ms: 1.726166
+  type: 'test'
+  ...
+# Subtest: domain resolution selects site-owned release independently of caller site IDs
+ok 119 - domain resolution selects site-owned release independently of caller site IDs
+  ---
+  duration_ms: 0.680208
+  type: 'test'
+  ...
+# Subtest: product template setup is opt-in and idempotent
+ok 120 - product template setup is opt-in and idempotent
+  ---
+  duration_ms: 1.270333
+  type: 'test'
+  ...
+# Subtest: mapped patch preserves all unedited values, rich text, other languages and content
+ok 121 - mapped patch preserves all unedited values, rich text, other languages and content
+  ---
+  duration_ms: 8.577958
+  type: 'test'
+  ...
+# Subtest: rejects flattening rich text and unknown fields; descriptors expose read-only rich text
+ok 122 - rejects flattening rich text and unknown fields; descriptors expose read-only rich text
+  ---
+  duration_ms: 1.253292
+  type: 'test'
+  ...
+# Subtest: new rich text is explicitly converted from plain input
+ok 123 - new rich text is explicitly converted from plain input
+  ---
+  duration_ms: 0.847167
+  type: 'test'
+  ...
+# Subtest: page operation identity is deterministic and isolated by site
+ok 124 - page operation identity is deterministic and isolated by site
+  ---
+  duration_ms: 0.531125
+  type: 'test'
+  ...
+# Subtest: viewer and missing template write grants are rejected
+ok 125 - viewer and missing template write grants are rejected
+  ---
+  duration_ms: 1.105041
+  type: 'test'
+  ...
+# Subtest: rejects invalid scalar prices and malformed media data
+ok 126 - rejects invalid scalar prices and malformed media data
+  ---
+  duration_ms: 9.382416
+  type: 'test'
+  ...
+# Subtest: every Studio read and write endpoint rejects requests without a real user token
+ok 127 - every Studio read and write endpoint rejects requests without a real user token
+  ---
+  duration_ms: 9.688709
+  type: 'test'
+  ...
+# Subtest: repository CAS rejects stale edits before preparation and enforces database write predicate
+ok 128 - repository CAS rejects stale edits before preparation and enforces database write predicate
+  ---
+  duration_ms: 1.008208
+  type: 'test'
+  ...
+# Subtest: Studio real HTTP and Mongo authorization, preserving edits, conflicts and idempotent page creation
+ok 129 - Studio real HTTP and Mongo authorization, preserving edits, conflicts and idempotent page creation
+  ---
+  duration_ms: 1186.827209
+  type: 'test'
+  ...
+# Subtest: route conflict fails before content write
+ok 130 - route conflict fails before content write
+  ---
+  duration_ms: 0.910458
+  type: 'test'
+  ...
+# Subtest: lost response retry returns same page with one Entry
+ok 131 - lost response retry returns same page with one Entry
+  ---
+  duration_ms: 0.221583
+  type: 'test'
+  ...
+# Subtest: CAS failure reports saved Entry and permits retry binding
+ok 132 - CAS failure reports saved Entry and permits retry binding
+  ---
+  duration_ms: 0.2295
+  type: 'test'
+  ...
+# Subtest: generic, custom and warm-cache content reads and writes stay in their workspace
+ok 133 - generic, custom and warm-cache content reads and writes stay in their workspace
+  ---
+  duration_ms: 432.683833
+  type: 'test'
+  ...
+# Subtest: selectors require membership and site ownership; API keys are pinned
+ok 134 - selectors require membership and site ownership; API keys are pinned
+  ---
+  duration_ms: 0.744833
+  type: 'test'
+  ...
+# Subtest: verified async contexts stay isolated across interleaved requests
+ok 135 - verified async contexts stay isolated across interleaved requests
+  ---
+  duration_ms: 9.808167
+  type: 'test'
+  ...
+# Subtest: real Mongo and HTTP workspace membership, independent installations, releases and domain ownership
+ok 136 - real Mongo and HTTP workspace membership, independent installations, releases and domain ownership
+  ---
+  duration_ms: 1392.696167
+  type: 'test'
+  ...
+# Subtest: a site creation reserved before insert prevents concurrent workspace deletion
+ok 137 - a site creation reserved before insert prevents concurrent workspace deletion
+  ---
+  duration_ms: 253.709917
+  type: 'test'
+  ...
+# Subtest: deletion winning before a previously authorized creator reserves leaves no orphan
+ok 138 - deletion winning before a previously authorized creator reserves leaves no orphan
+  ---
+  duration_ms: 213.795333
+  type: 'test'
+  ...
+# Subtest: a creation completed after the empty-site check invalidates deletion revision
+ok 139 - a creation completed after the empty-site check invalidates deletion revision
+  ---
+  duration_ms: 188.9475
+  type: 'test'
+  ...
+# Subtest: interrupted creation reservations survive age and restart until explicitly recovered
+ok 140 - interrupted creation reservations survive age and restart until explicitly recovered
+  ---
+  duration_ms: 142.303084
+  type: 'test'
+  ...
+# Subtest: Entry names conflict across templates atomically and foreign references are rejected
+ok 141 - Entry names conflict across templates atomically and foreign references are rejected
+  ---
+  duration_ms: 334.672667
+  type: 'test'
+  ...
+1..141
+# tests 141
+# suites 0
+# pass 141
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 24857.236292

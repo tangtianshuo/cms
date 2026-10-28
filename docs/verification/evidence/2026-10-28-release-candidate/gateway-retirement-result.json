@@ -1,0 +1,12 @@
+{
+  "orphanIds": [
+    "add1d36ecf3466bd5511f262e691b9ad6c624c740fcc910d75f214e9e2ad672b",
+    "ca907ba7fb88435a4b29413ae55ca32dbff3c4c27d7e97e8c45823c50eb47b96",
+    "ed1cb6db1a4cfcda31863497a0866a17adc9962b7064963a4a205abc74c94809"
+  ],
+  "removedAutomatically": 3,
+  "rejectedDeletionAttempts": 3,
+  "protectedContainersRetained": 2,
+  "preexistingContainersRetained": 15,
+  "publicStatus": 200
+}

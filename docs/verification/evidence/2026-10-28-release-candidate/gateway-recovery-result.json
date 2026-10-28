@@ -1,0 +1,11 @@
+{
+  "activeReleaseId": "09333038-ecf4-4414-94a3-7a951ab44164",
+  "failure": {
+    "id": "9fa1313a-df02-401e-8167-f584b73a4ecb",
+    "status": "failed",
+    "failureCode": "CANDIDATE_UNHEALTHY",
+    "releaseId": "23d18b1b-a1ca-4343-b3db-35f25d317b9b",
+    "revision": 25
+  },
+  "oldSiteStatus": 200
+}

@@ -1,0 +1,86 @@
+{
+  "checkedAt": "2026-10-28T08:54:03.113Z",
+  "source": {
+    "cms": "bde8aae",
+    "gateway": "79857f4",
+    "templates": "615959b"
+  },
+  "health": [
+    {
+      "service": "cms",
+      "url": "http://127.0.0.1:18080/api/v4/health-check",
+      "status": 200
+    },
+    {
+      "service": "gateway",
+      "url": "http://127.0.0.1:18183/api/v1/health/ready",
+      "status": 200
+    },
+    {
+      "service": "public",
+      "url": "http://127.0.0.1:18090/",
+      "host": "shop.localhost",
+      "status": 200
+    },
+    {
+      "service": "builtin",
+      "url": "http://127.0.0.1:13001/",
+      "status": 200
+    },
+    {
+      "service": "preview",
+      "url": "http://127.0.0.1:18081/preview",
+      "status": 200
+    }
+  ],
+  "images": [
+    {
+      "tag": "local/cms-e2e:20261028",
+      "id": "sha256:e5f591d62dd793ed9801bb96245af3d09b8f7cf67185c0ddb24e98c564874b4d",
+      "created": "2026-10-28T08:45:09.533403211Z"
+    },
+    {
+      "tag": "local/cms-storefront-e2e:20261028",
+      "id": "sha256:62e786515364d55256bfa34faf4ac018b0cae03fc594aa7b49a8a1e6f7eb967f",
+      "created": "2026-10-28T08:45:28.333649053Z"
+    },
+    {
+      "tag": "local/gateway-e2e:20261028",
+      "id": "sha256:b3833d82efeddb8a71f19bb93d007841551e429e63d2a5d76a4e2e3023429b91",
+      "created": "2026-10-28T08:46:29.401782679Z"
+    },
+    {
+      "tag": "local/aeroframe:1.0.3",
+      "id": "sha256:2823909bf9e5733ddee8f2980c9cc4b122cb9b380cc5ed4b797e7f316d2dd13b",
+      "created": "2026-10-28T05:15:39.025500375Z"
+    }
+  ],
+  "running": [
+    {
+      "name": "/cms-e2e-20261028-cms-1",
+      "imageId": "sha256:e5f591d62dd793ed9801bb96245af3d09b8f7cf67185c0ddb24e98c564874b4d",
+      "running": true
+    },
+    {
+      "name": "/cms-e2e-20261028-gateway-control-1",
+      "imageId": "sha256:b3833d82efeddb8a71f19bb93d007841551e429e63d2a5d76a4e2e3023429b91",
+      "running": true
+    },
+    {
+      "name": "/cms-e2e-20261028-builtin-storefront-1",
+      "imageId": "sha256:62e786515364d55256bfa34faf4ac018b0cae03fc594aa7b49a8a1e6f7eb967f",
+      "running": true
+    },
+    {
+      "name": "/cms-e2e-20261028-template-preview-1",
+      "imageId": "sha256:2823909bf9e5733ddee8f2980c9cc4b122cb9b380cc5ed4b797e7f316d2dd13b",
+      "running": true
+    }
+  ],
+  "workerRunning": true,
+  "containers": {
+    "total": 2,
+    "unreferenced": 0,
+    "protected": 2
+  }
+}
