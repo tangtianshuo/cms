@@ -1,0 +1,93 @@
+[
+  {
+    "name": "dry-powder-extinguisher",
+    "model": "gpt-image-2.5-flare",
+    "raw": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/dry-powder-extinguisher.png",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "rawSha256": "9d09606c4d3c2c9f916619444c4f9e833793eaba9e75a0a3ca6572edd95b39d7",
+    "web": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/web/fireguard-dry-powder-extinguisher.webp",
+    "webSha256": "ff431fa82a25c88a12c7a00dbb05a29d8aa98b28273e9fe9219d59a5e4a7df27",
+    "webBytes": 33146
+  },
+  {
+    "name": "co2-extinguisher",
+    "model": "gpt-image-2.5-flare",
+    "raw": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/co2-extinguisher.png",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "rawSha256": "2f3bc663537c7e6c25d9156bab5ea96b89cae482198f1948f8ab3a4f462befe2",
+    "web": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/web/fireguard-co2-extinguisher.webp",
+    "webSha256": "f96d24f39772f983976c93a744c1293f280d67ae4723c93b6d25353f618727dd",
+    "webBytes": 40006
+  },
+  {
+    "name": "fire-hose",
+    "model": "gpt-image-2.5-flare",
+    "raw": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/fire-hose.png",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "rawSha256": "f1fc8fba2bbfa3519570eb2b811bd1c3facda5ee63448fbe6f0bbc946f924a90",
+    "web": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/web/fireguard-fire-hose.webp",
+    "webSha256": "9bd0d11e6942e9d2c917c2f17f60061414b747f967b6ec2e58b907c7ea06c31a",
+    "webBytes": 127780
+  },
+  {
+    "name": "hydrant-cabinet",
+    "model": "gpt-image-2.5-flare",
+    "raw": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/hydrant-cabinet.png",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "rawSha256": "576be311aacf5a52ca0269380ad0b405448e0863dab9d79824d0e899ba0e9064",
+    "web": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/web/fireguard-hydrant-cabinet.webp",
+    "webSha256": "f6487001e1c85e9795a5cacacfa52bbd1954aadc8c3968f77bdb3008732bffc9",
+    "webBytes": 105728
+  },
+  {
+    "name": "smoke-detector",
+    "model": "gpt-image-2.5-flare",
+    "raw": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/smoke-detector.png",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "rawSha256": "039e4ddfde1d9fad898a1e222240feb48ee24c6029a0f81f90c7341f3d69e1cb",
+    "web": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/web/fireguard-smoke-detector.webp",
+    "webSha256": "1e6a631d123456fd49a2960e4500fc75990782e3a1092b9a909b5fa76f06a1ea",
+    "webBytes": 46366
+  },
+  {
+    "name": "emergency-light",
+    "model": "gpt-image-2.5-flare",
+    "raw": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/emergency-light.png",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "rawSha256": "781e142bf27a36cf86da2ff077cfc57499858662aa02f0150690922a72249c7d",
+    "web": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/web/fireguard-emergency-light.webp",
+    "webSha256": "83000b25406b1672434ec8f170da2000aedd45623f9cc40d9ef7d2fe2e7d4d0e",
+    "webBytes": 62828
+  },
+  {
+    "name": "hero",
+    "model": "gpt-image-2.5-flare",
+    "raw": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/hero.png",
+    "dimensions": [
+      1981,
+      793
+    ],
+    "rawSha256": "a3ce3cde465851e3c7033b451162b8a24a088d86b26a07f7d65d5f4d0a4dc209",
+    "web": "/Users/445101599qq.com/Projects/cms/output/imagegen/fireguard/web/fireguard-hero.webp",
+    "webSha256": "7d9434e2008a227fb9c91962f3982fff1e44fbd9ea6493460a2f0bbf39c5bb50",
+    "webBytes": 120128
+  }
+]

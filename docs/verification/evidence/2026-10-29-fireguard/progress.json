@@ -1,0 +1,176 @@
+{
+  "date": "2026-10-29",
+  "fullProductionE2ePassed": true,
+  "domain": {
+    "selected": "fire.novaintelligent.cn",
+    "plannedDns": {
+      "type": "A",
+      "name": "fire",
+      "content": "101.33.78.203",
+      "proxied": true
+    },
+    "dnsConfiguredByThisSession": false,
+    "ingressConfiguredByThisSession": true,
+    "userReportedDnsConfigured": true,
+    "observedDns": "Cloudflare 104.21.66.192, 172.67.206.250; HTTPS 404 before first release",
+    "externalDnsCheck": {
+      "provider": "Google DNS queried from deployment host",
+      "status": 3,
+      "meaning": "NXDOMAIN",
+      "authority": "harlee.ns.cloudflare.com",
+      "checkedAt": "2026-10-29T04:09Z"
+    }
+  },
+  "cmsSite": {
+    "workspaceName": "FireGuard 消防设备",
+    "name": "FireGuard 消防设备",
+    "id": "12e0921b-270f-46f4-864c-8b5716178b31",
+    "createdVia": "production CMS UI",
+    "templateInstalled": true,
+    "editedProducts": 6,
+    "mediaUploads": 7,
+    "published": true,
+    "workspaceId": "861aee08-fcc2-4b5b-9948-c8a39fd242ad",
+    "currentReleaseId": "76bf91b5-6710-4600-9bdd-44a873e76a37",
+    "gatewayRevision": 2,
+    "publicPages": 9
+  },
+  "cmsCompatibilityFix": {
+    "sourceCommit": "b76a16c3dbf2064b480f81c833f5acafe5157579",
+    "masterCi": 40812143811,
+    "masterCiConclusion": "success",
+    "releaseVersion": "1.0.4",
+    "releaseRun": 40812660463,
+    "releaseConclusion": "success",
+    "imageDigest": "sha256:4b6af402a2c999eda853e15c1a05dfc8caf7c1f78953748de807d71e3f16068e",
+    "backup": "/opt/novaintelligent/backups/release-cms-20261029T033729990168Z"
+  },
+  "templateDraft": {
+    "id": "fireguard",
+    "version": "1.0.0",
+    "committed": true,
+    "published": true,
+    "manifestValidation": "pass",
+    "storefrontUnitTests": {
+      "pass": 15,
+      "fail": 0
+    },
+    "build": "pass",
+    "builtRendererTest": "pass",
+    "imageDockerTest": "pass",
+    "sourceCommit": "6e00925af7d5ebe375ac255d415ff2bf75619369",
+    "mergedTests": {
+      "pass": 32,
+      "skip": 1,
+      "fail": 0
+    },
+    "releaseRun": 40818378391,
+    "masterRun": 40818372003
+  },
+  "images": {
+    "method": "authorized imagegen CLI/API fallback",
+    "generated": 7,
+    "preparedPromptJobs": 7,
+    "preparedProductContentRecords": 6,
+    "apiRequestsWithCredential": "seven successful generated assets with the latest user-supplied credential; earlier unavailable-account attempts retained in history",
+    "credentialPersisted": false,
+    "blocker": null,
+    "apiBaseUrl": "https://llm.graypuppy.cn/v1",
+    "model": "gpt-image-2.5-flare",
+    "actualProductDimensions": [
+      1254,
+      1254
+    ],
+    "actualHeroDimensions": [
+      1981,
+      793
+    ]
+  },
+  "blockers": [],
+  "serverAccess": {
+    "matchingPrivateKeyFound": true,
+    "rootLogin": "rejected",
+    "username": "ubuntu",
+    "loginVerified": true,
+    "passwordlessSudoVerified": true
+  },
+  "updatedAt": "2026-10-29T04:57:21.529838+00:00",
+  "gatewayProvisioning": {
+    "workspaceId": "ea3007fe-6ca8-44c8-989f-38c6e13f9789",
+    "siteId": "12e0921b-270f-46f4-864c-8b5716178b31",
+    "domainStatus": "verified",
+    "certificateStatus": "external",
+    "backup": "/opt/novaintelligent/deploy/fireguard-provisioning/20261029T035613Z",
+    "entryCandidateChecks": {
+      "cms": 200,
+      "shop": 200,
+      "fire": 404
+    }
+  },
+  "gatewayBindingFix": {
+    "sourceCommit": "0a3b95951a219e3650fd5242b4faa5e71ec73e78",
+    "masterPushed": true,
+    "releaseVersion": "1.0.5",
+    "releaseRun": 40816447666,
+    "masterCi": 40816447322,
+    "releaseStatus": "success",
+    "backendTests": {
+      "pass": 153,
+      "fail": 0,
+      "skip": 0,
+      "mongoIncluded": true
+    },
+    "uiTests": {
+      "pass": 34,
+      "skip": 1
+    },
+    "typeCheck": "pass",
+    "independentReview": "pass",
+    "masterCiConclusion": "success",
+    "releaseConclusion": "success",
+    "imageDigest": "sha256:e17d715bc75522df640d0ee9f45bbde9934472dfa6ae384c3dee0612a6d75bd6",
+    "releaseBackup": "/opt/novaintelligent/backups/release-cms-20261029T041814639761Z",
+    "bindingsActivated": true,
+    "bindingsBackup": "/opt/novaintelligent/deploy/fireguard-provisioning/20261029T035613Z/compose-before-bindings.yaml",
+    "productionGatewayState": [
+      {
+        "siteUrl": "https://shop.novaintelligent.cn",
+        "http": 200,
+        "revision": 4,
+        "activeReleaseId": "07b1ea4b-6865-497b-bbd5-dd5c084e6ac1",
+        "imageDigest": "sha256:931b7e38882216deda60ac4060a9b76bbfb782426a1317c7b842727f0931a80a",
+        "pages": [
+          "/",
+          "/collections",
+          "/products/featured-product",
+          "/pages/about"
+        ]
+      },
+      {
+        "siteUrl": "https://fire.novaintelligent.cn",
+        "http": 200,
+        "revision": 2,
+        "activeReleaseId": "76bf91b5-6710-4600-9bdd-44a873e76a37",
+        "imageDigest": "sha256:f9ef13e8b78eb0b10247990bdfd9b8ba88ba8791373eb50863633b4d64a64f38",
+        "pages": [
+          "/",
+          "/collections",
+          "/products/dry-powder-extinguisher",
+          "/products/co2-extinguisher",
+          "/products/fire-hose",
+          "/products/hydrant-cabinet",
+          "/products/smoke-detector",
+          "/products/emergency-light",
+          "/pages/about"
+        ]
+      }
+    ]
+  },
+  "fullProductionE2eScope": "requested template import, six real product edits, generated media upload/reference, production publication and public checks; admin preview limitations listed separately",
+  "knownLimitations": [
+    "CMS draft preview does not support fireguard@1.0.0; public deployment verified directly",
+    "Media management appeared empty after a full page load although all seven files persisted in the correct workspace and were selectable in Studio",
+    "Multiple pointer selector visually clears selection after changing it; persisted data confirmed six related products",
+    "Home decorative story block has no body/image in home projection; about page content and cover verified separately"
+  ]
+}

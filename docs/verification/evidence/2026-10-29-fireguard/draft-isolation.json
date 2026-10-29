@@ -1,0 +1,8 @@
+{
+  "testedAt": "2026-10-29T04:52:46.409888+00:00",
+  "method": "CMS UI saved product title with 草稿隔离验收 marker; hard-reloaded published product; public title remained original; restored original draft via UI",
+  "pass": true,
+  "releaseId": "0064638e-c1f4-443b-a05b-921d684e627d",
+  "marker": "草稿隔离验收",
+  "draftRestored": true
+}

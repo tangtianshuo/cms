@@ -1,0 +1,140 @@
+{
+  "pages": [
+    {
+      "path": "/",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/collections",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/products/dry-powder-extinguisher",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/products/co2-extinguisher",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/products/fire-hose",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/products/hydrant-cabinet",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/products/smoke-detector",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/products/emergency-light",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    },
+    {
+      "path": "/pages/about",
+      "http": 200,
+      "apiHttp": 200,
+      "titleFound": true,
+      "contentType": "text/html;charset=utf-8"
+    }
+  ],
+  "media": {
+    "https://cms.novaintelligent.cn/api/v4/media/6ae2cbba3aa5f31585ea7f97/bin/image": {
+      "http": 200,
+      "contentType": "image/webp",
+      "bytes": 120128,
+      "sha256": "7d9434e2008a227fb9c91962f3982fff1e44fbd9ea6493460a2f0bbf39c5bb50",
+      "matchesGeneratedAsset": [
+        "fireguard-hero.webp"
+      ]
+    },
+    "https://cms.novaintelligent.cn/api/v4/media/6ae2cb973aa5f31585ea7f91/bin/image": {
+      "http": 200,
+      "contentType": "image/webp",
+      "bytes": 33146,
+      "sha256": "ff431fa82a25c88a12c7a00dbb05a29d8aa98b28273e9fe9219d59a5e4a7df27",
+      "matchesGeneratedAsset": [
+        "fireguard-dry-powder-extinguisher.webp"
+      ]
+    },
+    "https://cms.novaintelligent.cn/api/v4/media/6ae2cba03aa5f31585ea7f92/bin/image": {
+      "http": 200,
+      "contentType": "image/webp",
+      "bytes": 40006,
+      "sha256": "f96d24f39772f983976c93a744c1293f280d67ae4723c93b6d25353f618727dd",
+      "matchesGeneratedAsset": [
+        "fireguard-co2-extinguisher.webp"
+      ]
+    },
+    "https://cms.novaintelligent.cn/api/v4/media/6ae2cbae3aa5f31585ea7f93/bin/image": {
+      "http": 200,
+      "contentType": "image/webp",
+      "bytes": 127780,
+      "sha256": "9bd0d11e6942e9d2c917c2f17f60061414b747f967b6ec2e58b907c7ea06c31a",
+      "matchesGeneratedAsset": [
+        "fireguard-fire-hose.webp"
+      ]
+    },
+    "https://cms.novaintelligent.cn/api/v4/media/6ae2cbb03aa5f31585ea7f94/bin/image": {
+      "http": 200,
+      "contentType": "image/webp",
+      "bytes": 105728,
+      "sha256": "f6487001e1c85e9795a5cacacfa52bbd1954aadc8c3968f77bdb3008732bffc9",
+      "matchesGeneratedAsset": [
+        "fireguard-hydrant-cabinet.webp"
+      ]
+    },
+    "https://cms.novaintelligent.cn/api/v4/media/6ae2cbb33aa5f31585ea7f95/bin/image": {
+      "http": 200,
+      "contentType": "image/webp",
+      "bytes": 46366,
+      "sha256": "1e6a631d123456fd49a2960e4500fc75990782e3a1092b9a909b5fa76f06a1ea",
+      "matchesGeneratedAsset": [
+        "fireguard-smoke-detector.webp"
+      ]
+    },
+    "https://cms.novaintelligent.cn/api/v4/media/6ae2cbb73aa5f31585ea7f96/bin/image": {
+      "http": 200,
+      "contentType": "image/webp",
+      "bytes": 62828,
+      "sha256": "83000b25406b1672434ec8f170da2000aedd45623f9cc40d9ef7d2fe2e7d4d0e",
+      "matchesGeneratedAsset": [
+        "fireguard-emergency-light.webp"
+      ]
+    }
+  },
+  "negativePaths": {
+    "/products/not-a-product": 404,
+    "/pages/not-a-page": 404,
+    "/preview": 404,
+    "/api/published": 404,
+    "/api/published?path=/products/featured-product": 404
+  },
+  "shopHttp": 200
+}

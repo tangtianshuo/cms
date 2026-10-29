@@ -1,0 +1,33 @@
+[
+  {
+    "siteUrl": "https://shop.novaintelligent.cn",
+    "http": 200,
+    "revision": 4,
+    "activeReleaseId": "07b1ea4b-6865-497b-bbd5-dd5c084e6ac1",
+    "imageDigest": "sha256:931b7e38882216deda60ac4060a9b76bbfb782426a1317c7b842727f0931a80a",
+    "pages": [
+      "/",
+      "/collections",
+      "/products/featured-product",
+      "/pages/about"
+    ]
+  },
+  {
+    "siteUrl": "https://fire.novaintelligent.cn",
+    "http": 200,
+    "revision": 2,
+    "activeReleaseId": "76bf91b5-6710-4600-9bdd-44a873e76a37",
+    "imageDigest": "sha256:f9ef13e8b78eb0b10247990bdfd9b8ba88ba8791373eb50863633b4d64a64f38",
+    "pages": [
+      "/",
+      "/collections",
+      "/products/dry-powder-extinguisher",
+      "/products/co2-extinguisher",
+      "/products/fire-hose",
+      "/products/hydrant-cabinet",
+      "/products/smoke-detector",
+      "/products/emergency-light",
+      "/pages/about"
+    ]
+  }
+]

@@ -1,0 +1,47 @@
+{
+  "checkedAt": "2026-10-29T04:20:57.713581+00:00",
+  "checks": [
+    {
+      "url": "https://cms.novaintelligent.cn/",
+      "status": "200",
+      "exitCode": 0,
+      "error": ""
+    },
+    {
+      "url": "https://cms.novaintelligent.cn/api/v4/health-check",
+      "status": "200",
+      "exitCode": 0,
+      "error": ""
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/",
+      "status": "200",
+      "exitCode": 0,
+      "error": ""
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/collections",
+      "status": "200",
+      "exitCode": 0,
+      "error": ""
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/products/featured-product",
+      "status": "200",
+      "exitCode": 0,
+      "error": ""
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/pages/about",
+      "status": "200",
+      "exitCode": 0,
+      "error": ""
+    },
+    {
+      "url": "https://fire.novaintelligent.cn/",
+      "status": "000",
+      "exitCode": 6,
+      "error": "curl: (6) Could not resolve host: fire.novaintelligent.cn"
+    }
+  ]
+}

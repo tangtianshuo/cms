@@ -1,0 +1,50 @@
+[
+  {
+    "slug": "dry-powder-extinguisher",
+    "title": "便携式干粉灭火器",
+    "price": 129,
+    "sku": "FG-DP-01",
+    "description": "用于消防器材目录展示。采购前核对适用火灾类别、规格与产品资料；不将展示图片作为认证或性能依据。",
+    "image": "dry-powder-extinguisher.png"
+  },
+  {
+    "slug": "co2-extinguisher",
+    "title": "二氧化碳灭火器",
+    "price": 269,
+    "sku": "FG-CO2-02",
+    "description": "展示二氧化碳灭火设备的产品目录。实际使用环境、适用类别和人员培训要求应以具体型号说明及专业核验为准。",
+    "image": "co2-extinguisher.png"
+  },
+  {
+    "slug": "fire-hose",
+    "title": "消防水带",
+    "price": 189,
+    "sku": "FG-HOSE-03",
+    "description": "消防供水器材展示。采购前核对接口型式、配套兼容性、长度和维护资料；实际配置由专业人员确认。",
+    "image": "fire-hose.png"
+  },
+  {
+    "slug": "hydrant-cabinet",
+    "title": "消火栓箱",
+    "price": 599,
+    "sku": "FG-CAB-04",
+    "description": "箱体及配套器材展示。尺寸、配件和安装条件以实际供货清单为准，安装与布置应由专业人员核验。",
+    "image": "hydrant-cabinet.png"
+  },
+  {
+    "slug": "smoke-detector",
+    "title": "烟感报警器",
+    "price": 89,
+    "sku": "FG-SMOKE-05",
+    "description": "用于报警设备目录展示。应核对供电方式、联动兼容性、安装位置和维护要求；不以图片判断实际探测性能。",
+    "image": "smoke-detector.png"
+  },
+  {
+    "slug": "emergency-light",
+    "title": "应急照明灯",
+    "price": 159,
+    "sku": "FG-LIGHT-06",
+    "description": "用于应急照明产品展示。实际续航、照度、供电方式及布置方案以具体型号资料和专业核验为准。",
+    "image": "emergency-light.png"
+  }
+]

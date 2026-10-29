@@ -1,0 +1,31 @@
+{
+  "checkedAt": "2026-10-29T04:01:03.106417+00:00",
+  "checks": [
+    {
+      "url": "https://cms.novaintelligent.cn/",
+      "method": "HEAD via curl",
+      "status": "200",
+      "exitCode": 0
+    },
+    {
+      "url": "https://cms.novaintelligent.cn/api/v4/health-check",
+      "method": "HEAD via curl",
+      "status": "200",
+      "exitCode": 0
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/",
+      "method": "HEAD via curl",
+      "status": "200",
+      "exitCode": 0
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/collections",
+      "method": "HEAD via curl",
+      "status": "200",
+      "exitCode": 0
+    }
+  ],
+  "sourceCmsAndShopStatus": 200,
+  "note": "Earlier urllib HEAD calls received Cloudflare 403; curl and source checks returned 200."
+}

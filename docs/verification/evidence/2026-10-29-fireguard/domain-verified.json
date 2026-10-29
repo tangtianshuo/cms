@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-10-29T04:24:29.235518+00:00",
+  "hostname": "fire.novaintelligent.cn",
+  "httpsStatusBeforePublication": 404,
+  "tlsVerification": "default certificate verification passed from workstation and deployment host",
+  "verification": "operator configured DNS target and Cloudflare proxy; verified live HTTPS before marking domain",
+  "previousStatus": "pending",
+  "status": "verified",
+  "certificateStatus": "external"
+}
