@@ -1,0 +1,19 @@
+{
+  "registryCommit": "e47062a167fd6d5653646d96e21b5ef4c44c76fb",
+  "previousRecordsUnchanged": true,
+  "manifestChecksumMatches": true,
+  "record": {
+    "schemaVersion": 1,
+    "id": "aeroframe",
+    "version": "1.0.3",
+    "manifestChecksum": "sha256:1e122ce48c81e8a7438ab2b6148031b9109060ba1b97d7e4491ca4780ca240e6",
+    "imageRepository": "ghcr.io/tangtianshuo/independent-website-templates/aeroframe",
+    "imageDigest": "sha256:42fb56a3f1cc20b4d141d16ce454d4fb128f3bd00b3b5461cdf5c4a89e15e5f4",
+    "sourceCommit": "615959b01136a5aab8628a9588ccf59961c35c45",
+    "manifestPath": "templates/aeroframe/1.0.3/template.json",
+    "status": "available"
+  },
+  "publicRegistryURL": "https://raw.githubusercontent.com/tangtianshuo/Independent-Website-Templates/e47062a167fd6d5653646d96e21b5ef4c44c76fb/registry/index.json",
+  "publicRegistryBytesMatch": true,
+  "publicRegistrySHA256": "dc186324c96ae1344827dcd8ef794d61e3cc75aa409157c7ed483ab3935a0d13"
+}

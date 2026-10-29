@@ -1,0 +1,149 @@
+{
+  "recordedAt": "2026-10-29T02:21:21.831747+00:00",
+  "evidenceSource": "GitHub Actions jobs and production forced-command deployment logs; public HTTPS probes. Server receipt paths are reported by the deployed script contract, not directly read over SSH.",
+  "releases": [
+    {
+      "component": "gateway",
+      "version": "1.0.1",
+      "sourceCommit": "dcbdd2f041c4e0284974cef074a3c17dff0233fb",
+      "releaseBranch": "release/v1.0.1",
+      "image": "ghcr.io/tangtianshuo/independent-website-gateway@sha256:3c62bfb7c2f520145a6a1383a13243a2832a73df6a425e2a6e4b406f12fd8254",
+      "runID": 40804008944,
+      "runNumber": 6,
+      "workflowURL": "https://github.com/tangtianshuo/Independent-Website-Gateway/actions/runs/40804008944",
+      "masterVerificationURL": "https://github.com/tangtianshuo/Independent-Website-Gateway/actions/runs/40803733593",
+      "conclusion": "success",
+      "serverDeliveryLog": "2026-10-29T02:07:17.2821234Z Release delivered gateway 1.0.1 dcbdd2f041c4e0284974cef074a3c17dff0233fb",
+      "serverReceiptPath": "/opt/novaintelligent/deploy/releases/gateway-6.json",
+      "backupPath": "/opt/novaintelligent/backups/release-gateway-20261029T020654639772Z",
+      "jobs": [
+        {
+          "name": "verify",
+          "conclusion": "success",
+          "steps": []
+        },
+        {
+          "name": "publish",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Run actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify published image provenance",
+              "conclusion": "success"
+            },
+            {
+              "name": "Deploy verified image",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "component": "templates",
+      "version": "1.0.3",
+      "sourceCommit": "615959b01136a5aab8628a9588ccf59961c35c45",
+      "releaseBranch": "release/v1.0.3",
+      "image": "ghcr.io/tangtianshuo/independent-website-templates/aeroframe@sha256:42fb56a3f1cc20b4d141d16ce454d4fb128f3bd00b3b5461cdf5c4a89e15e5f4",
+      "runID": 40804585125,
+      "runNumber": 8,
+      "workflowURL": "https://github.com/tangtianshuo/Independent-Website-Templates/actions/runs/40804585125",
+      "masterVerificationURL": "https://github.com/tangtianshuo/Independent-Website-Templates/actions/runs/40803735484",
+      "conclusion": "success",
+      "serverDeliveryLog": "2026-10-29T02:10:34.5027263Z Release delivered templates 1.0.3 615959b01136a5aab8628a9588ccf59961c35c45",
+      "serverReceiptPath": "/opt/novaintelligent/deploy/releases/templates-8.json",
+      "backupPath": null,
+      "jobs": [
+        {
+          "name": "metadata",
+          "conclusion": "success",
+          "steps": []
+        },
+        {
+          "name": "verify",
+          "conclusion": "success",
+          "steps": []
+        },
+        {
+          "name": "publish",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Run actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify provenance",
+              "conclusion": "success"
+            },
+            {
+              "name": "Confirm anonymous image access",
+              "conclusion": "success"
+            },
+            {
+              "name": "Smoke test candidate image",
+              "conclusion": "success"
+            },
+            {
+              "name": "Append immutable registry record",
+              "conclusion": "success"
+            },
+            {
+              "name": "Synchronize released template image to server",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "component": "cms",
+      "version": "1.0.3",
+      "sourceCommit": "fe6cd2da73810058b2bb6c854d8b8c17805c76e4",
+      "releaseBranch": "release/v1.0.3",
+      "image": "ghcr.io/tangtianshuo/cms@sha256:b46a37ff90f824ababb9043e5f90e7025ca1ce0a9c6398223833a8665616a5dc",
+      "runID": 40804981944,
+      "runNumber": 12,
+      "workflowURL": "https://github.com/tangtianshuo/cms/actions/runs/40804981944",
+      "masterVerificationURL": "https://github.com/tangtianshuo/cms/actions/runs/40803739565",
+      "conclusion": "success",
+      "serverDeliveryLog": "2026-10-29T02:18:39.3537275Z Release delivered cms 1.0.3 fe6cd2da73810058b2bb6c854d8b8c17805c76e4",
+      "serverReceiptPath": "/opt/novaintelligent/deploy/releases/cms-12.json",
+      "backupPath": "/opt/novaintelligent/backups/release-cms-20261029T021820000256Z",
+      "jobs": [
+        {
+          "name": "verify",
+          "conclusion": "success",
+          "steps": []
+        },
+        {
+          "name": "publish-and-deploy",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Attest image provenance",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify image provenance",
+              "conclusion": "success"
+            },
+            {
+              "name": "Deploy verified image digest",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": {
+    "privatePreviewEnabled": false,
+    "reason": "VITE_TEMPLATE_PREVIEW_ORIGIN and VITE_STOREFRONT_ORIGIN were empty in the production image build.",
+    "activeSiteTemplateAutomaticallyChanged": false,
+    "originalIntermittentTemplateFailureRootCauseKnown": false
+  }
+}

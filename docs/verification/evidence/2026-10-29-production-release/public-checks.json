@@ -1,0 +1,95 @@
+{
+  "checkedAt": "2026-10-29T02:20:43.040475+00:00",
+  "checks": [
+    {
+      "url": "https://cms.novaintelligent.cn/",
+      "method": "GET",
+      "status": 200,
+      "contentType": "text/html",
+      "durationSeconds": 1.900489,
+      "bytes": 1113,
+      "sha256": "e37f380d4d2bce658caeccc42c257bbdc24b131279569ea759a1c69a675f3446"
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/",
+      "method": "GET",
+      "status": 200,
+      "contentType": "text/html;charset=utf-8",
+      "durationSeconds": 3.006244,
+      "bytes": 12359,
+      "sha256": "af215668bf9dea74be99727eca7502952c753e7327eea6502378a0d084cf22c9"
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/collections",
+      "method": "GET",
+      "status": 200,
+      "contentType": "text/html;charset=utf-8",
+      "durationSeconds": 1.880708,
+      "bytes": 6899,
+      "sha256": "b63293338250c804001695365df497ed9acaca40a551169f3f7b2c057c6082a2"
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/products/featured-product",
+      "method": "GET",
+      "status": 200,
+      "contentType": "text/html;charset=utf-8",
+      "durationSeconds": 1.710981,
+      "bytes": 7028,
+      "sha256": "9f6a845d11a0930417167d8ec392c2102de4cea6a16e77ef30debb14465ad5f9"
+    },
+    {
+      "url": "https://shop.novaintelligent.cn/pages/about",
+      "method": "GET",
+      "status": 200,
+      "contentType": "text/html;charset=utf-8",
+      "durationSeconds": 2.763721,
+      "bytes": 6713,
+      "sha256": "890a3b02bdd914a1f1e926bcc8b506c7403596e01920fd8f07908545e77c0fd0"
+    },
+    {
+      "url": "https://cms.novaintelligent.cn/d/studio",
+      "method": "GET",
+      "status": 200,
+      "contentType": "text/html",
+      "durationSeconds": 1.865671,
+      "bytes": 1113,
+      "sha256": "e37f380d4d2bce658caeccc42c257bbdc24b131279569ea759a1c69a675f3446"
+    },
+    {
+      "url": "https://cms.novaintelligent.cn/api/v4/health-check",
+      "method": "HEAD",
+      "status": 200,
+      "contentType": "application/json; charset=utf-8",
+      "durationSeconds": 1.874648
+    }
+  ],
+  "assets": [
+    {
+      "url": "https://cms.novaintelligent.cn/assets/index-83b232b7.js",
+      "method": "GET",
+      "status": 200,
+      "contentType": "application/javascript; charset=utf-8",
+      "durationSeconds": 1.71249,
+      "bytes": 1304902,
+      "sha256": "1e4302d9b2e9bca8b4c4ccab4c82225f1283cc5f41776aa17b7a44834e049b0a"
+    },
+    {
+      "url": "https://cms.novaintelligent.cn/assets/studio-12f80a23.js",
+      "method": "GET",
+      "status": 200,
+      "bytes": 31607,
+      "sha256": "0acdf67c25db33f51f7e09b38fcbce50a3ca1e5f2e384475e725f9d8feb3295f",
+      "matchesReleaseBuildOutput": true
+    },
+    {
+      "url": "https://cms.novaintelligent.cn/assets/studio-90bb16c8.css",
+      "method": "GET",
+      "status": 200,
+      "bytes": 17698,
+      "sha256": "90bb16c8bacf405b67c91e210f5bbaaecb374524659c126e9d817eab2f1716a2",
+      "matchesReleaseBuildOutput": true
+    }
+  ],
+  "studioRouteFoundInServedBundle": true,
+  "mainAssetMatchesReleaseBuildOutput": true
+}
