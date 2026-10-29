@@ -59,6 +59,32 @@ Protect the environment file:
 chmod 600 .env
 ```
 
+### Bind CMS sites to Gateway sites
+
+When CMS publishes to the independent Website Gateway, set the shared
+Gateway URL and service credential, then configure one explicit binding per
+CMS site. The CMS workspace/site pair and Gateway workspace/site pair must be
+unique across the array. Gateway workspace and site IDs must be UUIDs; public
+site URLs must use HTTPS. An unlisted CMS site remains unbound.
+
+```dotenv
+GATEWAY_BASE_URL=https://gateway.example.com
+CMS_SERVICE_SECRET=replace-with-gateway-service-secret
+GATEWAY_SITE_BINDINGS='[
+  {"cmsWorkspaceId":"default","cmsSiteId":"507f1f77bcf86cd799439011","workspaceId":"11111111-1111-4111-8111-111111111111","siteId":"22222222-2222-4222-8222-222222222222","siteUrl":"https://shop.example.com"},
+  {"cmsWorkspaceId":"merchant-workspace","cmsSiteId":"507f1f77bcf86cd799439012","workspaceId":"33333333-3333-4333-8333-333333333333","siteId":"44444444-4444-4444-8444-444444444444","siteUrl":"https://another-shop.example.com"}
+]'
+```
+
+`GATEWAY_BASE_URL` and `CMS_SERVICE_SECRET` are shared by these bindings. Keep
+the service secret private and use the Gateway site IDs assigned to each CMS
+site; callers cannot select or override a Gateway identity. The background
+recovery job checks each configured binding independently. Existing single
+site deployments may continue using `GATEWAY_WORKSPACE_ID`, `GATEWAY_SITE_ID`,
+`GATEWAY_CMS_WORKSPACE_ID`, `GATEWAY_CMS_SITE_ID` and
+`GATEWAY_PUBLIC_SITE_URL`; do not mix those legacy binding variables with
+`GATEWAY_SITE_BINDINGS`.
+
 ## Start the production stack
 
 From the repository root:

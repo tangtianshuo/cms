@@ -27,3 +27,10 @@ Activated on 2026-10-27 at 14:54:44 UTC. The server's backup, verified candidate
 and deployment receipt are under
 `/opt/novaintelligent/deploy/cache-optimization/`. This proxy change requires
 no application image replacement.
+
+On 2026-10-29, `fire.novaintelligent.cn` was added to the storefront relay
+and the edge Nginx server names. The independent Gateway site is provisioned
+with a pending domain; publication and DNS/HTTPS verification remain separate
+steps. The candidate checks returned CMS 200, shop 200 and unpublished fire
+404. Configuration and PostgreSQL backups, candidate files and the entry
+receipt are in `/opt/novaintelligent/deploy/fireguard-provisioning/20261029T035613Z/`.
