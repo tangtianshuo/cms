@@ -59,7 +59,6 @@ function validRecord(value: unknown): value is PublicTemplateRecord {
 }
 
 function normalizeManifest(value: unknown, record: PublicTemplateRecord): PresetManifest {
-    if (record.id !== 'aeroframe') throw new Error('Only the AeroFrame renderer profile is supported');
     if (!object(value) || value.schemaVersion !== 1 || value.id !== record.id || value.version !== record.version ||
         !object(value.compatibility) || value.compatibility.cmsSchema !== 1 || value.compatibility.releaseSchema !== 1 ||
         !object(value.presentation) || !object(value.presentation.theme) || !object(value.presentation.demo) ||

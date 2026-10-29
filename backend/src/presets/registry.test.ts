@@ -82,3 +82,27 @@ test('registry streams and rejects responses over the byte limit', async () => {
     }));
     await assert.rejects(() => readPublicRegistry(fetcher), /too large/i);
 });
+
+test('registry exposes a separately identified FireGuard template using the supported model profile', async () => {
+    const fireguard = { ...manifest, id: 'fireguard', version: '1.0.0', name: 'FireGuard 消防设备' };
+    const pinned = { ...record, id: 'fireguard', version: '1.0.0',
+        imageRepository: 'ghcr.io/tangtianshuo/independent-website-templates/fireguard',
+        manifestPath: 'templates/fireguard/1.0.0/template.json', manifestChecksum: sha(fireguard) };
+    const fetcher = async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes('/commits/registry')) return Response.json({ sha: sourceCommit });
+        if (url.endsWith('/registry/index.json')) return Response.json({ schemaVersion: 1,
+            records: [{ ...record, manifestChecksum: sha(manifest) }, pinned] });
+        return Response.json(url.endsWith(pinned.manifestPath) ? fireguard : manifest);
+    };
+    const result = await readPublicRegistry(fetcher);
+    assert.deepEqual(result.records.map(item => item.id), ['aeroframe', 'fireguard']);
+    assert.equal(result.records[1].manifest.name, 'FireGuard 消防设备');
+    assert.equal(result.records[1].manifest.id, 'fireguard');
+    for (const key of ['sourceCommit', 'imageRepository', 'imageDigest', 'manifestPath', 'manifestChecksum'] as const) {
+        assert.equal(result.records[1][key], pinned[key]);
+    }
+    fireguard.models = [];
+    pinned.manifestChecksum = sha(fireguard);
+    await assert.rejects(() => readPublicRegistry(fetcher), /model profile is incompatible/i);
+});
