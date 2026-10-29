@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /Users/445101599qq.com/Projects/Independent-Website-Gateway
+
+ ✓ apps/control/test/public-registry.test.ts (22 tests) 14ms
+ ✓ apps/control/test/template-pin-failure.test.ts (2 tests) 7ms
+
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+   Start at  09:37:42
+   Duration  268ms (transform 57ms, setup 0ms, collect 73ms, tests 20ms, environment 0ms, prepare 43ms)

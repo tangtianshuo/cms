@@ -1,0 +1,53 @@
+{
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": 200,
+      "elapsedMs": 1392,
+      "verified": true
+    },
+    {
+      "attempt": 2,
+      "status": 200,
+      "elapsedMs": 209,
+      "verified": true
+    },
+    {
+      "attempt": 3,
+      "status": 200,
+      "elapsedMs": 222,
+      "verified": true
+    },
+    {
+      "attempt": 4,
+      "status": 200,
+      "elapsedMs": 182,
+      "verified": true
+    },
+    {
+      "attempt": 5,
+      "status": 200,
+      "elapsedMs": 196,
+      "verified": true
+    },
+    {
+      "attempt": 6,
+      "status": 200,
+      "elapsedMs": 200,
+      "verified": true
+    },
+    {
+      "attempt": 7,
+      "status": 200,
+      "elapsedMs": 176,
+      "verified": true
+    },
+    {
+      "attempt": 8,
+      "status": 200,
+      "elapsedMs": 171,
+      "verified": true
+    }
+  ],
+  "passed": true
+}

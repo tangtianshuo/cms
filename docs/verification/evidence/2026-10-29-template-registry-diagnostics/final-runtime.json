@@ -1,0 +1,70 @@
+{
+  "checkedAt": "2026-10-29T01:47:31.913Z",
+  "source": {
+    "cms": "97c3377",
+    "gateway": "dcbdd2f",
+    "templates": "615959b"
+  },
+  "buildDirectory": "build-1793237949705",
+  "runtimeSourceMatchesBuiltContext": true,
+  "health": [
+    {
+      "service": "cms",
+      "status": 200
+    },
+    {
+      "service": "gateway",
+      "status": 200
+    },
+    {
+      "service": "public",
+      "status": 200
+    },
+    {
+      "service": "builtin",
+      "status": 200
+    },
+    {
+      "service": "preview",
+      "status": 200
+    }
+  ],
+  "images": [
+    {
+      "name": "/cms-e2e-20261028-cms-1",
+      "imageId": "sha256:dd126c2e0cb430df031413942c930f6d7e24ef7e8bbf05155ec35da93a581b93",
+      "running": true,
+      "builtImage": "local/cms-e2e:20261028",
+      "matchesBuiltImage": true
+    },
+    {
+      "name": "/cms-e2e-20261028-gateway-control-1",
+      "imageId": "sha256:f33b774050db865dc4518d93fc707b04fe00bd932f1a2034139293d1c5c5efd6",
+      "running": true,
+      "builtImage": "local/gateway-e2e:20261028",
+      "matchesBuiltImage": true
+    },
+    {
+      "name": "/cms-e2e-20261028-builtin-storefront-1",
+      "imageId": "sha256:3408613858f772573912175fc37adc120effec7a2427ae31dd725c4f3703c40a",
+      "running": true,
+      "builtImage": "local/cms-storefront-e2e:20261028",
+      "matchesBuiltImage": true
+    },
+    {
+      "name": "/cms-e2e-20261028-template-preview-1",
+      "imageId": "sha256:79f525c3320bc28980206b6db34a4e93a4fb5b23f56008655889240fc66d635e",
+      "running": true,
+      "builtImage": "local/aeroframe:1.0.3",
+      "matchesBuiltImage": true
+    }
+  ],
+  "workerRunning": true,
+  "containers": {
+    "total": 2,
+    "unreferenced": 0,
+    "protected": 2
+  },
+  "naturalRegistryFailuresReproduced": 0,
+  "controlledDiagnosticEvents": 1
+}

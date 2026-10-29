@@ -1,0 +1,12 @@
+{
+  "controlledProbe": "one invalid template version; expected400; no network or database mutation",
+  "events": [
+    {
+      "event": "template_verification_failed",
+      "siteId": "ae04c072-049c-4658-b751-61279db41fcf",
+      "stage": "identity",
+      "reason": "invalid_identity",
+      "elapsedMs": 0
+    }
+  ]
+}

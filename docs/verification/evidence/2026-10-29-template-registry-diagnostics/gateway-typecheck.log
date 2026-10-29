@@ -1,0 +1,15 @@
+
+> independent-website-gateway@0.1.0 typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @gateway/control@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @gateway/contracts@0.1.0 typecheck
+> tsc --noEmit --skipLibCheck --target ES2022 --module ESNext src/index.ts
+
+
+> @gateway/worker@0.1.0 typecheck
+> tsc --project tsconfig.json --noEmit

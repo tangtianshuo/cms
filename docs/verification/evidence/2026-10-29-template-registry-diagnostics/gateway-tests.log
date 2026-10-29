@@ -1,0 +1,529 @@
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "gateway_test_5f58ebf3c831464491db31f5ba3f8145", schema "public" at "127.0.0.1:15432"
+
+4 migrations found in prisma/migrations
+
+Applying migration `20261026100000_gateway_core`
+Applying migration `20261026110000_publish_leases`
+Applying migration `20261026120000_site_credentials`
+Applying migration `20261027100000_public_template_pins`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261026100000_gateway_core/
+    └─ migration.sql
+  └─ 20261026110000_publish_leases/
+    └─ migration.sql
+  └─ 20261026120000_site_credentials/
+    └─ migration.sql
+  └─ 20261027100000_public_template_pins/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+
+> independent-website-gateway@0.1.0 test
+> npm run test --workspaces --if-present
+
+
+> @gateway/control@0.1.0 test
+> node test-build.mjs
+
+   ▲ Next.js 15.5.28
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 2.6s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/6) ...
+   Generating static pages (1/6)
+   Generating static pages (2/6)
+   Generating static pages (4/6)
+ ✓ Generating static pages (6/6)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                     Size  First Load JS
+┌ ○ /                                                          152 B         103 kB
+├ ○ /_not-found                                                986 B         104 kB
+├ ƒ /api/v1/health/live                                        152 B         103 kB
+├ ƒ /api/v1/health/ready                                       152 B         103 kB
+├ ƒ /api/v1/sites/[siteId]                                     152 B         103 kB
+├ ƒ /api/v1/sites/[siteId]/domains                             152 B         103 kB
+├ ƒ /api/v1/sites/[siteId]/publication-state                   152 B         103 kB
+├ ƒ /api/v1/sites/[siteId]/publish-operations                  152 B         103 kB
+├ ƒ /api/v1/sites/[siteId]/publish-operations/[operationId]    152 B         103 kB
+├ ƒ /api/v1/sites/[siteId]/published-release                   152 B         103 kB
+├ ƒ /api/v1/sites/[siteId]/releases                            152 B         103 kB
+└ ƒ /api/v1/sites/[siteId]/template-pin                        152 B         103 kB
++ First Load JS shared by all                                 103 kB
+  ├ chunks/18-8a0e9dadb94224f5.js                            46.6 kB
+  ├ chunks/87c73c54-24122e7b92478d00.js                      54.2 kB
+  └ other shared chunks (total)                              1.88 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+ RUN  v2.1.9 /Users/445101599qq.com/Projects/Independent-Website-Gateway/apps/control
+
+ ✓ test/template-pin.integration.test.ts (5 tests) 87ms
+ ✓ test/public-registry.test.ts (22 tests) 16ms
+ ✓ test/publication-state.test.ts (18 tests) 55ms
+ ✓ test/published-release.test.ts (5 tests) 59ms
+ ✓ test/health.test.ts (10 tests) 6026ms
+   ✓ health endpoint routes > returns 503 by the deadline when PostgreSQL connect hangs 2004ms
+   ✓ health endpoint routes > returns 503 by the deadline when PostgreSQL query hangs 2004ms
+   ✓ health endpoint routes > returns 503 by the deadline when PostgreSQL end hangs 2002ms
+ ✓ test/publish.integration.test.ts (5 tests) 73ms
+ ✓ test/release.integration.test.ts (4 tests) 52ms
+ ✓ test/publication-state.integration.test.ts (4 tests) 41ms
+ ✓ test/domain.integration.test.ts (4 tests) 68ms
+ ✓ test/template-pin-failure.test.ts (2 tests) 6ms
+ ✓ test/site-info.test.ts (2 tests) 3ms
+ ✓ test/publish-operation.test.ts (1 test) 3ms
+ ✓ test/auth.test.ts (5 tests) 2ms
+ ✓ test/domain-reservation.test.ts (2 tests) 3ms
+ ✓ test/prisma.test.ts (2 tests) 1ms
+ ✓ test/domains.test.ts (17 tests) 5ms
+
+ Test Files  16 passed (16)
+      Tests  108 passed (108)
+   Start at  09:38:40
+   Duration  8.02s (transform 105ms, setup 0ms, collect 200ms, tests 6.50s, environment 1ms, prepare 318ms)
+
+
+> @gateway/contracts@0.1.0 test
+> vitest run
+
+
+ RUN  v2.1.9 /Users/445101599qq.com/Projects/Independent-Website-Gateway/packages/contracts
+
+ ✓ test/release.test.ts (2 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  09:38:49
+   Duration  220ms (transform 20ms, setup 0ms, collect 20ms, tests 2ms, environment 0ms, prepare 29ms)
+
+
+> @gateway/worker@0.1.0 test
+> npm run build && node --test dist/*.test.js
+
+
+> @gateway/worker@0.1.0 build
+> tsc --project tsconfig.json
+
+TAP version 13
+# Subtest: direct worker CLI executes startup and rejects missing configuration
+ok 1 - direct worker CLI executes startup and rejects missing configuration
+  ---
+  duration_ms: 55.514833
+  type: 'test'
+  ...
+# Subtest: persists only credential hash while current lease is valid
+ok 2 - persists only credential hash while current lease is valid
+  ---
+  duration_ms: 0.732167
+  type: 'test'
+  ...
+# Subtest: verifies candidate health and representative Host before switching, then verifies route before finalizing
+ok 3 - verifies candidate health and representative Host before switching, then verifies route before finalizing
+  ---
+  duration_ms: 1.188833
+  type: 'test'
+  ...
+# Subtest: unhealthy candidate leaves old route and active tuple untouched
+ok 4 - unhealthy candidate leaves old route and active tuple untouched
+  ---
+  duration_ms: 0.245125
+  type: 'test'
+  ...
+# Subtest: failed representative Host check does not switch route
+ok 5 - failed representative Host check does not switch route
+  ---
+  duration_ms: 0.168291
+  type: 'test'
+  ...
+# Subtest: route verification failure restores old route before marking failure
+ok 6 - route verification failure restores old route before marking failure
+  ---
+  duration_ms: 0.142417
+  type: 'test'
+  ...
+# Subtest: an apply error may have changed the route, so restores the prior route
+ok 7 - an apply error may have changed the route, so restores the prior route
+  ---
+  duration_ms: 0.151167
+  type: 'test'
+  ...
+# Subtest: finalize rejection restores the old route without returning ready
+ok 8 - finalize rejection restores the old route without returning ready
+  ---
+  duration_ms: 0.096125
+  type: 'test'
+  ...
+# Subtest: finalize throws after commit: keeps route and never records failure
+ok 9 - finalize throws after commit: keeps route and never records failure
+  ---
+  duration_ms: 0.183625
+  type: 'test'
+  ...
+# Subtest: unknown commit result keeps new route and does not write failed
+ok 10 - unknown commit result keeps new route and does not write failed
+  ---
+  duration_ms: 0.471458
+  type: 'test'
+  ...
+# Subtest: lost lease does not restore or record failure
+ok 11 - lost lease does not restore or record failure
+  ---
+  duration_ms: 1.356208
+  type: 'test'
+  ...
+# Subtest: old worker cannot restore another switch at the same revision
+ok 12 - old worker cannot restore another switch at the same revision
+  ---
+  duration_ms: 0.441375
+  type: 'test'
+  ...
+# Subtest: restoration error is unknown and never records failure
+ok 13 - restoration error is unknown and never records failure
+  ---
+  duration_ms: 0.329583
+  type: 'test'
+  ...
+# Subtest: lease crossing during representative Host validation never switches the old route
+ok 14 - lease crossing during representative Host validation never switches the old route
+  ---
+  duration_ms: 0.1115
+  type: 'test'
+  ...
+# Subtest: expired attempt restores its own switch token when the database still has the old active route
+ok 15 - expired attempt restores its own switch token when the database still has the old active route
+  ---
+  duration_ms: 0.097792
+  type: 'test'
+  ...
+# Subtest: sends only approved create, start and forced delete over the private socket
+ok 16 - sends only approved create, start and forced delete over the private socket
+  ---
+  duration_ms: 15.7985
+  type: 'test'
+  ...
+# Subtest: pulls only an exact allowlisted repository digest through the Docker image API
+ok 17 - pulls only an exact allowlisted repository digest through the Docker image API
+  ---
+  duration_ms: 4.054333
+  type: 'test'
+  ...
+# Subtest: rejects a pulled image unless Docker confirms the exact repository digest
+ok 18 - rejects a pulled image unless Docker confirms the exact repository digest
+  ---
+  duration_ms: 1.672
+  type: 'test'
+  ...
+# Subtest: pull wall deadline aborts a progress stream even before its inactivity timeout
+ok 19 - pull wall deadline aborts a progress stream even before its inactivity timeout
+  ---
+  duration_ms: 122.016208
+  type: 'test'
+  ...
+# Subtest: pull rejects an HTTP 200 progress error without inspecting or creating a candidate
+ok 20 - pull rejects an HTTP 200 progress error without inspecting or creating a candidate
+  ---
+  duration_ms: 1.563792
+  type: 'test'
+  ...
+# Subtest: uses validated path and method scalars when request getters change
+ok 21 - uses validated path and method scalars when request getters change
+  ---
+  duration_ms: 0.990292
+  type: 'test'
+  ...
+# Subtest: sends only vetted create bytes under global Object.prototype.toJSON pollution
+ok 22 - sends only vetted create bytes under global Object.prototype.toJSON pollution
+  ---
+  duration_ms: 1.048417
+  type: 'test'
+  ...
+# Subtest: rejects inherited serializers, accessors, extra properties and non-loopback bindings
+ok 23 - rejects inherited serializers, accessors, extra properties and non-loopback bindings
+  ---
+  duration_ms: 0.525959
+  type: 'test'
+  ...
+# Subtest: only starts or deletes IDs returned by successful creates in the same client
+ok 24 - only starts or deletes IDs returned by successful creates in the same client
+  ---
+  duration_ms: 1.80175
+  type: 'test'
+  ...
+# Subtest: rejects unauthorized paths, methods and unsafe create options without sending
+ok 25 - rejects unauthorized paths, methods and unsafe create options without sending
+  ---
+  duration_ms: 0.631292
+  type: 'test'
+  ...
+# Subtest: does not expose engine error body or socket details
+ok 26 - does not expose engine error body or socket details
+  ---
+  duration_ms: 1.056833
+  type: 'test'
+  ...
+# Subtest: times out a hanging engine request
+ok 27 - times out a hanging engine request
+  ---
+  duration_ms: 41.485583
+  type: 'test'
+  ...
+# Subtest: rejects oversized responses without exposing response content
+ok 28 - rejects oversized responses without exposing response content
+  ---
+  duration_ms: 0.8105
+  type: 'test'
+  ...
+# Subtest: explicit architecture is applied to both pull and candidate creation
+ok 29 - explicit architecture is applied to both pull and candidate creation
+  ---
+  duration_ms: 1.106292
+  type: 'test'
+  ...
+# Subtest: injects site-scoped Nuxt configuration into an approved local candidate
+ok 30 - injects site-scoped Nuxt configuration into an approved local candidate
+  ---
+  duration_ms: 1.101917
+  type: 'test'
+  ...
+# Subtest: creates and starts an approved immutable candidate with fixed isolation
+ok 31 - creates and starts an approved immutable candidate with fixed isolation
+  ---
+  duration_ms: 0.345875
+  type: 'test'
+  ...
+# Subtest: rejects valid-looking but unapproved repository and digest pairs before Docker calls
+ok 32 - rejects valid-looking but unapproved repository and digest pairs before Docker calls
+  ---
+  duration_ms: 0.345208
+  type: 'test'
+  ...
+# Subtest: rejects invalid runtime fields and ignores caller-supplied Docker options
+ok 33 - rejects invalid runtime fields and ignores caller-supplied Docker options
+  ---
+  duration_ms: 0.3685
+  type: 'test'
+  ...
+# Subtest: removes a created candidate when Docker fails to start it
+ok 34 - removes a created candidate when Docker fails to start it
+  ---
+  duration_ms: 0.165542
+  type: 'test'
+  ...
+# Subtest: preserves start error and identifies residual candidate when cleanup also fails
+ok 35 - preserves start error and identifies residual candidate when cleanup also fails
+  ---
+  duration_ms: 0.125292
+  type: 'test'
+  ...
+# Subtest: records a bounded failure only while the worker owns the lease
+ok 36 - records a bounded failure only while the worker owns the lease
+  ---
+  duration_ms: 0.817167
+  type: 'test'
+  ...
+# Subtest: does not overwrite the operation after the lease was taken by another worker
+ok 37 - does not overwrite the operation after the lease was taken by another worker
+  ---
+  duration_ms: 0.201583
+  type: 'test'
+  ...
+# Subtest: rejects arbitrary failure messages before touching the database
+ok 38 - rejects arbitrary failure messages before touching the database
+  ---
+  duration_ms: 0.98525
+  type: 'test'
+  ...
+# Subtest: rejects unsafe trusted configuration before any Docker request
+ok 39 - rejects unsafe trusted configuration before any Docker request
+  ---
+  duration_ms: 0.711125
+  type: 'test'
+  ...
+# Subtest: finalizes ready and the active tuple together after route verification
+ok 40 - finalizes ready and the active tuple together after route verification
+  ---
+  duration_ms: 57.968667
+  type: 'test'
+  ...
+# Subtest: rejects an expired or superseded lease even with the same worker ID
+ok 41 - rejects an expired or superseded lease even with the same worker ID
+  ---
+  duration_ms: 9.343708
+  type: 'test'
+  ...
+# Subtest: rejects another worker and a stale desired revision without changing the old tuple
+ok 42 - rejects another worker and a stale desired revision without changing the old tuple
+  ---
+  duration_ms: 5.452
+  type: 'test'
+  ...
+# Subtest: rejects a foreign Release, a mismatched digest, and an unpinned image while preserving the old tuple
+ok 43 - rejects a foreign Release, a mismatched digest, and an unpinned image while preserving the old tuple
+  ---
+  duration_ms: 11.066334
+  type: 'test'
+  ...
+# Subtest: concurrent finalize calls have only one winner
+ok 44 - concurrent finalize calls have only one winner
+  ---
+  duration_ms: 8.99425
+  type: 'test'
+  ...
+# Subtest: release and pin changes and pin inserts wait until finalize commits
+ok 45 - release and pin changes and pin inserts wait until finalize commits
+  ---
+  duration_ms: 746.099959
+  type: 'test'
+  ...
+# Subtest: expired failure and late failure from the same worker cannot invalidate a reclaimed attempt
+ok 46 - expired failure and late failure from the same worker cannot invalidate a reclaimed attempt
+  ---
+  duration_ms: 23.685833
+  type: 'test'
+  ...
+# Subtest: candidate failure leaves the prior active tuple untouched and cannot finalize
+ok 47 - candidate failure leaves the prior active tuple untouched and cannot finalize
+  ---
+  duration_ms: 19.717083
+  type: 'test'
+  ...
+# Subtest: public finalization rejects every changed or NULL pin field and preserves the active release
+ok 48 - public finalization rejects every changed or NULL pin field and preserves the active release
+  ---
+  duration_ms: 53.636667
+  type: 'test'
+  ...
+# Subtest: records a bounded operation failure when an approved public image pull fails
+ok 49 - records a bounded operation failure when an approved public image pull fails
+  ---
+  duration_ms: 0.382625
+  type: 'test'
+  ...
+# Subtest: does not record failure after a successful pull
+ok 50 - does not record failure after a successful pull
+  ---
+  duration_ms: 0.095416
+  type: 'test'
+  ...
+# Subtest: collection fences active/previous routes, pending leases, mismatched state, and retries after restart
+ok 51 - collection fences active/previous routes, pending leases, mismatched state, and retries after restart
+  ---
+  duration_ms: 193.056417
+  type: 'test'
+  ...
+# Subtest: retirement re-inspects exact owned stateless container before deleting without volumes
+ok 52 - retirement re-inspects exact owned stateless container before deleting without volumes
+  ---
+  duration_ms: 12.78125
+  type: 'test'
+  ...
+# Subtest: retirement refuses foreign, mounted, privileged, writable and unexpected image containers
+ok 53 - retirement refuses foreign, mounted, privileged, writable and unexpected image containers
+  ---
+  duration_ms: 11.027916
+  type: 'test'
+  ...
+# Subtest: Docker deletion errors stay retryable and malformed IDs never reach the socket
+ok 54 - Docker deletion errors stay retryable and malformed IDs never reach the socket
+  ---
+  duration_ms: 0.9345
+  type: 'test'
+  ...
+# Subtest: already absent container retirement is idempotent
+ok 55 - already absent container retirement is idempotent
+  ---
+  duration_ms: 0.664667
+  type: 'test'
+  ...
+# Subtest: listing is limited to Gateway labels and rejects malformed ownership records
+ok 56 - listing is limited to Gateway labels and rejects malformed ownership records
+  ---
+  duration_ms: 0.790083
+  type: 'test'
+  ...
+# Subtest: local router switches by verified host and restores only matching token
+ok 57 - local router switches by verified host and restores only matching token
+  ---
+  duration_ms: 12.546583
+  type: 'test'
+  ...
+# Subtest: switch and token-guarded rollback persist atomically across restarts
+ok 58 - switch and token-guarded rollback persist atomically across restarts
+  ---
+  duration_ms: 33.266042
+  type: 'test'
+  ...
+# Subtest: restart only restores database-active route when container and port still match
+ok 59 - restart only restores database-active route when container and port still match
+  ---
+  duration_ms: 17.917584
+  type: 'test'
+  ...
+# Subtest: failed snapshot write leaves the old in-memory route intact
+ok 60 - failed snapshot write leaves the old in-memory route intact
+  ---
+  duration_ms: 1.231167
+  type: 'test'
+  ...
+# Subtest: invalidated container identity cannot forward to a reused port
+ok 61 - invalidated container identity cannot forward to a reused port
+  ---
+  duration_ms: 0.665375
+  type: 'test'
+  ...
+# Subtest: candidate health uses the image health endpoint instead of the homepage
+ok 62 - candidate health uses the image health endpoint instead of the homepage
+  ---
+  duration_ms: 0.581292
+  type: 'test'
+  ...
+# Subtest: candidate health rejects failed responses
+ok 63 - candidate health rejects failed responses
+  ---
+  duration_ms: 0.806417
+  type: 'test'
+  ...
+# Subtest: representative Host homepage requires a direct 200 even when healthz is ready
+ok 64 - representative Host homepage requires a direct 200 even when healthz is ready
+  ---
+  duration_ms: 2.05925
+  type: 'test'
+  ...
+# Subtest: route verification checks the proxied homepage, not just healthz
+ok 65 - route verification checks the proxied homepage, not just healthz
+  ---
+  duration_ms: 1.892875
+  type: 'test'
+  ...
+# Subtest: restart does not restore an active container whose homepage is unavailable
+ok 66 - restart does not restore an active container whose homepage is unavailable
+  ---
+  duration_ms: 9.9625
+  type: 'test'
+  ...
+# Subtest: retirement protection retains the previous route after restart and replaces it on the next switch
+ok 67 - retirement protection retains the previous route after restart and replaces it on the next switch
+  ---
+  duration_ms: 24.804542
+  type: 'test'
+  ...
+1..67
+# tests 67
+# suites 0
+# pass 67
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1024.033208

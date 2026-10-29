@@ -1,0 +1,244 @@
+
+ RUN  v2.1.9 /Users/445101599qq.com/Projects/Independent-Website-Gateway
+
+ ❯ apps/control/test/public-registry.test.ts (22 tests | 11 failed) 15ms
+   × public template registry > identifies a transport failure at registry_commit without retaining private error text 4ms
+     → expected TypeError: private token=secret to match object { diagnostic: { …(4) } }
+   × public template registry > identifies a transport failure at registry_index without retaining private error text 1ms
+     → expected TypeError: private token=secret to match object { diagnostic: { …(4) } }
+   × public template registry > identifies a transport failure at manifest without retaining private error text 1ms
+     → expected TypeError: private token=secret to match object { diagnostic: { …(4) } }
+   × public template registry > distinguishes upstream HTTP 403 and cancels its unused response 1ms
+     → expected Error: Public registry unavailable to match object { diagnostic: { …(3) } }
+   × public template registry > distinguishes upstream HTTP 429 and cancels its unused response 0ms
+     → expected Error: Public registry unavailable to match object { diagnostic: { …(3) } }
+   × public template registry > distinguishes upstream HTTP 503 and cancels its unused response 0ms
+     → expected Error: Public registry unavailable to match object { diagnostic: { …(3) } }
+   × public template registry > identifies a response-body timeout separately from a network rejection 1ms
+     → expected DOMException{ stack: 'TimeoutError: …' } to match object { diagnostic: { …(2) } }
+   × public template registry > identifies malformed JSON and rejects response bodies beyond the size limit 0ms
+     → expected SyntaxError: Unexpected token 'p', "priva… to match object { diagnostic: { …(2) } }
+   × public template registry > keeps an invalid registry commit distinct from a transport failure 1ms
+     → expected TypeError: Cannot read properties of null… to match object { diagnostic: { …(2) } }
+   × public template registry > identifies an invalid index and a missing template at the index stage 1ms
+     → expected Error: Invalid registry record to match object { diagnostic: { …(2) } }
+   × public template registry > identifies a checksum mismatch at the manifest stage 1ms
+     → expected Error: Public manifest checksum mismatch to match object { diagnostic: { …(2) } }
+ ❯ apps/control/test/template-pin-failure.test.ts (2 tests | 2 failed) 6ms
+   × template pin failure boundary > returns a retryable service error for a registry outage and logs only structured diagnostics 5ms
+     → expected 400 to be 503 // Object.is equality
+   × template pin failure boundary > retains invalid_template for malformed approved data and logs its validation stage 1ms
+     → Cannot read properties of undefined (reading '0')
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > identifies a transport failure at registry_commit without retaining private error text
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > identifies a transport failure at registry_index without retaining private error text
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > identifies a transport failure at manifest without retaining private error text
+AssertionError: expected TypeError: private token=secret to match object { diagnostic: { …(4) } }
+
+- Expected
++ Received
+
+- Object {
+-   "diagnostic": Object {
+-     "elapsedMs": Any<Number>,
+-     "networkCode": "ECONNRESET",
+-     "reason": "network",
+-     "stage": "registry_commit",
+-   },
+- }
++ [TypeError: private token=secret]
+
+ ❯ apps/control/test/public-registry.test.ts:35:19
+     33|     }));
+     34|     const error = await loadPublicTemplate('aeroframe', '1.0.1').catch…
+     35|     expect(error).toMatchObject({ diagnostic: { stage, reason: 'networ…
+       |                   ^
+     36|     expect(JSON.stringify(error)).not.toMatch(/private|token|secret/);
+     37|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > distinguishes upstream HTTP 403 and cancels its unused response
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > distinguishes upstream HTTP 429 and cancels its unused response
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > distinguishes upstream HTTP 503 and cancels its unused response
+AssertionError: expected Error: Public registry unavailable to match object { diagnostic: { …(3) } }
+
+- Expected
++ Received
+
+- Object {
+-   "diagnostic": Object {
+-     "reason": "rate_limited",
+-     "stage": "registry_commit",
+-     "status": 403,
+-   },
+- }
++ [Error: Public registry unavailable]
+
+ ❯ apps/control/test/public-registry.test.ts:48:19
+     46|     vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { stat…
+     47|     const error = await loadPublicTemplate('aeroframe', '1.0.1').catch…
+     48|     expect(error).toMatchObject({ diagnostic: { stage: 'registry_commi…
+       |                   ^
+     49|     if (status === 403) expect(error.diagnostic).toMatchObject({ rateL…
+     50|     if (status === 429) expect(error.diagnostic.retryAfterSeconds).toB…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > identifies a response-body timeout separately from a network rejection
+AssertionError: expected DOMException{ stack: 'TimeoutError: …' } to match object { diagnostic: { …(2) } }
+
+- Expected
++ Received
+
+- Object {
+-   "diagnostic": Object {
+-     "reason": "timeout",
+-     "stage": "registry_commit",
+-   },
+- }
++ [TimeoutError: private timeout details]
+
+ ❯ apps/control/test/public-registry.test.ts:58:5
+     56|       start(controller) { controller.error(new DOMException('private t…
+     57|     }))));
+     58|     await expect(loadPublicTemplate('aeroframe', '1.0.1')).rejects.toM…
+       |     ^
+     59|   });
+     60|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > identifies malformed JSON and rejects response bodies beyond the size limit
+AssertionError: expected SyntaxError: Unexpected token 'p', "priva… to match object { diagnostic: { …(2) } }
+
+- Expected
++ Received
+
+- Object {
+-   "diagnostic": Object {
+-     "reason": "invalid_json",
+-     "stage": "registry_commit",
+-   },
+- }
++ [SyntaxError: Unexpected token 'p', "private up"... is not valid JSON]
+
+ ❯ apps/control/test/public-registry.test.ts:64:23
+     62|     vi.stubGlobal('fetch', vi.fn(async () => new Response('private ups…
+     63|     const malformed = await loadPublicTemplate('aeroframe', '1.0.1').c…
+     64|     expect(malformed).toMatchObject({ diagnostic: { stage: 'registry_c…
+       |                       ^
+     65|     expect(JSON.stringify(malformed)).not.toMatch(/private|token|secre…
+     66|     vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Arr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > keeps an invalid registry commit distinct from a transport failure
+AssertionError: expected TypeError: Cannot read properties of null… to match object { diagnostic: { …(2) } }
+
+- Expected
++ Received
+
+- Object {
+-   "diagnostic": Object {
+-     "reason": "invalid_commit",
+-     "stage": "registry_commit",
+-   },
+- }
++ [TypeError: Cannot read properties of null (reading 'sha')]
+
+ ❯ apps/control/test/public-registry.test.ts:72:5
+     70|   it('keeps an invalid registry commit distinct from a transport failu…
+     71|     vi.stubGlobal('fetch', vi.fn(async () => Response.json(null)));
+     72|     await expect(loadPublicTemplate('aeroframe', '1.0.1')).rejects.toM…
+       |     ^
+     73|   });
+     74|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > identifies an invalid index and a missing template at the index stage
+AssertionError: expected Error: Invalid registry record to match object { diagnostic: { …(2) } }
+
+- Expected
++ Received
+
+- Object {
+-   "diagnostic": Object {
+-     "reason": "invalid_index",
+-     "stage": "registry_index",
+-   },
+- }
++ [Error: Invalid registry record]
+
+ ❯ apps/control/test/public-registry.test.ts:78:7
+     76|     for (const [index, reason] of [[{ schemaVersion: 1, records: [null…
+     77|       vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.jso…
+     78|       await expect(loadPublicTemplate('aeroframe', '1.0.1')).rejects.t…
+       |       ^
+     79|     }
+     80|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  apps/control/test/public-registry.test.ts > public template registry > identifies a checksum mismatch at the manifest stage
+AssertionError: expected Error: Public manifest checksum mismatch to match object { diagnostic: { …(2) } }
+
+- Expected
++ Received
+
+- Object {
+-   "diagnostic": Object {
+-     "reason": "checksum_mismatch",
+-     "stage": "manifest",
+-   },
+- }
++ [Error: Public manifest checksum mismatch]
+
+ ❯ apps/control/test/public-registry.test.ts:88:5
+     86|       return Response.json({ schemaVersion: 1 });
+     87|     }));
+     88|     await expect(loadPublicTemplate('aeroframe', '1.0.1')).rejects.toM…
+       |     ^
+     89|   });
+     90|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  apps/control/test/template-pin-failure.test.ts > template pin failure boundary > returns a retryable service error for a registry outage and logs only structured diagnostics
+AssertionError: expected 400 to be 503 // Object.is equality
+
+- Expected
++ Received
+
+- 503
++ 400
+
+ ❯ apps/control/test/template-pin-failure.test.ts:19:29
+     17|     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('ht…
+     18|     const response = await updateTemplatePin(request(), randomUUID());
+     19|     expect(response.status).toBe(503);
+       |                             ^
+     20|     expect(await response.json()).toEqual({ error: 'template_registry_…
+     21|     expect(log).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  apps/control/test/template-pin-failure.test.ts > template pin failure boundary > retains invalid_template for malformed approved data and logs its validation stage
+TypeError: Cannot read properties of undefined (reading '0')
+ ❯ apps/control/test/template-pin-failure.test.ts:33:39
+     31|     expect(response.status).toBe(400);
+     32|     expect(await response.json()).toEqual({ error: 'invalid_template' …
+     33|     expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({ stage: 'r…
+       |                                       ^
+     34|   });
+     35| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ Test Files  2 failed (2)
+      Tests  13 failed | 11 passed (24)
+   Start at  09:35:54
+   Duration  305ms (transform 72ms, setup 0ms, collect 89ms, tests 21ms, environment 0ms, prepare 47ms)

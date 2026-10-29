@@ -1,0 +1,262 @@
+
+> @bcms/selfhosted-backend@1.0.0 lint
+> eslint . --ext .ts
+
+
+/Users/445101599qq.com/Projects/cms/backend/src/_server/modules/mongodb/repository.ts
+  194:125  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  195:108  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  198:59   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/entry/repo.ts
+  27:95  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/media/retention.integration.test.ts
+  19:45  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/controller.test.ts
+  11:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/controller.ts
+  223:111  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  224:52   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  228:43   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/gateway-media.integration.test.ts
+   27:45  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   35:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   68:35  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  110:38  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  110:38  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/gateway-publish.test.ts
+   57:46  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  130:29  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  151:66  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  294:31  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  297:34  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  328:29  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  367:31  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  370:29  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  385:39  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  391:29  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  399:66  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  422:29  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/gateway-publish.ts
+  118:53  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  121:34  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  216:73  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/import.test.ts
+  155:296  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  172:20   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  173:27   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  199:27   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  219:54   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/import.ts
+  172:45  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  179:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  210:30  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  303:12  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/installed.test.ts
+   8:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  15:27  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  38:12  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/registry.test.ts
+  15:17  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/release-integration.test.ts
+  34:49  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  88:18  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  90:22  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  91:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  94:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/releases.test.ts
+   14:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   48:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   48:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   56:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   57:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   58:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   71:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   78:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   81:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   89:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   89:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   95:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   98:49  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  101:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  151:23  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  174:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  180:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  186:24  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  193:18  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  200:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  204:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  205:22  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  206:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  208:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  214:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  220:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  221:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  221:5   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  224:12  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  228:12  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  231:12  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/releases.ts
+  129:23  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  130:28  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  196:22  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  232:23  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  252:23  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  254:49  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  255:22  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  261:55  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/presets/site-repo.ts
+  92:24  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/resource-shares/graph.ts
+   62:24   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   65:111  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   72:184  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   82:59   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   85:93   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   93:60   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  103:28   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  114:16   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  118:69   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  119:69   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  121:25   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  170:94   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  171:106  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  174:47   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  176:155  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/resource-shares/repo.ts
+  31:15  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/resource-shares/service.ts
+   72:48   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   88:102  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  107:57   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  145:43   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  148:124  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  158:30   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  166:107  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  169:144  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  170:115  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  177:57   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/resource-shares/visibility.ts
+  35:9  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/site-domains/integration.test.ts
+   26:49  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   48:63  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   52:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   53:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   53:59  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  137:31  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  138:11  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  142:30  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  146:11  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  148:11  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  153:25  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  156:26  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  169:11  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  182:48  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  185:19  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  190:29  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/site-domains/migrate.ts
+  23:67  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/site-domains/migration.ts
+  16:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/site-domains/service.test.ts
+   48:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  101:20  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/site-domains/verification.test.ts
+  26:18  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  29:18  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  40:18  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/storefront/published.ts
+  13:202  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  29:202  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/studio/business.test.ts
+   9:16  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  10:15  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  29:23  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  42:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/studio/business.ts
+  34:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  72:24  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/studio/controller.ts
+   80:95   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  115:104  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/studio/integration.test.ts
+   25:45  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   26:33  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   54:22  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   62:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   64:26  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   69:22  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   69:67  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   71:52  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   78:11  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   85:19  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   85:64  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   86:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   87:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   88:22  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   95:18  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  117:63  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/studio/page-create.test.ts
+  8:16  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/studio/page-create.ts
+  24:21  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  40:12  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/workspaces/content-isolation.test.ts
+  11:45  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  12:33  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  15:11  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/workspaces/integration.test.ts
+   24:45   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   26:19   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   27:23   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   73:24   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+   82:24   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  100:20   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  105:19   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  106:121  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  107:22   warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/workspaces/lifecycle.test.ts
+   28:14  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  241:15  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  261:13  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  265:13  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/445101599qq.com/Projects/cms/backend/src/workspaces/names.test.ts
+  11:42  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  12:30  warning  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+✖ 184 problems (0 errors, 184 warnings)

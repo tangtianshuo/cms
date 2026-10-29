@@ -1,0 +1,84 @@
+
+> @bcms/selfhosted-ui@1.0.0 build
+> run-p type-check build-only
+
+
+> @bcms/selfhosted-ui@1.0.0 build-only
+> vite build
+
+
+> @bcms/selfhosted-ui@1.0.0 type-check
+> vue-tsc --noEmit -p tsconfig.app.json --composite false
+
+vite v4.5.3 building for production...
+transforming...
+DEPRECATION WARNING: Using / for division outside of calc() is deprecated and will be removed in Dart Sass 2.0.0.
+
+Recommendation: math.div($value, $value * 0 + 1) or calc($value / ($value * 0 + 1))
+
+More info and automated migrator: https://sass-lang.com/d/slash-div
+
+   ╷
+27 │   @return $value / ($value * 0 + 1);
+   │           ^^^^^^^^^^^^^^^^^^^^^^^^^
+   ╵
+    src/styles/settings/_mixins.scss 27:11  strip-unit()
+    src/styles/settings/_mixins.scss 13:13  fluid()
+    src/styles/_main.scss 27:3              root stylesheet
+
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+warn - The `purge`/`content` options have changed in Tailwind CSS v3.0.
+warn - Update your configuration file to eliminate this warning.
+warn - https://tailwindcss.com/docs/upgrade-guide#configure-content-sources
+✓ 616 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                  1.11 kB │ gzip:   0.49 kB
+dist/assets/studio-90bb16c8.css                 17.70 kB │ gzip:   3.63 kB
+dist/assets/index-f68db0ba.css                 108.44 kB │ gzip:  17.20 kB
+dist/assets/common-33ed0dc8.js                   0.07 kB │ gzip:   0.08 kB
+dist/assets/entry-group-options-f1802e4f.js      0.13 kB │ gzip:   0.12 kB
+dist/assets/date-1cce05a1.js                     0.30 kB │ gzip:   0.22 kB
+dist/assets/tag-7df08463.js                      0.34 kB │ gzip:   0.27 kB
+dist/assets/provenance-d61c2736.js               0.35 kB │ gzip:   0.27 kB
+dist/assets/user-avatar-40549332.js              0.65 kB │ gzip:   0.43 kB
+dist/assets/empty-state-2433d3c8.js              0.65 kB │ gzip:   0.40 kB
+dist/assets/plugin-867490af.js                   0.66 kB │ gzip:   0.44 kB
+dist/assets/entity-list-22d9b7f6.js              0.82 kB │ gzip:   0.51 kB
+dist/assets/language-switch-0ae28b4d.js          0.86 kB │ gzip:   0.53 kB
+dist/assets/groups-29ca6ca3.js                   1.25 kB │ gzip:   0.71 kB
+dist/assets/templates-39a7418b.js                1.28 kB │ gzip:   0.71 kB
+dist/assets/widgets-400383b8.js                  1.35 kB │ gzip:   0.76 kB
+dist/assets/api-keys-49f291b7.js                 1.58 kB │ gzip:   0.85 kB
+dist/assets/signup-admin-c0002a36.js             2.12 kB │ gzip:   0.76 kB
+dist/assets/template-preview-69d7d6fc.js         2.14 kB │ gzip:   1.35 kB
+dist/assets/entry-groups-e73d3087.js             2.29 kB │ gzip:   1.06 kB
+dist/assets/user-list-7ac25620.js                2.63 kB │ gzip:   1.19 kB
+dist/assets/home-a4965d17.js                     2.82 kB │ gzip:   1.28 kB
+dist/assets/prop-list-a7b9644c.js                3.27 kB │ gzip:   1.51 kB
+dist/assets/site-preview-1d1accdc.js             3.60 kB │ gzip:   1.86 kB
+dist/assets/group-f53a5f00.js                    3.80 kB │ gzip:   1.43 kB
+dist/assets/widget-ca97608b.js                   3.80 kB │ gzip:   1.43 kB
+dist/assets/template-dd500ac1.js                 3.98 kB │ gzip:   1.47 kB
+dist/assets/entries-6cff0302.js                  4.89 kB │ gzip:   2.05 kB
+dist/assets/workspaces-84891a85.js               5.66 kB │ gzip:   1.82 kB
+dist/assets/api-key-8977c5cf.js                  5.77 kB │ gzip:   2.03 kB
+dist/assets/domains-b7d0ae12.js                  6.04 kB │ gzip:   2.17 kB
+dist/assets/media-3c75b7fb.js                    6.24 kB │ gzip:   2.30 kB
+dist/assets/release-manager-0d562420.js          8.40 kB │ gzip:   3.00 kB
+dist/assets/settings-2ea7335e.js                10.20 kB │ gzip:   4.61 kB
+dist/assets/shares-0996a6c9.js                  12.71 kB │ gzip:   4.04 kB
+dist/assets/presets-b68c74e5.js                 18.09 kB │ gzip:   5.50 kB
+dist/assets/studio-65e1b14b.js                  28.27 kB │ gzip:   9.84 kB
+dist/assets/entry-5870ab9d.js                  177.44 kB │ gzip:  54.79 kB
+dist/assets/404-df1e446a.js                    463.54 kB │ gzip: 118.27 kB
+dist/assets/index-9fb198a7.js                1,286.12 kB │ gzip: 422.80 kB
+
+(!) Some chunks are larger than 500 kBs after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 5.76s
