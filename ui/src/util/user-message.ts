@@ -213,6 +213,7 @@ const valueTypes: Record<string, string> = {
 };
 
 const gatewayMessages: Record<string, string> = {
+    template_registry_unavailable: '公开模板目录服务暂时不可用，请稍后刷新发布状态，再重新检查发布；如持续失败，请联系管理员查看网关模板核验日志。',
     invalid_template: '公开模板未通过核验，请刷新模板目录后重新检查；如仍失败，请联系管理员检查模板版本及目录服务。',
     template_not_found: '公开模板目录中找不到所选版本，请刷新目录确认该版本已发布，再重新检查发布。',
     invalid_release: '发布快照未通过网关校验，请重新检查内容后发布；如仍失败，请联系管理员检查模板与快照兼容性。',

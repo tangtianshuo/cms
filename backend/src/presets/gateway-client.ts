@@ -15,6 +15,7 @@ const publicFailureCodes = new Set([
     'release_conflict', 'request_too_large', 'site_not_found', 'release_not_found',
     'template_pin_unavailable', 'release_unavailable', 'invalid_request', 'publish_pending',
     'publication_state_unavailable',
+    'template_registry_unavailable',
 ]);
 
 export function gatewayPublishConfig(env: NodeJS.ProcessEnv = process.env): GatewayPublishConfig {

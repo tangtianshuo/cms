@@ -165,6 +165,7 @@ test('deployment failure codes explain the failed stage and a useful next step',
 test('Gateway request failures explain verified codes and keep unknown diagnostics private', () => {
     assert.match(errorMessage('Gateway request failed (400): invalid_template'), /模板.*核验.*管理员/);
     assert.match(errorMessage('Gateway request failed (400): invalid_release'), /发布快照.*校验/);
+    assert.match(errorMessage('Gateway request failed (503): template_registry_unavailable'), /模板目录.*暂时.*稍后/);
     const unknown = errorMessage('Gateway request failed (502): unrecognized_code');
     assert.match(unknown, /发布网关.*状态/);
     assert.doesNotMatch(unknown, /unrecognized_code/);

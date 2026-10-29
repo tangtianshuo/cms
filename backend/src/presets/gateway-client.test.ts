@@ -18,6 +18,13 @@ test('Gateway failures discard unknown codes and non-JSON error responses', asyn
     }
 });
 
+test('Gateway registry outages retain a safe code distinct from invalid template data', async () => {
+    const fetcher = (async () => Response.json({ error: 'template_registry_unavailable', details: 'token=private' }, { status: 503 })) as typeof fetch;
+    await assert.rejects(gatewayRequest(fetcher, 'https://gateway.invalid', 'fixture-secret'), {
+        message: 'Gateway request failed (503): template_registry_unavailable',
+    });
+});
+
 test('Gateway conflict responses retain the existing revision-conflict behavior', async () => {
     const fetcher = (async () => Response.json({ error: 'revision_conflict' }, { status: 409 })) as typeof fetch;
     await assert.rejects(gatewayRequest(fetcher, 'https://gateway.invalid', 'fixture-secret'), GatewayRevisionConflict);
