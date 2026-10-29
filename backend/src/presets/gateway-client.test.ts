@@ -30,6 +30,20 @@ test('legacy binding selects only its exact CMS identity from verified context',
     assert.equal(selected.siteUrl, 'https://a.example.com');
 });
 
+test('legacy single binding remains available to its verified workspace when site selection is deferred', () => {
+    const legacyEnv = { GATEWAY_BASE_URL: 'https://gateway.example.com', CMS_SERVICE_SECRET: 'shared-secret',
+        GATEWAY_CMS_WORKSPACE_ID: 'workspace-a', GATEWAY_CMS_SITE_ID: 'site-a',
+        GATEWAY_WORKSPACE_ID: '11111111-1111-4111-8111-111111111111', GATEWAY_SITE_ID: '22222222-2222-4222-8222-222222222222',
+        GATEWAY_PUBLIC_SITE_URL: 'https://a.example.com' } as NodeJS.ProcessEnv;
+    const matching = runWithWorkspace({ workspaceId: 'workspace-a', actorId: 'admin', admin: true, instanceAdmin: false, role: 'admin' },
+        () => gatewayPublishConfig(legacyEnv));
+    assert.equal(matching.siteId, '22222222-2222-4222-8222-222222222222');
+    const otherWorkspace = runWithWorkspace({ workspaceId: 'workspace-b', actorId: 'admin', admin: true, instanceAdmin: false, role: 'admin' },
+        () => gatewayPublishConfig(legacyEnv));
+    assert.equal(otherWorkspace.siteId, '');
+    assert.equal(otherWorkspace.siteUrl, '');
+});
+
 test('multiple bindings without workspace context do not select a Gateway identity', () => {
     const selected = gatewayPublishConfig(bindingEnv);
     assert.equal(selected.siteId, '');

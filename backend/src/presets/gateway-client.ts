@@ -76,9 +76,15 @@ export function gatewayPublishConfigs(env: NodeJS.ProcessEnv = process.env): Gat
 export function gatewayPublishConfig(env: NodeJS.ProcessEnv = process.env): GatewayPublishConfig {
     const context = workspaceContext();
     const configs = gatewayPublishConfigs(env);
-    if (context) return (context.siteId && configs.find(config => config.cmsWorkspaceId === context.workspaceId && config.cmsSiteId === context.siteId))
-        || { ...sharedConfig(env), workspaceId: '', siteId: '',
+    if (context) {
+        const selected = context.siteId
+            ? configs.find(config => config.cmsWorkspaceId === context.workspaceId && config.cmsSiteId === context.siteId)
+            : env.GATEWAY_SITE_BINDINGS === undefined
+                ? configs.find(config => config.cmsWorkspaceId === context.workspaceId)
+                : undefined;
+        return selected || { ...sharedConfig(env), workspaceId: '', siteId: '',
             cmsWorkspaceId: '', cmsSiteId: '', siteUrl: '' };
+    }
     if (env.GATEWAY_SITE_BINDINGS !== undefined) return { ...sharedConfig(env), workspaceId: '', siteId: '',
         cmsWorkspaceId: '', cmsSiteId: '', siteUrl: '' };
     if (configs.length === 1) return configs[0];
