@@ -1,0 +1,93 @@
+{
+  "at": "2026-10-30T01:07:10.216Z",
+  "branch": "codex/nocode-independent-sites",
+  "head": "25f7021003e8521e9fcb19566634a581dfb1b5f3",
+  "manifestFiles": 1288,
+  "sourceManifestMatches": true,
+  "runtime": [
+    {
+      "container": "cms-e2e-20261028-cms-1",
+      "sourceFilesMatched": 302
+    },
+    {
+      "container": "cms-backend-1",
+      "sourceFilesMatched": 302
+    },
+    {
+      "container": "cms-ui-1",
+      "sourceFilesMatched": 261
+    },
+    {
+      "container": "cms-storefront-1",
+      "sourceFilesMatched": 22
+    }
+  ],
+  "containers": [
+    {
+      "name": "cms-e2e-20261028-cms-1",
+      "imageId": "sha256:6af805508900595acc65f0f811e70c9b25de1ccb1f725be8cb09bd845a0df81b",
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "name": "cms-e2e-20261028-builtin-storefront-1",
+      "imageId": "sha256:6530704a948738fbc7e077958668860a01f077304bc62a7d7a8b9c4e43be0a53",
+      "running": true,
+      "health": "not-configured"
+    }
+  ],
+  "endpoints": [
+    {
+      "url": "http://localhost:8080/d/studio",
+      "method": "GET",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "url": "http://localhost:8080/api/v4/health-check",
+      "method": "HEAD",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "url": "http://localhost:3000/",
+      "method": "GET",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "url": "http://127.0.0.1:18080/d/studio",
+      "method": "GET",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "url": "http://127.0.0.1:18080/api/v4/health-check",
+      "method": "HEAD",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "url": "http://127.0.0.1:18183/api/v1/health/ready",
+      "method": "GET",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "url": "http://127.0.0.1:13002/",
+      "method": "GET",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "url": "http://127.0.0.1:13002/products/featured-product",
+      "method": "GET",
+      "status": 200,
+      "expected": 200
+    }
+  ],
+  "publishedCss": {
+    "status": 200,
+    "carouselStylesPresent": true
+  }
+}

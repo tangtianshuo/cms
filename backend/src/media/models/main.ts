@@ -21,6 +21,8 @@ export enum MediaType {
 }
 
 export interface Media extends MongoDBEntry {
+    /** Optional site binding added for site-scoped storefront media. */
+    siteId?: string;
     /** Authorized metadata only; never persisted in Release snapshots. */
     accessToken?: string;
     accessTokenExpiresAt?: number;
@@ -40,6 +42,7 @@ export interface Media extends MongoDBEntry {
 
 export const MediaSchema: ObjectSchema = {
     ...MongoDBEntrySchema,
+    siteId: { __type: 'string', __required: false },
     userId: {
         __type: 'string',
         __required: true,

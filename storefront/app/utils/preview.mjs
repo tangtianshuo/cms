@@ -38,7 +38,17 @@ export function isSiteDraftPreviewPayload(value) {
             paths.has(page.path) || !isPresetPreviewPayload(page.content)) return false;
         paths.add(page.path);
     }
-    return paths.has('/') && value.navigation.every((link) =>
-        strings(link, ['label', 'path']) && paths.has(link.path)) &&
+    const validNavigation = (nodes) => nodes.every((link) => {
+        if (!link || typeof link !== 'object' || Array.isArray(link) || !strings(link, ['label'])) return false;
+        if (link.children !== undefined && !Array.isArray(link.children)) return false;
+        if (link.href !== undefined && typeof link.href !== 'string') return false;
+        if (link.path !== undefined && typeof link.path !== 'string') return false;
+        if (!validNavigation(link.children || [])) return false;
+        if (link.enabled === false) return true;
+        const href = typeof link.href === 'string' ? link.href : link.path;
+        if (href && href.startsWith('/') && !paths.has(href)) return false;
+        return true;
+    });
+    return paths.has('/') && validNavigation(value.navigation) &&
         value.redirects.every((redirect) => strings(redirect, ['from', 'to']));
 }

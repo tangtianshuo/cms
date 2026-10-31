@@ -1,24 +1,35 @@
 <script setup lang="ts">
 import type { PresetDemo, PresetPagePreview } from '../types/preset';
+import NavigationMenu, { type NavigationItem } from './NavigationMenu.vue';
+import HeroCarousel from './sections/HeroCarousel.vue';
+import InfoGrid from './sections/InfoGrid.vue';
+import FaqSection from './sections/FaqSection.vue';
+import ProductSections from './sections/ProductSections.vue';
 
 const props = withDefaults(defineProps<{
     preset: PresetDemo;
     view: string;
     mode?: 'demo' | 'draft' | 'published';
-    navigation?: Array<{ label: string; path: string }>;
+    navigation?: NavigationItem[];
     items?: PresetPagePreview['items'];
     sections?: string[];
+    sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }>;
 }>(), { mode: 'demo' });
 
 const menuOpen = ref(false);
 const showcase = computed(() => props.preset.showcase);
 const show = (section: string) => !props.sections || props.sections.includes(section);
+const configured = computed(() => props.sectionConfigs || []);
+const sectionItems = (section: { data: Record<string, unknown> }, key: string) => Array.isArray(section.data[key]) ? section.data[key] as any[] : [];
 const routeFor = (view: string) => ({ path: `/presets/${props.preset.id}`, query: { view } });
 const quoteHref = computed(() => props.preset.demo.contactEmail
     ? `mailto:${encodeURIComponent(props.preset.demo.contactEmail)}?subject=${encodeURIComponent('Project inquiry')}`
     : 'mailto:');
-const publishedCollection = computed(() => props.navigation?.find((link) => link.path !== '/')?.path || '/collections');
-const publishedCompany = computed(() => props.navigation?.find((link) => /about|company|story|page/i.test(link.label))?.path || '/pages/about');
+const navigationNodes = computed(() => props.navigation || []);
+const flattenNavigation = (nodes: NavigationItem[]): NavigationItem[] => nodes.flatMap(node => [node, ...flattenNavigation(node.children || [])]);
+const flatNavigation = computed(() => flattenNavigation(navigationNodes.value));
+const publishedCollection = computed(() => flatNavigation.value.find((link) => (link.href || link.path) !== '/')?.href || flatNavigation.value.find((link) => (link.href || link.path) !== '/')?.path || '/collections');
+const publishedCompany = computed(() => { const link = flatNavigation.value.find((item) => /about|company|story|page/i.test(item.label)); return link?.href || link?.path || '/pages/about'; });
 const products = computed(() => props.mode === 'published'
     ? props.items || []
     : (showcase.value?.products || [props.preset.demo.product]).map((item) => ({
@@ -37,34 +48,25 @@ const products = computed(() => props.mode === 'published'
                 <span class="aero-brand__mark" aria-hidden="true">A</span>
                 <span>{{ preset.demo.brand }}</span>
             </NuxtLink>
-            <nav aria-label="Main navigation">
-                <template v-if="mode === 'published'">
-                    <NuxtLink v-for="link in navigation" :key="link.path" :to="link.path">{{ link.label }}</NuxtLink>
-                </template>
-                <template v-else>
-                    <NuxtLink :to="routeFor('home')">Overview</NuxtLink>
-                    <NuxtLink :to="routeFor('collection')">Platforms</NuxtLink>
-                    <NuxtLink :to="routeFor('page')">Company</NuxtLink>
-                </template>
-            </nav>
+            <nav aria-label="Main navigation"><NavigationMenu v-if="mode === 'published'" :nodes="navigationNodes" /><NavigationMenu v-else :nodes="[{ label: 'Overview', href: routeFor('home').path }, { label: 'Platforms', href: routeFor('collection').path }, { label: 'Company', href: routeFor('page').path }]" /></nav>
             <a class="aero-header__cta" :href="quoteHref">Request a quote <span aria-hidden="true">↗</span></a>
             <button class="aero-header__menu" type="button" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">
                 {{ menuOpen ? 'Close' : 'Menu' }}
             </button>
-            <div v-if="menuOpen" class="aero-mobile-panel">
-                <template v-if="mode === 'published'">
-                    <NuxtLink v-for="link in navigation" :key="link.path" :to="link.path" @click="menuOpen = false">{{ link.label }}</NuxtLink>
-                </template>
-                <template v-else>
-                    <NuxtLink :to="routeFor('home')" @click="menuOpen = false">Overview</NuxtLink>
-                    <NuxtLink :to="routeFor('collection')" @click="menuOpen = false">Platforms</NuxtLink>
-                    <NuxtLink :to="routeFor('page')" @click="menuOpen = false">Company</NuxtLink>
-                </template>
+            <div v-if="menuOpen" class="aero-mobile-panel"><NavigationMenu v-if="mode === 'published'" :nodes="navigationNodes" mobile :on-navigate="() => { menuOpen = false; }" /><NavigationMenu v-else mobile :nodes="[{ label: 'Overview', href: routeFor('home').path }, { label: 'Platforms', href: routeFor('collection').path }, { label: 'Company', href: routeFor('page').path }]" :on-navigate="() => { menuOpen = false; }" />
                 <a :href="quoteHref">Request a quote <span aria-hidden="true">↗</span></a>
             </div>
         </header>
 
         <main v-if="view === 'home'">
+            <template v-if="configured.length">
+                <template v-for="section in configured" :key="section.type">
+                    <HeroCarousel v-if="section.enabled && section.type === 'hero-carousel'" :slides="sectionItems(section, 'slides')" />
+                    <InfoGrid v-else-if="section.enabled && section.type === 'info-grid'" :items="sectionItems(section, 'items')" />
+                    <FaqSection v-else-if="section.enabled && section.type === 'faq'" :items="sectionItems(section, 'items')" />
+                </template>
+            </template>
+            <template v-else>
             <section v-if="show('hero')" class="aero-hero" :style="{ '--aero-hero-image': `url('${preset.demo.hero.image}')` }">
                 <div class="aero-hero__content">
                     <p class="aero-kicker">{{ showcase?.heroLabel || 'UNMANNED SYSTEMS / FIELD PROVEN' }}</p>
@@ -129,6 +131,7 @@ const products = computed(() => props.mode === 'published'
 
             <section id="contact" class="aero-contact aero-wrap"><div><p class="aero-kicker">START A CONVERSATION</p><h2>Tell us what the mission demands.</h2></div><a class="aero-button aero-button--primary" :href="quoteHref">Request a quote <span aria-hidden="true">↗</span></a></section>
             </template>
+            </template>
         </main>
 
         <main v-else-if="view === 'collection'" class="aero-inner aero-wrap">
@@ -137,7 +140,10 @@ const products = computed(() => props.mode === 'published'
         </main>
 
         <main v-else-if="view === 'product'" class="aero-product-page aero-wrap">
+            <ProductSections v-if="configured.length" :product="preset.demo.product" :sections="configured" />
+            <template v-else>
             <p class="aero-kicker">PLATFORM / {{ preset.demo.brand }}</p><div class="aero-product-page__grid"><div v-if="show('gallery')" class="aero-product-page__image"><img v-if="preset.demo.product.image" :src="preset.demo.product.image" :alt="preset.demo.product.title" /></div><div class="aero-product-page__info"><p class="aero-kicker">MODULAR MULTIROTOR SYSTEM</p><h1>{{ preset.demo.product.title }}</h1><strong v-if="show('information')">{{ preset.demo.product.price }}</strong><p v-if="show('description')">{{ preset.demo.product.description }}</p><ul v-if="show('information')"><li v-for="stat in showcase?.stats" :key="stat.label"><span>{{ stat.label }}</span><b>{{ stat.value }}</b></li></ul><a class="aero-button aero-button--primary" :href="quoteHref">Configure this platform <span aria-hidden="true">↗</span></a><small>Final configuration and pricing depend on payload and mission requirements.</small></div></div>
+        </template>
         </main>
 
         <main v-else class="aero-inner aero-wrap"><p class="aero-kicker">{{ preset.demo.brand }} / COMPANY</p><div v-if="show('story')" class="aero-about"><div><h1>{{ preset.demo.page.title }}</h1><p>{{ preset.demo.page.body }}</p><a class="aero-button aero-button--primary" :href="quoteHref">Contact the team <span aria-hidden="true">↗</span></a></div><img v-if="preset.demo.page.image" :src="preset.demo.page.image" :alt="preset.demo.page.title" /></div></main>

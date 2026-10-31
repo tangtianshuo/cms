@@ -1,6 +1,9 @@
 import type { DomainPrimaryAudit } from '../site-domains/model';
 import type { MongoDBEntry } from '../_server/modules/mongodb';
 import type { ObjectSchema } from '../_utils/object-utility';
+import type { NavigationNode } from './navigation';
+import type { SectionConfig } from '../storefront/section-schema';
+import type { SiteOperations } from './operations';
 
 export interface SiteInstallation extends MongoDBEntry {
     workspaceId?: string;
@@ -29,12 +32,14 @@ export interface SiteInstallation extends MongoDBEntry {
         muted: string;
         font: string;
     };
+    operations?: SiteOperations;
     models: Array<{
         key: string;
         templateId: string;
         fields: Array<{ key: string; propId: string }>;
     }>;
     pages: SitePage[];
+    navigation?: NavigationNode[];
     domainAuditOutbox?: DomainPrimaryAudit[];
     primaryDomainId?: string;
     domainRevision?: number;
@@ -54,6 +59,7 @@ export interface SitePage {
     seoTitle?: string;
     seoDescription?: string;
     sections?: string[];
+    sectionConfigs?: SectionConfig[];
     entryId?: string;
     blueprintKey?: string;
     enabled?: boolean;
@@ -94,6 +100,12 @@ export const SiteInstallationSchema: ObjectSchema = {
     domainMutationUntil: { __type: 'number', __required: false },
     currentReleaseId: { __type: 'string', __required: false },
     publishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
+    operations: { __type: 'object', __required: false, __child: {
+        seoTitle: { __type: 'string', __required: true }, seoDescription: { __type: 'string', __required: true },
+        socialImage: { __type: 'object', __required: false, __child: { _id: { __type: 'string', __required: true } } },
+        favicon: { __type: 'object', __required: false, __child: { _id: { __type: 'string', __required: true } } },
+        analyticsId: { __type: 'string', __required: false }, contactFormEnabled: { __type: 'boolean', __required: true },
+    } },
     theme: {
         __type: 'object', __required: true,
         __child: {
@@ -138,6 +150,9 @@ export const SiteInstallationSchema: ObjectSchema = {
                 seoTitle: { __type: 'string', __required: false },
                 seoDescription: { __type: 'string', __required: false },
                 sections: { __type: 'array', __required: false, __child: { __type: 'string' } },
+                sectionConfigs: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
+                    type: { __type: 'string', __required: true }, enabled: { __type: 'boolean', __required: true }, data: { __type: 'object', __required: true },
+                } } },
                 entryId: { __type: 'string', __required: false },
                 blueprintKey: { __type: 'string', __required: false },
                 enabled: { __type: 'boolean', __required: false },
@@ -145,4 +160,11 @@ export const SiteInstallationSchema: ObjectSchema = {
             },
         },
     },
+    navigation: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
+        id: { __type: 'string', __required: true },
+        label: { __type: 'string', __required: true },
+        href: { __type: 'string', __required: false },
+        enabled: { __type: 'boolean', __required: true },
+        children: { __type: 'array', __required: true, __child: { __type: 'object', __content: {} } },
+    } } },
 };

@@ -23,6 +23,8 @@ export interface PublicTemplateRecord {
 
 export interface VerifiedPublicTemplate extends PublicTemplateRecord {
     manifest: PresetManifest;
+    /** The raw manifest that was hashed by the registry record. */
+    manifestSnapshot?: unknown;
 }
 
 let registryCache: { until: number; value: Awaited<ReturnType<typeof readPublicRegistry>> } | undefined;
@@ -58,7 +60,7 @@ function validRecord(value: unknown): value is PublicTemplateRecord {
         hasOnlyKeys(value, ['schemaVersion', 'id', 'version', 'manifestChecksum', 'imageRepository', 'imageDigest', 'sourceCommit', 'manifestPath', 'status']);
 }
 
-function normalizeManifest(value: unknown, record: PublicTemplateRecord): PresetManifest {
+export function normalizePublicManifest(value: unknown, record: PublicTemplateRecord): PresetManifest {
     if (!object(value) || value.schemaVersion !== 1 || value.id !== record.id || value.version !== record.version ||
         !object(value.compatibility) || value.compatibility.cmsSchema !== 1 || value.compatibility.releaseSchema !== 1 ||
         !object(value.presentation) || !object(value.presentation.theme) || !object(value.presentation.demo) ||
@@ -236,7 +238,7 @@ export async function readPublicRegistry(fetcher: typeof fetch = fetch): Promise
         const manifestValue = await readJson(fetcher, `${rawRoot}/${record.sourceCommit}/${record.manifestPath}`);
         const checksum = `sha256:${createHash('sha256').update(canonicalJson(manifestValue), 'utf8').digest('hex')}`;
         if (checksum !== record.manifestChecksum) throw new Error('Public template manifest checksum mismatch');
-        records.push({ ...record, manifest: normalizeManifest(manifestValue, record) });
+        records.push({ ...record, manifest: normalizePublicManifest(manifestValue, record), manifestSnapshot: manifestValue });
     }
     return { commit, records };
 }

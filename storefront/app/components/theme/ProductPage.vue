@@ -3,6 +3,7 @@ import type { ProductPage as Page } from '../../types/product';
 import ProductGallery from './ProductGallery.vue';
 import ProductInformation from './ProductInformation.vue';
 import ProductDescription from './ProductDescription.vue';
+import FaqSection from '../sections/FaqSection.vue';
 
 defineProps<{ page: Page }>();
 
@@ -10,6 +11,7 @@ const sections = {
     'product-gallery': ProductGallery,
     'product-information': ProductInformation,
     'product-description': ProductDescription,
+    faq: FaqSection,
 };
 </script>
 
@@ -30,6 +32,9 @@ const sections = {
                         :product="page.product"
                         :page="page"
                         :fields="section.type === 'product-information' ? section.fields : undefined"
+                        :specifications="section.type === 'product-information' ? section.specifications : undefined"
+                        :related-products="section.type === 'product-information' ? section.relatedProducts : undefined"
+                        :cta="section.type === 'product-information' ? section.cta : undefined"
                     />
                 </template>
             </div>

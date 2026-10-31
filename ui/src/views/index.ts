@@ -22,6 +22,7 @@ import EntryGroupsView from './dashboard/entry-groups';
 import SharesView from './dashboard/shares';
 import StudioView from './dashboard/studio';
 import SitePreviewView from './dashboard/site-preview';
+import SiteOnboardingView from './dashboard/site-onboarding';
 
 export const views = {
     LoginView,
@@ -36,6 +37,7 @@ export const views = {
     EntryGroupsView,
     SharesView,
     SitePreviewView,
+    SiteOnboardingView,
     TemplateView,
 
     GroupsView,

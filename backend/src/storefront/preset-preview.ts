@@ -4,13 +4,17 @@ import { type PresetManifest } from '../presets/catalog';
 import { resolveInstalledPreset } from '../presets/installed';
 import { pageDraft } from '../presets/pages';
 import type { SiteInstallation } from '../presets/site-model';
+import { validateSectionMediaReferences, type SectionConfig } from './section-schema';
+import type { SiteOperations } from '../presets/operations';
 
 export interface PresetPagePreview {
     kind: 'preset-page';
     view: 'home' | 'collection' | 'product' | 'page';
     preset: Pick<PresetManifest, 'id' | 'version' | 'name' | 'description' | 'theme' | 'demo' | 'showcase'>;
     sections: string[];
+    sectionConfigs?: SectionConfig[];
     seo: { title: string; description: string };
+    operations?: SiteOperations & { socialImageUrl?: string; faviconUrl?: string };
 }
 
 export interface PresetPagePreviewInput {
@@ -66,7 +70,22 @@ function image(site: SiteInstallation, modelKey: string, entry: Entry | undefine
     if (!value || typeof value !== 'object' || !('_id' in value) || typeof value._id !== 'string') return '';
     const found = media.find((item) => item._id === value._id && item.mimetype.startsWith('image/'));
     if (!found) return '';
-    return `${new URL(mediaOrigin).origin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image${found.accessToken ? '?cap=' + encodeURIComponent(found.accessToken) : ''}`;
+    return mediaUrl(found._id, media, mediaOrigin);
+}
+
+function mediaUrl(id: unknown, media: Media[], origin: string): string {
+    const found = media.find(item => item._id === id && item.mimetype.startsWith('image/'));
+    return found ? `${new URL(origin).origin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image${found.accessToken ? '?cap=' + encodeURIComponent(found.accessToken) : ''}` : '';
+}
+
+function resolvedSections(sections: SectionConfig[] | undefined, media: Media[], origin: string): SectionConfig[] | undefined {
+    return sections?.map(section => {
+        const result = structuredClone(section);
+        if (!result.enabled) return result;
+        if (result.type === 'hero-carousel') result.data.slides = (result.data.slides as Array<Record<string, unknown>>).map(slide => ({ ...slide, image: mediaUrl((slide.image as { _id: string })._id, media, origin) }));
+        if (result.type === 'product-gallery') result.data.images = (result.data.images as Array<{ _id: string }>).map(image => mediaUrl(image._id, media, origin));
+        return result;
+    });
 }
 
 function pointer(site: SiteInstallation, modelKey: string, entry: Entry | undefined,
@@ -85,6 +104,10 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
     const manifest = resolveInstalledPreset(site);
     const page = pageDraft(site, input.pageKey);
     if (!page) throw new Error('Unknown preset page');
+    if (page.sectionConfigs) validateSectionMediaReferences(page.layout, page.sectionConfigs, {
+        media: input.media, site,
+        publishedPaths: new Set(site.pages.filter(item => item.enabled !== false && !item.path.includes(':')).map(item => item.path)),
+    });
     if (!input.availableLanguages.includes(language)) throw new Error('Invalid preview language');
     const selectedModel = site.models.find((model) => model.templateId === entry.templateId);
     if (!selectedModel || (selectedModel.key !== page.modelKey && selectedModel.key !== 'site-settings')) {
@@ -153,13 +176,16 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
             image: image(site, 'content-page', pageEntry, language, 'cover', input.media, input.mediaOrigin),
         };
     }
-    const seoDescription = page.seoDescription || (view === 'page'
+    const operations = site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false };
+    const seoDescription = page.seoDescription || operations.seoDescription || (view === 'page'
         ? text(site, 'content-page', pageEntry, language, 'seoDescription') : '');
     return {
         kind: 'preset-page', view,
         preset: { id: manifest.id, version: manifest.version, name: site.name, description: '',
             theme: site.theme, demo, showcase: manifest.showcase ? structuredClone(manifest.showcase) : undefined },
         sections: page.sections,
-        seo: { title: page.seoTitle || (view === 'page' ? demo.page.title : site.name), description: seoDescription },
+        sectionConfigs: resolvedSections(page.sectionConfigs, input.media, input.mediaOrigin),
+        seo: { title: page.seoTitle || operations.seoTitle || (view === 'page' ? demo.page.title : site.name), description: seoDescription },
+        operations: { ...structuredClone(operations), socialImageUrl: mediaUrl(operations.socialImage?._id, input.media, input.mediaOrigin), faviconUrl: mediaUrl(operations.favicon?._id, input.media, input.mediaOrigin) },
     };
 }

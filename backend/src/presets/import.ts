@@ -37,6 +37,37 @@ export interface ImportPlan {
     pages: PresetManifest['pages'];
 }
 
+export interface TemplateUpgradePreview {
+    compatible: boolean;
+    requiresNewInstallation: boolean;
+    contentImpact: string[];
+    templateImpact: string[];
+}
+
+function compatibilitySignature(preset: PresetManifest): string {
+    return JSON.stringify({
+        models: preset.models.map((model) => ({ key: model.key, singleEntry: model.singleEntry,
+            fields: model.fields.map(({ key, type, required, array, referenceModel }) => ({ key, type, required, array, referenceModel })) })),
+        pages: preset.pages.map(({ key, path, modelKey, layout }) => ({ key, path, modelKey, layout })),
+    });
+}
+
+export function previewPublicTemplateUpgrade(site: SiteInstallation, selected: VerifiedPublicTemplate): TemplateUpgradePreview {
+    if (site.presetId !== selected.id) throw new Error('Template upgrade must target the installed template');
+    const installed = resolveInstalledPreset(site);
+    const schemaCompatible = compatibilitySignature(installed) === compatibilitySignature(selected.manifest);
+    const installedRecord = site.publishedTemplateRecord ? JSON.parse(site.publishedTemplateRecord) as PublicTemplateRecord : null;
+    const contentImpact = schemaCompatible
+        ? ['现有内容、页面路径和主题设置会保留。']
+        : ['模板字段或页面结构发生变化，需要新建站点安装。'];
+    const templateImpact: string[] = [];
+    if (site.presetVersion !== selected.version) templateImpact.push(`模板版本：${site.presetVersion} → ${selected.version}`);
+    if (installedRecord?.imageDigest !== selected.imageDigest) templateImpact.push('模板运行镜像已更新。');
+    if (installedRecord?.manifestChecksum !== selected.manifestChecksum) templateImpact.push('模板清单已更新。');
+    if (!templateImpact.length) templateImpact.push('模板版本与运行内容没有变化。');
+    return { compatible: schemaCompatible, requiresNewInstallation: !schemaCompatible, contentImpact, templateImpact };
+}
+
 export function templateName(key: string, namespace?: string): string {
     if (namespace) return `site-${namespace}-${key}`;
     return key === 'product' ? 'product' : `storefront-${key}`;
@@ -157,7 +188,7 @@ export async function importPreset(
         workspaceId: 'default', _id: new ObjectId().toString(), createdAt: Date.now(), updatedAt: Date.now(), slot: 'default',
         name: siteName, presetId: preset.id, presetVersion: preset.version, status: 'importing',
         language: 'en',
-        presetManifestSnapshot: selected ? JSON.stringify(preset) : undefined,
+        presetManifestSnapshot: selected ? JSON.stringify(publicManifestSnapshot(selected)) : undefined,
         publishedTemplateRecord: selected ? JSON.stringify(publicRecord(selected)) : undefined,
         importError: '', includeDemo: input.includeDemo, demoSeeded: false,
         theme: { ...preset.theme }, models: [],
@@ -167,7 +198,7 @@ export async function importPreset(
     if (!current) site.pages = site.pages.map((page) => pageDraft(site, page.key) as NonNullable<ReturnType<typeof pageDraft>>);
     if (current) {
         site = { ...current, language: current.language || 'en', ...(current.status === 'empty' ? { name: siteName, presetId: preset.id, presetVersion: preset.version, language: 'en', includeDemo: input.includeDemo, theme: { ...preset.theme }, pages: preset.pages.map(page => ({ ...page, status: 'draft' as const })),
-            presetManifestSnapshot: selected ? JSON.stringify(preset) : undefined,
+            presetManifestSnapshot: selected ? JSON.stringify(publicManifestSnapshot(selected)) : undefined,
             publishedTemplateRecord: selected ? JSON.stringify(publicRecord(selected)) : undefined } : {}), status: 'importing', importError: '', updatedAt: Date.now() };
         site.pages = site.pages.map(page => pageDraft(site, page.key)!);
         if (source.claimSite) {
@@ -253,8 +284,12 @@ export async function importPreset(
 }
 
 function publicRecord(template: VerifiedPublicTemplate): PublicTemplateRecord {
-    const { manifest: _manifest, ...record } = template;
+    const { manifest: _manifest, manifestSnapshot: _manifestSnapshot, ...record } = template;
     return record;
+}
+
+function publicManifestSnapshot(template: VerifiedPublicTemplate): unknown {
+    return template.manifestSnapshot === undefined ? template.manifest : template.manifestSnapshot;
 }
 
 export async function adoptPublicTemplate(input: {
@@ -275,13 +310,8 @@ export async function adoptPublicTemplate(input: {
             throw new Error('Stored Gateway publication intent is invalid');
         }
     }
-    const installed = resolveInstalledPreset(site);
-    const signature = (preset: PresetManifest) => JSON.stringify({
-        models: preset.models.map((model) => ({ key: model.key, singleEntry: model.singleEntry,
-            fields: model.fields.map(({ key, type, required, array, referenceModel }) => ({ key, type, required, array, referenceModel })) })),
-        pages: preset.pages.map(({ key, path, modelKey, layout }) => ({ key, path, modelKey, layout })),
-    });
-    if (signature(installed) !== signature(selected.manifest)) throw new Error('Public template schema changes require a new installation');
+    const upgrade = previewPublicTemplateUpgrade(site, selected);
+    if (!upgrade.compatible) throw new Error('Public template schema changes require a new installation');
     for (const model of selected.manifest.models) {
         const mapping = site.models.find((item) => item.key === model.key);
         const template = mapping ? await source.findTemplate(templateName(model.key, site.templateNamespace)) : null;
@@ -296,7 +326,7 @@ export async function adoptPublicTemplate(input: {
     }
     const updated: SiteInstallation = {
         ...site, presetVersion: selected.version,
-        presetManifestSnapshot: JSON.stringify(selected.manifest),
+        presetManifestSnapshot: JSON.stringify(publicManifestSnapshot(selected)),
         publishedTemplateRecord: JSON.stringify(publicRecord(selected)), updatedAt: Math.max(Date.now(), site.updatedAt + 1),
     };
     if (!source.claimSite || !await source.claimSite(updated, input.expectedUpdatedAt)) throw new Error('Site changed; refresh before adopting');

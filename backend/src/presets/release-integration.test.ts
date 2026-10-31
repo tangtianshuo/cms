@@ -165,7 +165,7 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
         globalThis.fetch = async (input) => { calls.push(String(input)); if (String(input).endsWith('/publication-state')) return Response.json({ revision: 0, active: null }); throw new Error('Unexpected Gateway call'); };
         const gatewayStatus = await fastify.inject({ url: '/api/v4/presets/releases/gateway', headers: { authorization } });
         assert.equal(gatewayStatus.statusCode, 200, gatewayStatus.body);
-        assert.deepEqual(JSON.parse(gatewayStatus.body), { configured: true, bound: true, siteUrl: gatewayEnv.GATEWAY_PUBLIC_SITE_URL, publishStatus: null });
+        assert.deepEqual(JSON.parse(gatewayStatus.body), { configured: true, bound: true, siteUrl: gatewayEnv.GATEWAY_PUBLIC_SITE_URL, publicHostname: Config.storefrontHost, defaultHost: Config.storefrontHost, publishStatus: null });
         calls.length = 0;
         const rejected = await fastify.inject({ url: '/api/v4/presets/releases/publish', method: 'POST',
             headers: { authorization }, payload: { target: 'gateway', requestKey: randomUUID(), expectedReleaseId: first.releaseId } });

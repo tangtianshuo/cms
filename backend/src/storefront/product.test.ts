@@ -76,6 +76,19 @@ test('rejects unknown sections and unbound template fields', () => {
     }, template));
 });
 
+test('accepts related product links and product specifications in the information section', () => {
+    const config = createDefaultPageConfig(template);
+    const parsed = parseProductPageConfig({
+        ...config,
+        sections: config.sections.map(section => section.type === 'product-information'
+            ? { ...section, specifications: [{ label: 'Weight', value: '2kg' }], relatedProducts: ['travel-case'], cta: { label: 'Configure', href: '/contact' } }
+            : section),
+    }, template);
+    const information = parsed.sections.find(section => section.type === 'product-information');
+    assert.equal(information?.type, 'product-information');
+    if (information?.type === 'product-information') assert.deepEqual(information.relatedProducts, ['travel-case']);
+});
+
 test('rejects missing required content and mismatched template', () => {
     const config = createDefaultPageConfig(template);
     const incomplete = structuredClone(entry);

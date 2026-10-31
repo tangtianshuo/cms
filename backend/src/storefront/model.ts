@@ -7,8 +7,12 @@ const sectionSchema = z.discriminatedUnion('type', [
     z.object({
         type: z.literal('product-information'),
         fields: z.array(z.enum(['name', 'price', 'description'])).min(1),
+        specifications: z.array(z.object({ label: z.string().min(1), value: z.string() })).optional(),
+        relatedProducts: z.array(z.string()).optional(),
+        cta: z.object({ label: z.string().min(1), href: z.string().startsWith('/') }).optional(),
     }).strict(),
     z.object({ type: z.literal('product-description'), source: z.literal('product.description') }).strict(),
+    z.object({ type: z.literal('faq'), items: z.array(z.object({ question: z.string(), answer: z.string() })).min(1) }).strict(),
 ]);
 
 const pageConfigSchema = z.object({
@@ -31,6 +35,7 @@ export interface StorefrontProduct {
     price: number;
     description: string;
     images: Array<{ src: string; alt: string }>;
+    relatedProducts?: Array<{ slug: string; name: string; image?: string }>;
 }
 
 export interface StorefrontPage {

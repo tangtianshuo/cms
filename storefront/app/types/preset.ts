@@ -33,8 +33,20 @@ export interface PresetPagePreview {
     view: 'home' | 'collection' | 'product' | 'page';
     preset: PresetDemo;
     sections: string[];
+    sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }>;
     seo: { title: string; description: string };
+    operations?: { seoTitle: string; seoDescription: string; socialImage?: { _id: string }; favicon?: { _id: string }; socialImageUrl?: string; faviconUrl?: string; analyticsId?: string; contactFormEnabled: boolean };
     items?: Array<{ label: string; path: string; image: string; description: string; price: string }>;
+}
+
+export interface NavigationNode {
+    id?: string;
+    label: string;
+    href?: string;
+    /** Legacy release snapshots use `path`; readers accept both fields. */
+    path?: string;
+    children?: NavigationNode[];
+    enabled?: boolean;
 }
 
 export interface SiteDraftPreview {
@@ -49,7 +61,7 @@ export interface SiteDraftPreview {
         entryId: string;
         content: PresetPagePreview;
     }>;
-    navigation: Array<{ label: string; path: string }>;
+    navigation: NavigationNode[];
     redirects: Array<{ from: string; to: string }>;
 }
 
@@ -62,5 +74,5 @@ export interface PublishedPageResponse {
     path: string;
     content?: PresetPagePreview;
     redirect?: string;
-    navigation: Array<{ label: string; path: string }>;
+    navigation: NavigationNode[];
 }

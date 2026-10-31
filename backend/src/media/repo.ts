@@ -1,5 +1,5 @@
 import { copyDatabase, copyVisibility } from '../resource-shares/visibility';
-import { workspaceFilter } from '../workspaces/context';
+import { workspaceFilter, workspaceContext } from '../workspaces/context';
 import { ContentScopeError } from '../workspaces/scoped-collection';
 import {
     type Media,
@@ -23,6 +23,11 @@ export const MediaRepo = createMongoDBRepository<Media, MediaRepoMethods>({
     collection: `${Config.dbPrefix}_medias`,
     schema: MediaSchema,
     async prepareWrite(media) {
+        const siteId = workspaceContext()?.siteId;
+        if (siteId) {
+            if (media.siteId && media.siteId !== siteId) throw new ContentScopeError('Media site binding cannot be changed');
+            media.siteId = siteId;
+        }
         delete media.accessToken; delete media.accessTokenExpiresAt;
         delete (media as any).retentionPins; delete (media as any).deletionPending;
         const visited = new Set([media._id]);

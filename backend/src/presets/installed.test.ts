@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import { getPreset } from './catalog';
 import { resolveInstalledPreset } from './installed';
+import { canonicalJson } from './registry';
 import type { SiteInstallation } from './site-model';
 
 function site(changes: Partial<SiteInstallation> = {}): SiteInstallation {
@@ -37,4 +39,16 @@ test('a missing or mismatched imported snapshot fails closed', () => {
     assert.throws(() => resolveInstalledPreset({ ...installed, presetManifestSnapshot: JSON.stringify({
         ...getPreset('aeroframe', '1.0.0')!, version: '1.0.0',
     }) }), /does not match/i);
+});
+
+test('a public snapshot with a valid shape but changed content fails checksum validation', () => {
+    const original = getPreset('aeroframe', '1.0.0')!;
+    const snapshot = JSON.parse(JSON.stringify(original));
+    const checksum = `sha256:${createHash('sha256').update(canonicalJson(snapshot), 'utf8').digest('hex')}`;
+    const record = { schemaVersion: 1, id: 'aeroframe', version: '1.0.0', manifestChecksum: checksum,
+        imageRepository: 'ghcr.io/tangtianshuo/independent-website-templates/aeroframe', imageDigest: `sha256:${'b'.repeat(64)}`,
+        sourceCommit: 'c'.repeat(40), manifestPath: 'templates/aeroframe/1.0.0/template.json', status: 'available' as const };
+    const tampered = { ...snapshot, description: `${snapshot.description} changed` };
+    assert.throws(() => resolveInstalledPreset(site({ presetId: 'aeroframe', presetVersion: '1.0.0', theme: original.theme,
+        presetManifestSnapshot: JSON.stringify(tampered), publishedTemplateRecord: JSON.stringify(record) })), /checksum/i);
 });

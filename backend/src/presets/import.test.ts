@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import type { Entry } from '../entry/models/main';
 import type { Template } from '../template/models/main';
 import { getPreset } from './catalog';
 import type { SiteInstallation } from './site-model';
-import { adoptPublicTemplate, importPreset, planImport, type ImportSource } from './import';
-import type { VerifiedPublicTemplate } from './registry';
+import { adoptPublicTemplate, importPreset, planImport, previewPublicTemplateUpgrade, type ImportSource } from './import';
+import { canonicalJson, readPublicRegistry, type VerifiedPublicTemplate } from './registry';
+import { resolveInstalledPreset } from './installed';
 
 function memorySource() {
     let site: SiteInstallation | null = null;
@@ -55,6 +57,34 @@ test('one import creates complete CMS models and draft pages only once', async (
     const again = await importPreset({ presetId: 'atelier', siteName: 'Studio', includeDemo: false }, memory.source);
     assert.equal(again._id, first._id);
     assert.equal(memory.templates.size, 5);
+});
+
+test('verified public raw manifest survives import, resolve and adoption', async () => {
+    const preset = getPreset('aeroframe', '1.0.0')!;
+    const sourceCommit = 'd'.repeat(40);
+    const rawManifest = JSON.parse(JSON.stringify({ schemaVersion: 1, id: 'aeroframe', version: '1.0.1', name: 'AeroFrame 1.0.1',
+        description: preset.description, compatibility: { cmsSchema: 1, releaseSchema: 1 },
+        presentation: { theme: preset.theme, demo: preset.demo, ...(preset.showcase ? { showcase: preset.showcase } : {}) },
+        models: preset.models, pages: preset.pages, assets: [] }));
+    const record = { schemaVersion: 1 as const, id: 'aeroframe', version: '1.0.1',
+        manifestChecksum: `sha256:${createHash('sha256').update(canonicalJson(rawManifest)).digest('hex')}`,
+        imageRepository: 'ghcr.io/tangtianshuo/independent-website-templates/aeroframe', imageDigest: `sha256:${'e'.repeat(64)}`,
+        sourceCommit, manifestPath: 'templates/aeroframe/1.0.1/template.json', status: 'available' as const };
+    const fetcher: typeof fetch = async (url) => String(url).includes('/commits/registry')
+        ? Response.json({ sha: sourceCommit })
+        : String(url).endsWith('/registry/index.json') ? Response.json({ schemaVersion: 1, records: [record] }) : Response.json(rawManifest);
+    const selected = (await readPublicRegistry(fetcher)).records[0];
+    const memory = memorySource();
+    const initial = await importPreset({ presetId: 'aeroframe', siteName: 'Field', includeDemo: false }, memory.source);
+    assert.equal(resolveInstalledPreset(initial).version, '1.0.0');
+    const adopted = await adoptPublicTemplate({ presetId: 'aeroframe', presetVersion: selected.version, expectedUpdatedAt: initial.updatedAt }, {
+        ...memory.source, claimSite: async (value, expected) => {
+            if (memory.getSite()?.updatedAt !== expected) return false;
+            await memory.source.updateSite(value); return true;
+        },
+    }, selected);
+    assert.deepEqual(resolveInstalledPreset(adopted).theme, preset.theme);
+    assert.deepEqual(JSON.parse(adopted.presetManifestSnapshot!), rawManifest);
 });
 
 test('import plan refuses an unrelated product Template collision', async () => {
@@ -220,5 +250,51 @@ test('public adoption is blocked while Gateway publication outcome is unresolved
     await memory.source.updateSite({ ...installed, gatewayPublishIntent: JSON.stringify({ status: 'pending' }) });
     await assert.rejects(() => adoptPublicTemplate({ presetId: 'aeroframe', presetVersion: '1.0.1',
         expectedUpdatedAt: installed.updatedAt }, memory.source, selected), /publication is still pending/i);
+    assert.equal(memory.getSite()?.presetVersion, '1.0.0');
+});
+
+test('upgrade preview accepts a compatible visual update and reports its impact', async () => {
+    const memory = memorySource();
+    const installed = await importPreset({ presetId: 'aeroframe', siteName: 'Field', includeDemo: false }, memory.source);
+    const selected = { schemaVersion: 1 as const, id: 'aeroframe', version: '1.0.1',
+        manifestChecksum: `sha256:${'a'.repeat(64)}`, imageRepository: 'ghcr.io/tangtianshuo/independent-website-templates/aeroframe',
+        imageDigest: `sha256:${'b'.repeat(64)}`, sourceCommit: 'c'.repeat(40), manifestPath: 'templates/aeroframe/1.0.1/template.json',
+        status: 'available' as const, manifest: { ...getPreset('aeroframe', '1.0.0')!, version: '1.0.1',
+            theme: { ...getPreset('aeroframe', '1.0.0')!.theme, accent: '#abcdef' } } } as VerifiedPublicTemplate;
+    const preview = previewPublicTemplateUpgrade(installed, selected);
+    assert.equal(preview.compatible, true);
+    assert.equal(preview.requiresNewInstallation, false);
+    assert.match(preview.templateImpact.join(' '), /1\.0\.0.*1\.0\.1/);
+    assert.match(preview.contentImpact.join(' '), /保留/);
+});
+
+test('upgrade preview requires a new installation when the schema changes', async () => {
+    const memory = memorySource();
+    const installed = await importPreset({ presetId: 'aeroframe', siteName: 'Field', includeDemo: false }, memory.source);
+    const base = getPreset('aeroframe', '1.0.0')!;
+    const manifest = structuredClone(base);
+    manifest.version = '1.0.1';
+    manifest.models[0].fields[0] = { ...manifest.models[0].fields[0], required: !manifest.models[0].fields[0].required };
+    const selected = { schemaVersion: 1 as const, id: 'aeroframe', version: '1.0.1',
+        manifestChecksum: `sha256:${'a'.repeat(64)}`, imageRepository: 'ghcr.io/tangtianshuo/independent-website-templates/aeroframe',
+        imageDigest: `sha256:${'b'.repeat(64)}`, sourceCommit: 'c'.repeat(40), manifestPath: 'templates/aeroframe/1.0.1/template.json',
+        status: 'available' as const, manifest } as VerifiedPublicTemplate;
+    const preview = previewPublicTemplateUpgrade(installed, selected);
+    assert.equal(preview.compatible, false);
+    assert.equal(preview.requiresNewInstallation, true);
+    assert.match(preview.contentImpact.join(' '), /新建站点/);
+    await assert.rejects(() => adoptPublicTemplate({ presetId: 'aeroframe', presetVersion: '1.0.1', expectedUpdatedAt: installed.updatedAt }, memory.source, selected), /schema changes/i);
+    assert.equal(memory.getSite()?.presetVersion, '1.0.0');
+});
+
+test('upgrade preview rejects a tampered installed snapshot before adoption', async () => {
+    const memory = memorySource();
+    const installed = await importPreset({ presetId: 'aeroframe', siteName: 'Field', includeDemo: false }, memory.source);
+    await memory.source.updateSite({ ...installed, presetManifestSnapshot: JSON.stringify({ ...getPreset('aeroframe', '1.0.0')!, version: '9.9.9' }) });
+    const selected = { schemaVersion: 1 as const, id: 'aeroframe', version: '1.0.1',
+        manifestChecksum: `sha256:${'a'.repeat(64)}`, imageRepository: 'ghcr.io/tangtianshuo/independent-website-templates/aeroframe',
+        imageDigest: `sha256:${'b'.repeat(64)}`, sourceCommit: 'c'.repeat(40), manifestPath: 'templates/aeroframe/1.0.1/template.json',
+        status: 'available' as const, manifest: { ...getPreset('aeroframe', '1.0.0')!, version: '1.0.1' } } as VerifiedPublicTemplate;
+    assert.throws(() => previewPublicTemplateUpgrade(memory.getSite()!, selected), /does not match/i);
     assert.equal(memory.getSite()?.presetVersion, '1.0.0');
 });

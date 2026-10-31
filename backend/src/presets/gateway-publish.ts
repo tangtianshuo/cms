@@ -71,8 +71,10 @@ function identityMatches(value: unknown, record: PublicTemplateRecord): boolean 
         result.manifestPath === record.manifestPath && result.status === record.status;
 }
 
-function responseIntent(intent: GatewayPublishIntent) {
-    return { releaseId: intent.releaseId, operationId: intent.operationId || '', status: intent.status || 'pending' };
+function responseIntent(intent: GatewayPublishIntent, activeRevision = 0) {
+    return { releaseId: intent.releaseId, operationId: intent.operationId || '', status: intent.status || 'pending',
+        ...(activeRevision > 0 ? { activeRevision } : {}),
+        ...(intent.failureCode ? { failureCode: intent.failureCode, reason: intent.failureCode } : {}) };
 }
 
 export async function publishGatewayRelease(
@@ -98,7 +100,7 @@ export async function publishGatewayRelease(
         if (!sameRecord(intent.record, publicRecord(site)) && !options.restoreReleaseId) throw new Error('A persisted Gateway publication cannot change its immutable template record');
         if (intent.status === 'ready') {
             const confirmed = await readGatewayOperation(source, site, intent.operationId, config, fetcher);
-            return { ...responseIntent(intent), status: confirmed.status || 'pending' };
+            return { ...responseIntent(intent, site.gatewayActiveRevision || 0), status: confirmed.status || 'pending' };
         }
         return responseIntent(intent);
     }
@@ -214,9 +216,9 @@ export async function publishGatewayRelease(
     if (!await source.saveSite(completed, site.updatedAt)) throw new Error('CMS site changed while recording Gateway publication');
     if (submittedStatus === 'ready') {
         const confirmed = await readGatewayOperation(source, completed, intent.operationId!, config, fetcher);
-        return { ...responseIntent(intent), status: confirmed.status || 'pending' };
+        return { ...responseIntent(intent, completed.gatewayActiveRevision || 0), status: confirmed.status || 'pending' };
     }
-    return responseIntent(intent);
+    return responseIntent(intent, site.gatewayActiveRevision || 0);
 }
 
 export function gatewayBound(site: SiteInstallation | null, config: GatewayPublishConfig) {
@@ -254,7 +256,8 @@ export async function readGatewayOperation(source: GatewayReleaseSource, site: S
         await source.saveSite(next, site.updatedAt);
     }
     return { id: operationId, status: updated.status, failureCode: updated.failureCode,
-        releaseId: intent.releaseId, revision: (result as { revision?: number }).revision };
+        reason: updated.failureCode, releaseId: intent.releaseId, revision: (result as { revision?: number }).revision,
+        activeRevision: site.gatewayActiveRevision || 0 };
 }
 
 function sameRecord(a: PublicTemplateRecord, b: PublicTemplateRecord): boolean {

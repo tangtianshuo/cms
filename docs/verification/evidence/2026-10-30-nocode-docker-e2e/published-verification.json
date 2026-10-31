@@ -1,0 +1,101 @@
+{
+  "releaseId": "dbd44c06-ee66-4944-b1a0-e5e11e4dad56",
+  "firstReleaseId": "79e00c9e-4367-4700-989f-e52358d2c887",
+  "checks": [
+    {
+      "name": "published carousel, FAQ and dropdown navigation",
+      "pass": true
+    },
+    {
+      "name": "new content page and body",
+      "pass": true
+    },
+    {
+      "name": "product gallery, specifications and description",
+      "pass": true
+    },
+    {
+      "name": "OpenGraph image uses CMS origin and returns 200",
+      "pass": true
+    },
+    {
+      "name": "favicon returns 200",
+      "pass": true
+    },
+    {
+      "name": "SEO description and canonical domain",
+      "pass": true
+    },
+    {
+      "name": "all carousel image resources return 200",
+      "pass": true,
+      "count": 2
+    },
+    {
+      "name": "sitemap lists concrete pages",
+      "pass": true
+    },
+    {
+      "name": "unknown path and untrusted host rejected",
+      "pass": true
+    },
+    {
+      "name": "operations status is honest and contact delivery stays disabled",
+      "pass": true
+    },
+    {
+      "name": "stale publish fails while the active page remains unchanged",
+      "pass": true,
+      "reason": "Published site changed; refresh before continuing"
+    }
+  ],
+  "operations": {
+    "scope": {
+      "workspaceId": "88a63b59-d770-410f-8650-4060c32cd238",
+      "siteId": "32eb4c64-6d3d-44ce-92e3-28697c210005"
+    },
+    "site": {
+      "id": "32eb4c64-6d3d-44ce-92e3-28697c210005",
+      "name": "No-code Docker 验收站",
+      "status": "ready"
+    },
+    "domain": {
+      "configured": true,
+      "verified": 1,
+      "ready": 1,
+      "primaryHostname": "nocode.localhost"
+    },
+    "https": {
+      "status": "ready"
+    },
+    "backup": {
+      "status": "unknown",
+      "restore": "unknown"
+    },
+    "storefront": {
+      "status": "unknown",
+      "checkedAt": 1793322167255
+    },
+    "gateway": {
+      "status": "unconfigured"
+    },
+    "recentPublishes": [
+      {
+        "id": "dbd44c06-ee66-4944-b1a0-e5e11e4dad56",
+        "createdAt": 1793321086881,
+        "status": "published"
+      },
+      {
+        "id": "4221a387-e41e-4fa7-ad26-57d8c027b48c",
+        "createdAt": 1793320820835,
+        "status": "published"
+      },
+      {
+        "id": "79e00c9e-4367-4700-989f-e52358d2c887",
+        "createdAt": 1793318608214,
+        "status": "published"
+      }
+    ]
+  },
+  "scopedDomainFixture": true
+}

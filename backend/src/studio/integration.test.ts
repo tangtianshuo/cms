@@ -108,11 +108,12 @@ test('Studio real HTTP and Mongo authorization, preserving edits, conflicts and 
     const conflicting = await request('/api/v4/studio/pages', admin, { ...pageInput, operationId: randomUUID(), expectedUpdatedAt: fresh.site.updatedAt, fields: { ...pageInput.fields, title: 'Conflicting route content' } });
     assert.equal(conflicting.statusCode, 400); assert.match(conflicting.body, /conflicts/);
     assert.equal(await runWithWorkspace(adminScope, () => Repo.entry.count()), beforeCount + 1);
-    const settingsRequest = { expectedUpdatedAt: fresh.site.updatedAt, name: 'Renamed site', theme: { background: '#ffffff', foreground: '#182230', accent: '#2563eb', muted: '#e3e8ef' } };
+    const settingsRequest = { expectedUpdatedAt: fresh.site.updatedAt, name: 'Renamed site', theme: { background: '#ffffff', foreground: '#182230', accent: '#2563eb', muted: '#e3e8ef' }, navigation: [{ id: 'home-link', label: 'Home', href: '/', children: [], enabled: true }] };
     assert.equal((await request('/api/v4/studio/settings', editor, settingsRequest)).statusCode, 403);
     await ok('/api/v4/studio/settings', admin, settingsRequest);
     assert.equal((await request('/api/v4/studio/settings', admin, settingsRequest)).statusCode, 409);
     const current = await ok('/api/v4/studio/site'); assert.equal(current.site.name, 'Renamed site');
+    assert.deepEqual(current.site.navigation, settingsRequest.navigation);
     const created = await runWithWorkspace(adminScope, () => Repo.entry.findById(page.entryId));
     assert.ok(created?.meta[0].props.find(prop => prop.id === mapping.fields.find(field => field.key === 'body')!.propId));
     assert.ok(!JSON.stringify(current).includes('gatewayPublishIntent'));

@@ -73,6 +73,16 @@ test('fixed product route still allows SEO and section edits', () => {
     assert.deepEqual(pageDraft(updated, 'product')?.sections, ['information', 'description']);
 });
 
+test('page section CTAs must target an enabled published page', () => {
+    const installed = site();
+    assert.throws(() => updatePageDraft(installed, 'home', {
+        title: 'Home', path: '/', seoTitle: '', seoDescription: '', sections: ['hero'], entryId: '',
+        sectionConfigs: [{ type: 'hero-carousel', enabled: true, data: {
+            slides: [{ image: { _id: 'media-1' }, title: 'Sale', order: 0, cta: { href: '/missing' } }],
+        } }],
+    }), /internal link/);
+});
+
 test('additional pages reuse installed blueprints and bind only their own model', () => {
     const installed = site();
     installed.models.push({ key: 'content-page', templateId: 'content-template', fields: [] });
@@ -93,4 +103,14 @@ test('additional pages reuse installed blueprints and bind only their own model'
     assert.throws(() => createPageDraft(updated, 'delivery-page', input, bound), /key/i);
     assert.throws(() => createPageDraft(installed, 'reserved', { ...input, path: '/sitemap.xml' }, bound), /reserved/i);
     assert.throws(() => createPageDraft(installed, 'collision', { ...input, path: '/pages/test' }, bound), /conflict/i);
+});
+
+test('page Entry bindings reject another site even when the template matches', () => {
+    const installed = { ...site(), workspaceId: 'workspace-a' };
+    installed.models.push({ key: 'content-page', templateId: 'content-template', fields: [] });
+    const foreign = { _id: 'foreign-entry', templateId: 'content-template', workspaceId: 'workspace-a', siteId: 'other-site' } as Entry;
+    assert.throws(() => createPageDraft(installed, 'foreign-page', {
+        blueprintKey: 'content', title: 'Foreign', path: '/foreign', seoTitle: 'Foreign', seoDescription: '',
+        sections: ['story'], entryId: foreign._id,
+    }, foreign), /binding/i);
 });

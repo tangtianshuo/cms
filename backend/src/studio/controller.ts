@@ -9,10 +9,18 @@ import { pageDraft, pageSectionOptions, updatePageDraft } from '../presets/pages
 import type { SiteInstallation } from '../presets/site-model';
 import { assertStudioWrite, entryValues, fieldDescriptors, pageOperationIds, patchEntry, type StudioValue } from './business';
 import { createStudioPage } from './page-create';
+import { normalizeNavigation, type NavigationNode } from '../presets/navigation';
+import { normalizeSiteOperations } from '../presets/operations';
+import { validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
 
 const studioValueSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.array(z.object({ _id: z.string().min(1), alt_text: z.string().optional(), caption: z.string().optional() }).strict()), z.array(z.object({ tid: z.string().min(1), eid: z.string().min(1) }).strict())]);
 const entryBody = z.object({ entryId: z.string().min(1).optional(), operationId: z.string().uuid(), expectedUpdatedAt: z.number().int().nonnegative().optional(), fields: z.record(studioValueSchema) }).strict();
-const pageBody = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().min(1).max(160), seoTitle: z.string().max(120), seoDescription: z.string().max(320), sections: z.array(z.string()).min(1), entryId: z.string(), enabled: z.boolean(), navigation: z.boolean() }).strict();
+const sectionConfigBody = z.object({ type: z.enum(['hero-carousel', 'info-grid', 'faq', 'product-gallery', 'product-information', 'product-description']), enabled: z.boolean(), data: z.record(z.unknown()) }).strict();
+const pageBody = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().min(1).max(160), seoTitle: z.string().max(120), seoDescription: z.string().max(320), sections: z.array(z.string()).min(1), sectionConfigs: z.array(sectionConfigBody).optional(), entryId: z.string(), enabled: z.boolean(), navigation: z.boolean() }).strict();
+const navigationBody: z.ZodType<NavigationNode> = z.lazy(() => z.object({
+    id: z.string().min(1).max(160), label: z.string().trim().min(1).max(120), href: z.string().trim().max(500).optional(),
+    children: z.array(navigationBody), enabled: z.boolean(),
+}).strict());
 async function selectedSite() {
     const site = await Repo.siteInstallation.methods.findSelected();
     if (!site || site.status !== 'ready') throw Object.assign(new Error('Select a site with an installed, ready template'), { status: 404 });
@@ -37,6 +45,9 @@ async function validateSelectedMedia(site: SiteInstallation, modelKey: string, f
     }
 }
 function conflict() { return Object.assign(new Error('Site changed; refresh before saving'), { status: 409 }); }
+export function assertStudioPageEntryBinding(siteId: string, entryId: string, boundEntry: { _id: string; siteId?: string } | null): void {
+    if (!boundEntry || boundEntry._id !== entryId || boundEntry.siteId !== siteId) throw new Error('Invalid page Entry binding');
+}
 export const StudioController = createController({ name: 'Studio', path: '/api/v4/studio', methods() {
     return {
         site: createControllerMethod({ path: '/site', type: 'get', preRequestHandler: RP.createJwtCheck(['USER']), async handler({ errorHandler }) {
@@ -57,6 +68,8 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
             if (!workspaceContext()) throw errorHandler(HttpStatus.Forbidden, 'Workspace context required');
             return { site: { id: site._id, name: site.name, updatedAt: site.updatedAt, language: site.language || 'en', presetId: site.presetId, presetVersion: site.presetVersion,
                 publicTemplate: Boolean(site.publishedTemplateRecord), theme: site.theme, pages: site.pages.map(page => pageDraft(site, page.key)),
+                navigation: site.navigation,
+                operations: site.operations || normalizeSiteOperations({ contactFormEnabled: false }),
                 pageOptions: Object.fromEntries(site.pages.map(page => [page.key, pageSectionOptions(page.layout)])),
                 blueprints: preset.pages.filter(page => page.layout === 'content-page'), canManage: Boolean(workspaceContext()?.admin) }, models };
         } }),
@@ -127,17 +140,36 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 if (site.updatedAt !== parsed.data.expectedUpdatedAt) throw conflict();
                 const key = (request.params as { pageKey: string }).pageKey;
                 const bound = parsed.data.entryId ? await Repo.entry.findById(parsed.data.entryId) : null;
+                if (parsed.data.entryId) assertStudioPageEntryBinding(site._id, parsed.data.entryId, bound);
+                if (parsed.data.sectionConfigs) {
+                    const media = await Repo.media.findAll();
+                    validateSectionMediaReferences(pageDraft(site, key)?.layout || '', parsed.data.sectionConfigs as never, {
+                        media, site, publishedPaths: new Set(site.pages.filter(page => page.enabled !== false && !page.path.includes(':')).map(page => page.path)),
+                    });
+                }
                 const updated = updatePageDraft(site, key, parsed.data, bound);
                 if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) throw conflict();
                 return pageDraft(updated, key);
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Page save failed'); }
         } }),
         settings: createControllerMethod({ path: '/settings', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(), async handler({ request, errorHandler }) {
-            const parsed = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), name: z.string().trim().min(1).max(80), theme: z.object({ background: z.string().regex(/^#[a-f0-9]{6}$/i), foreground: z.string().regex(/^#[a-f0-9]{6}$/i), accent: z.string().regex(/^#[a-f0-9]{6}$/i), muted: z.string().regex(/^#[a-f0-9]{6}$/i) }).strict() }).strict().safeParse(request.body);
+            const parsed = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), name: z.string().trim().min(1).max(80), theme: z.object({ background: z.string().regex(/^#[a-f0-9]{6}$/i), foreground: z.string().regex(/^#[a-f0-9]{6}$/i), accent: z.string().regex(/^#[a-f0-9]{6}$/i), muted: z.string().regex(/^#[a-f0-9]{6}$/i) }).strict(), navigation: z.array(navigationBody).optional(), operations: z.object({ seoTitle: z.string().max(120), seoDescription: z.string().max(320), socialImage: z.object({ _id: z.string().min(1) }).optional(), favicon: z.object({ _id: z.string().min(1) }).optional(), analyticsId: z.string().optional(), contactFormEnabled: z.boolean() }).strict().optional() }).strict().safeParse(request.body);
             if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Name and four six-digit theme colors are required');
             const site = await selectedSite();
             if (site.updatedAt !== parsed.data.expectedUpdatedAt) throw errorHandler(HttpStatus.Conflict, 'Site changed; refresh before saving');
-            const updated = { ...site, name: parsed.data.name, theme: { ...site.theme, ...parsed.data.theme } };
+            let navigation = site.navigation;
+            if (parsed.data.navigation !== undefined) {
+                try { navigation = normalizeNavigation(parsed.data.navigation, { publishedPaths: site.pages.filter(page => page.enabled !== false && !page.path.includes(':')).map(page => page.path) }); }
+                catch (cause) { throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Invalid navigation'); }
+            }
+            let operations = site.operations || normalizeSiteOperations({ contactFormEnabled: false });
+            if (parsed.data.operations !== undefined) {
+                const availableMedia = await Repo.media.findAll();
+                const mediaIds = new Set(availableMedia.filter(item => ['IMG', 'SVG', 'GIF'].includes(item.type) && mediaAuthorizedForSite(item, site, { requireSiteBinding: true })).map(item => item._id));
+                try { operations = normalizeSiteOperations(parsed.data.operations, mediaIds); }
+                catch (cause) { throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Invalid website operations'); }
+            }
+            const updated = { ...site, name: parsed.data.name, theme: { ...site.theme, ...parsed.data.theme }, navigation, operations };
             if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) throw errorHandler(HttpStatus.Conflict, 'Site changed; refresh before saving');
             return { updatedAt: updated.updatedAt };
         } }),

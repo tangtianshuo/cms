@@ -1,5 +1,7 @@
 import { defineComponent, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
+import { siteSetupHref } from '../../layouts/dashboard/navigation';
 import type { Workspace } from '@bcms/selfhosted-backend/workspaces/repo';
 import type { SiteInstallation } from '@bcms/selfhosted-backend/presets/site-model';
 import { Button } from '@bcms/selfhosted-ui/components/button';
@@ -201,18 +203,19 @@ export default defineComponent({
                                                             sdk.context!.context
                                                                 .workspaceId,
                                                         siteId: site._id,
-                                                    }),
+                                                    }, site.status === 'empty' ? siteSetupHref : '/d/studio?section=overview'),
                                                 )
                                             }
                                         >
                                             {sdk.context?.context.siteId ===
                                             site._id
-                                                ? t('workspace.currentSite')
-                                                : t('workspace.openSite')}
+                                                ? site.status === 'empty' ? '继续创建网站' : t('workspace.currentSite')
+                                                : site.status === 'empty' ? '设置网站' : t('workspace.openSite')}
                                         </Button>
                                     </div>
                                 ))}
                             </div>
+                            {admin() && <RouterLink class="mt-4 inline-flex min-h-[44px] items-center text-sm underline" to={`${siteSetupHref}?new=1`}>使用向导创建网站 →</RouterLink>}
                             {admin() && (
                                 <form
                                     class="mt-5 flex flex-wrap gap-3"
@@ -298,7 +301,7 @@ export default defineComponent({
                                         {t('common.update')}
                                     </Button>
                                 </form>
-                                <h3 class="mt-6 font-semibold">
+                                <h3 id="workspace-members" class="mt-6 font-semibold">
                                     {t('workspace.members')}
                                 </h3>
                                 <p class="mt-2 text-sm opacity-70">

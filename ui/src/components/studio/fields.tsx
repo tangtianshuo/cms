@@ -10,6 +10,7 @@ export const StudioFields = defineComponent({
         values: { type: Object as PropType<Record<string, StudioValue>>, required: true },
         media: { type: Array as PropType<Media[]>, required: true },
         isNew: Boolean, disabled: Boolean,
+        onUpload: { type: Function as PropType<() => void>, required: false },
         onChange: { type: Function as PropType<(key: string, value: StudioValue) => void>, required: true },
     },
     setup(props) {
@@ -37,8 +38,9 @@ export const StudioFields = defineComponent({
                             return <div class="studio-selected-file"><span>{media?.name || item._id}</span><button type="button" disabled={props.disabled} aria-label={`移除 ${media?.name || item._id}`} onClick={() => props.onChange(field.key, (value as Array<{ _id: string }>).filter(file => file._id !== item._id))}>移除</button></div>;
                         })}</div>
                         <button id={fieldId} type="button" disabled={props.disabled} aria-expanded={picker.value === field.key} onClick={() => { picker.value = picker.value === field.key ? '' : field.key; }}>选择已有素材</button>
+                        {props.onUpload && <button type="button" disabled={props.disabled} class="studio-upload-button" onClick={() => { picker.value = field.key; props.onUpload?.(); }}>上传新图片</button>}
                         {picker.value === field.key && <div class="studio-picker"><label for={`${fieldId}-filter`}>筛选图片</label><input id={`${fieldId}-filter`} value={mediaFilter.value} onInput={event => { mediaFilter.value = (event.target as HTMLInputElement).value; }} />
-                            {props.media.length === 0 && <p class="studio-help">没有可访问的图片。请在素材库上传图片后刷新。</p>}
+                            {props.media.length === 0 && <p class="studio-help">没有可访问的图片。{props.onUpload ? '点击「上传新图片」添加，上传完成后即可在这里选择。' : '请联系管理员上传图片。'}</p>}
                             <div class="studio-media-grid">{props.media.filter(media => media.name.toLowerCase().includes(mediaFilter.value.toLowerCase())).map(media => {
                                 const selected = Array.isArray(value) && value.some(item => '_id' in item && item._id === media._id);
                                 return <button type="button" disabled={props.disabled} class={{ selected }} aria-pressed={selected} onClick={() => {

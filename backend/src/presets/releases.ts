@@ -10,9 +10,16 @@ import { previewPresetPage, type PresetPagePreview } from '../storefront/preset-
 import { resolveInstalledPreset } from './installed';
 import { pageDraft, updatePageDraft } from './pages';
 import type { SiteInstallation } from './site-model';
+import { normalizeNavigation, type NavigationNode } from './navigation';
+import { validateSectionConfigs, validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
+import type { SiteOperations } from './operations';
 
 export interface ReleaseLink { label: string; path: string }
 export interface ReleaseItem extends ReleaseLink { image: string; description: string; price: string }
+/** Normalize either a current tree or a legacy flat release navigation list. */
+export function normalizeReleaseNavigation(value: unknown): NavigationNode[] {
+    return normalizeNavigation(value);
+}
 export interface PublishedContent extends PresetPagePreview { items?: ReleaseItem[] }
 export interface ReleasePage {
     path: string;
@@ -25,9 +32,12 @@ export interface ReleaseSnapshot {
     workspaceId?: string;
     siteId: string;
     language: string;
+    templateVersion?: string;
+    mediaIds?: string[];
     pages: ReleasePage[];
-    navigation: ReleaseLink[];
+    navigation: NavigationNode[];
     redirects: Array<{ from: string; to: string }>;
+    operations?: SiteOperations;
 }
 export interface ReleaseRecord extends MongoDBEntry {
     workspaceId?: string;
@@ -174,7 +184,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
                     }
                     if (field.type === PropType.MEDIA) {
                         const id = (value as { _id?: string } | null)?._id;
-                        if (!input.media.some((media) => media._id === id && media.mimetype.startsWith('image/'))) {
+                        if (!input.media.some((media) => media._id === id && mediaAuthorizedForSite(media, site))) {
                             issues.push({ code: 'media-missing', message: `Missing image media: ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
                         }
                     }
@@ -248,7 +258,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
             return result;
         });
     }
-    const navigation: ReleaseLink[] = pages.filter((page) => {
+    const legacyNavigation: ReleaseLink[] = pages.filter((page) => {
         const draft = pageDraft(site, page.pageKey)!;
         return draft.navigation && !draft.path.includes(':');
     }).map((page) => ({ path: page.path, label: site.pages.find((item) => item.key === page.pageKey)!.title }));
@@ -257,8 +267,8 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         const id = (value as { eid: string }).eid;
         const target = pageForEntry(id);
         if (!target) throw new Error(`Navigation Entry has no published page: ${id}`);
-        if (!navigation.some((link) => link.path === target.path)) {
-            navigation.push({ label: entryText(input, entries.find((entry) => entry._id === id)!, 'title'), path: target.path });
+        if (!legacyNavigation.some((link) => link.path === target.path)) {
+            legacyNavigation.push({ label: entryText(input, entries.find((entry) => entry._id === id)!, 'title'), path: target.path });
         }
     }
     const redirects = new Map<string, string>();
@@ -275,6 +285,20 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         const target = destination(old);
         if (target && target.path !== old.path && !pages.some((page) => page.path === old.path)) redirects.set(old.path, target.path);
     }
+    const publishedPaths = new Set([...pages.map(page => page.path), ...redirects.keys()]);
+    for (const page of site.pages) {
+        if (page.sectionConfigs) {
+            validateSectionConfigs(page.layout, page.sectionConfigs, { publishedPaths });
+            validateSectionMediaReferences(page.layout, page.sectionConfigs, { publishedPaths, media: input.media, site });
+        }
+    }
+    const navigation = normalizeNavigation(site.navigation === undefined ? legacyNavigation : site.navigation, { publishedPaths });
+    // Keep enumerable `path` aliases in serialized snapshots so legacy
+    // storefront readers continue to render releases created before the tree.
+    const legacyNode = (node: NavigationNode): NavigationNode => ({ ...node,
+        ...(node.href ? { path: node.href } : {}), children: node.children.map(legacyNode),
+    });
+    const releaseNavigation = navigation.map(legacyNode);
     const validateLinks = (value: unknown): void => {
         if (Array.isArray(value)) { value.forEach(validateLinks); return; }
         if (!value || typeof value !== 'object') return;
@@ -286,8 +310,9 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         Object.values(object).forEach(validateLinks);
     };
     entries.forEach((entry) => validateLinks(entry.meta.find((meta) => meta.lng === language)?.props));
-    return structuredClone({ schemaVersion: 1, workspaceId: ownerWorkspace(site), siteId: site._id, language, pages, navigation,
-        redirects: [...redirects].map(([from, to]) => ({ from, to })) });
+    return structuredClone({ schemaVersion: 1 as const, workspaceId: ownerWorkspace(site), siteId: site._id, language,
+        templateVersion: site.presetVersion, mediaIds: input.media.map((media) => media._id).sort(), pages, navigation: releaseNavigation,
+        redirects: [...redirects].map(([from, to]) => ({ from, to })), operations: site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false } });
 }
 
 export function releaseDiff(previous: ReleaseSnapshot | undefined, next: ReleaseSnapshot) {
@@ -297,6 +322,9 @@ export function releaseDiff(previous: ReleaseSnapshot | undefined, next: Release
         changed: next.pages.filter((page) => old.has(page.path) && old.get(page.path) !== JSON.stringify(page.content)).map((page) => page.path),
         removed: (previous?.pages || []).filter((page) => !next.pages.some((item) => item.path === page.path)).map((page) => page.path),
         navigationChanged: JSON.stringify(previous?.navigation) !== JSON.stringify(next.navigation),
+        mediaChanged: Boolean(previous?.mediaIds) && JSON.stringify(previous?.mediaIds) !== JSON.stringify(next.mediaIds || []),
+        templateChanged: Boolean(previous?.templateVersion) && previous?.templateVersion !== next.templateVersion,
+        templateVersion: next.templateVersion || '',
         redirects: next.redirects,
     };
 }

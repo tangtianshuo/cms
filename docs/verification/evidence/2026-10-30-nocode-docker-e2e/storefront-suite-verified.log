@@ -1,0 +1,92 @@
+
+> test
+> node --test test/*.test.mjs
+
+TAP version 13
+# Subtest: preview validates disabled navigation node shape while skipping only its link target
+ok 1 - preview validates disabled navigation node shape while skipping only its link target
+  ---
+  duration_ms: 1.033708
+  type: 'test'
+  ...
+# Subtest: preview accepts a complete preset page payload
+ok 2 - preview accepts a complete preset page payload
+  ---
+  duration_ms: 0.729875
+  type: 'test'
+  ...
+# Subtest: preview rejects unknown layouts and incomplete nested data
+ok 3 - preview rejects unknown layouts and incomplete nested data
+  ---
+  duration_ms: 0.08775
+  type: 'test'
+  ...
+# Subtest: demo lookup fetches the selected platform preset
+ok 4 - demo lookup fetches the selected platform preset
+  ---
+  duration_ms: 0.762833
+  type: 'test'
+  ...
+# Subtest: demo lookup treats unknown presets as missing but surfaces backend failures
+ok 5 - demo lookup treats unknown presets as missing but surfaces backend failures
+  ---
+  duration_ms: 0.490375
+  type: 'test'
+  ...
+# Subtest: only supported page views can be shown in a demo
+ok 6 - only supported page views can be shown in a demo
+  ---
+  duration_ms: 0.078708
+  type: 'test'
+  ...
+# Subtest: public page lookup encodes the exact route and supplies only the validated host
+ok 7 - public page lookup encodes the exact route and supplies only the validated host
+  ---
+  duration_ms: 1.151375
+  type: 'test'
+  ...
+# Subtest: sitemap lists concrete release paths with XML escaping
+ok 8 - sitemap lists concrete release paths with XML escaping
+  ---
+  duration_ms: 0.168625
+  type: 'test'
+  ...
+# Subtest: custom host calls carry internal credentials and reject unsafe redirect paths
+ok 9 - custom host calls carry internal credentials and reject unsafe redirect paths
+  ---
+  duration_ms: 0.433042
+  type: 'test'
+  ...
+# Subtest: product SEO includes canonical URL and escaped structured data
+ok 10 - product SEO includes canonical URL and escaped structured data
+  ---
+  duration_ms: 0.375417
+  type: 'test'
+  ...
+# Subtest: fetches the configured development site and returns its product
+ok 11 - fetches the configured development site and returns its product
+  ---
+  duration_ms: 0.463542
+  type: 'test'
+  ...
+# Subtest: unknown host and CMS 404 produce a missing page
+ok 12 - unknown host and CMS 404 produce a missing page
+  ---
+  duration_ms: 0.102833
+  type: 'test'
+  ...
+# Subtest: CMS failures other than 404 remain errors
+ok 13 - CMS failures other than 404 remain errors
+  ---
+  duration_ms: 0.136291
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 85.631083

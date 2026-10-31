@@ -1,4 +1,4 @@
-import { computed, defineComponent, onMounted } from 'vue';
+import { computed, defineComponent, onMounted, ref } from 'vue';
 import { useMedia } from '@bcms/selfhosted-ui/hooks/media';
 import { Icon } from '@bcms/selfhosted-ui/components/icon';
 import { EmptyState } from '@bcms/selfhosted-ui/components/empty-state';
@@ -8,6 +8,7 @@ import { MediaList } from '@bcms/selfhosted-ui/components/media/list';
 import { useRoute, useRouter } from 'vue-router';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 import { useI18n } from 'vue-i18n';
+import { userErrorMessage } from '../../util/user-message';
 
 export const MediaView = defineComponent({
     setup() {
@@ -16,6 +17,9 @@ export const MediaView = defineComponent({
         const modal = window.bcms.modalService;
         const route = useRoute();
         const router = useRouter();
+        const loading = ref(true);
+        const error = ref('');
+        const canUpload = computed(() => sdk.context?.context.role !== 'viewer' && Boolean(sdk.context?.context.instanceAdmin || sdk.context?.context.mediaPermissions?.post));
 
         const {
             mediaData,
@@ -28,9 +32,11 @@ export const MediaView = defineComponent({
         const isEmpty = computed(() => sdk.store.media.items().length === 0);
 
         onMounted(async () => {
-            if (typeof route.query.parentId === 'string') {
-                setMediaParent(route.query.parentId);
-            }
+            try {
+                await sdk.media.getAll({ skipCache: true });
+                setMediaParent(typeof route.query.parentId === 'string' ? route.query.parentId : undefined);
+            } catch (cause) { error.value = userErrorMessage(cause); }
+            finally { loading.value = false; }
         });
 
         async function setActiveDir(media?: Media) {
@@ -69,7 +75,8 @@ export const MediaView = defineComponent({
 
         return () => (
             <div class="cms-media-page">
-                <div class="cms-admin-heading"><div><p class="cms-admin-eyebrow">MEDIA MANAGEMENT</p><h1>{t('routes.media')}</h1><p class="cms-page-description">上传、整理并复用网站的图片与文件。</p></div><a class="cms-admin-text-link" href="/d/shares?type=Media">{t('shares.grant')}</a></div>
+                <div class="cms-admin-heading"><div><p class="cms-admin-eyebrow">MEDIA LIBRARY</p><h1>素材库</h1><p class="cms-page-description">上传、整理并复用网站的图片与文件。</p></div></div>
+                {error.value && <p role="alert" class="studio-error">{error.value}</p>}
                 <header class="cms-media-toolbar">
                     <div class="cms-media-search">
                         <Icon
@@ -90,6 +97,7 @@ export const MediaView = defineComponent({
                     </div>
                     <div class={`flex gap-2`}>
                         <Button
+                            disabled={!canUpload.value}
                             onClick={() => {
                                 modal.handlers.mediaCreateFile.open();
                             }}
@@ -97,6 +105,7 @@ export const MediaView = defineComponent({
                             {t('views.media.uploadFile')}
                         </Button>
                         <Button
+                            disabled={!canUpload.value}
                             kind={'secondary'}
                             class=""
                             onClick={() => {
@@ -107,7 +116,7 @@ export const MediaView = defineComponent({
                         </Button>
                     </div>
                 </header>
-                {isEmpty.value ? (
+                {loading.value ? <p role="status">正在加载素材…</p> : isEmpty.value ? (
                     <>
                         <div class="cms-media-empty-label">
                             {t('views.media.empty')}

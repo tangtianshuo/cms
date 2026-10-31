@@ -26,6 +26,7 @@ export function mapProduct(
     language: string,
     config: ProductPageConfig,
     mediaOrigin: string,
+    relatedEntries: Entry[] = [],
 ): StorefrontProduct {
     if (template.name !== 'product' || entry.templateId !== template._id) {
         throw new Error('Entry does not belong to the product template');
@@ -63,5 +64,13 @@ export function mapProduct(
             });
         }
     }
-    return { slug, name, price, description, images };
+    const relatedSlugs = config.sections.find(section => section.type === 'product-information')?.relatedProducts || [];
+    const relatedProducts = relatedSlugs.map(relatedSlug => {
+        const related = relatedEntries.find(item => productEntrySlug(item, template, language) === relatedSlug);
+        if (!related) return { slug: relatedSlug, name: relatedSlug };
+        const relatedNameData = propValue(related, language, config.bindings.name);
+        const relatedName = Array.isArray(relatedNameData) && typeof relatedNameData[0] === 'string' ? relatedNameData[0].trim() : relatedSlug;
+        return { slug: relatedSlug, name: relatedName };
+    });
+    return { slug, name, price, description, images, ...(relatedProducts.length ? { relatedProducts } : {}) };
 }

@@ -8,7 +8,7 @@ import { getPreset } from './catalog';
 import { createPageDraft } from './pages';
 import { pageDraft, updatePageDraft } from './pages';
 import { buildRelease, publishRelease, rollbackRelease, type ReleaseSource,
-    type ReleaseRecord, type ReleaseInput } from './releases';
+    releaseDiff, type ReleaseRecord, type ReleaseInput } from './releases';
 
 function fixture(): ReleaseInput {
     const preset = getPreset('atelier')!;
@@ -44,11 +44,23 @@ test('release expands concrete routes and isolates saved content, theme and navi
     assert.equal(snapshot.siteId, 'site');
     assert.deepEqual(snapshot.pages.map((page) => page.path), ['/', '/collections', '/products/bag', '/pages/about']);
     assert.ok(snapshot.navigation.some((link) => link.path === '/pages/about'));
+    assert.equal((JSON.parse(JSON.stringify(snapshot)) as typeof snapshot).navigation.find((link) => link.href === '/pages/about')?.path, '/pages/about');
     input.site.theme.accent = '#000000';
     input.entries.find((entry) => entry.templateId === 'home')!.meta[0].props.find((prop) => prop.id === 'headline')!.data = ['Unpublished'];
     assert.equal(snapshot.pages[0].content.preset.demo.hero.title, 'Original headline');
     assert.equal(snapshot.pages[0].content.preset.theme.accent, '#176a58');
     assert.equal(snapshot.pages[1].content.items?.[0].path, '/products/bag');
+});
+
+test('release diff exposes media and template changes for publish confirmation', () => {
+    const previous = buildRelease(fixture());
+    const next = structuredClone(previous);
+    next.templateVersion = '2.0.0';
+    next.mediaIds = ['new-media'];
+    const diff = releaseDiff(previous, next);
+    assert.equal(diff.mediaChanged, true);
+    assert.equal(diff.templateChanged, true);
+    assert.equal(diff.templateVersion, '2.0.0');
 });
 
 test('preflight reports independent field problems with editable object locations', () => {
@@ -179,6 +191,31 @@ test('removing a page checks rich text internal links and related published page
     const related = fixture();
     related.site.pages.find((page) => page.key === 'product')!.enabled = false;
     assert.throws(() => buildRelease(related), /published page/i);
+});
+
+test('release validation rejects section CTAs that target unpublished paths', () => {
+    const input = fixture();
+    input.site.pages.find((page) => page.key === 'home')!.sectionConfigs = [{
+        type: 'hero-carousel', enabled: true, data: {
+            slides: [{ image: { _id: 'media-1' }, title: 'Sale', order: 0, cta: { href: '/missing' } }],
+        },
+    }];
+    assert.throws(() => buildRelease(input), /internal link/i);
+});
+
+test('release preflight rejects section media that is missing or belongs to another site', () => {
+    const missing = fixture();
+    missing.site.pages.find((page) => page.key === 'home')!.sectionConfigs = [{
+        type: 'hero-carousel', enabled: true, data: { slides: [{ image: { _id: 'missing' }, title: 'Sale', order: 0 }] },
+    }];
+    assert.throws(() => buildRelease(missing), /media.*available/i);
+
+    const foreign = fixture();
+    foreign.media = [{ _id: 'foreign', workspaceId: 'default', siteId: 'other-site', mimetype: 'image/png' } as Media];
+    foreign.site.pages.find((page) => page.key === 'home')!.sectionConfigs = [{
+        type: 'hero-carousel', enabled: true, data: { slides: [{ image: { _id: 'foreign' }, title: 'Sale', order: 0 }] },
+    }];
+    assert.throws(() => buildRelease(foreign), /media.*available/i);
 });
 
 test('a fixed collection page retains its bound description and cover', () => {

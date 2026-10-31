@@ -83,6 +83,12 @@ const routes: Array<RouteRecordRawExtended> = [
         component: () => import('./views/dashboard/studio'),
     },
     {
+        path: '/d/site-setup',
+        name: 'SiteOnboardingView',
+        meta: { title: '创建网站', layout: 'DashboardLayout' },
+        component: () => import('./views/dashboard/site-onboarding'),
+    },
+    {
         path: '/d/presets',
         name: 'PresetsView',
         meta: {
@@ -173,7 +179,7 @@ const routes: Array<RouteRecordRawExtended> = [
         path: '/d/media',
         name: 'MediaView',
         meta: {
-            titleKey: 'routes.media',
+            title: '素材库',
             layout: 'DashboardLayout',
         },
         component: () =>

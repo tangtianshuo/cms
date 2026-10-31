@@ -1,0 +1,501 @@
+TAP version 13
+# Subtest: canonical sections handle old content links and invalid query values
+ok 1 - canonical sections handle old content links and invalid query values
+  ---
+  duration_ms: 0.893
+  type: 'test'
+  ...
+# Subtest: sidebar distinguishes Studio sections and honors model and entry deep links
+ok 2 - sidebar distinguishes Studio sections and honors model and entry deep links
+  ---
+  duration_ms: 0.301916
+  type: 'test'
+  ...
+# Subtest: website content stays selected across page and brand editing deep links
+ok 3 - website content stays selected across page and brand editing deep links
+  ---
+  duration_ms: 0.411041
+  type: 'test'
+  ...
+# Subtest: the main media destination includes saved legacy Studio media links
+ok 4 - the main media destination includes saved legacy Studio media links
+  ---
+  duration_ms: 0.190458
+  type: 'test'
+  ...
+# Subtest: administration matches nested routes on segment boundaries only
+ok 5 - administration matches nested routes on segment boundaries only
+  ---
+  duration_ms: 0.069583
+  type: 'test'
+  ...
+# Subtest: new editor state produces persisted metadata and content
+ok 6 - new editor state produces persisted metadata and content
+  ---
+  duration_ms: 3.979542
+  type: 'test'
+  ...
+# Subtest: lost publish response survives component reload and keeps the same request identity
+ok 7 - lost publish response survives component reload and keeps the same request identity
+  ---
+  duration_ms: 0.882042
+  type: 'test'
+  ...
+# Subtest: publishing another site cannot reuse or clear the first site request
+ok 8 - publishing another site cannot reuse or clear the first site request
+  ---
+  duration_ms: 0.172208
+  type: 'test'
+  ...
+# Subtest: a prior completed operation cannot clear a newer uncertain publish request
+ok 9 - a prior completed operation cannot clear a newer uncertain publish request
+  ---
+  duration_ms: 0.399417
+  type: 'test'
+  ...
+# Subtest: rollback identities remain distinct from publish and other rollback targets
+ok 10 - rollback identities remain distinct from publish and other rollback targets
+  ---
+  duration_ms: 0.230084
+  type: 'test'
+  ...
+# Subtest: Docker management policy permits its local storefront iframe
+ok 11 - Docker management policy permits its local storefront iframe
+  ---
+  duration_ms: 73.348625
+  type: 'test'
+  ...
+# WebSocket server error: Port is already in use
+# Subtest: navigation editor emits add, nested, reorder and visibility changes through real events
+ok 12 - navigation editor emits add, nested, reorder and visibility changes through real events
+  ---
+  duration_ms: 760.224666
+  type: 'test'
+  ...
+# Subtest: existing pages can move into and out of groups without duplication
+ok 13 - existing pages can move into and out of groups without duplication
+  ---
+  duration_ms: 5.264916
+  type: 'test'
+  ...
+# Subtest: preview choices are limited to pages served by the generated model
+ok 14 - preview choices are limited to pages served by the generated model
+  ---
+  duration_ms: 2.316625
+  type: 'test'
+  ...
+# Subtest: preview request carries the unsaved Entry, selected page and language
+ok 15 - preview request carries the unsaved Entry, selected page and language
+  ---
+  duration_ms: 0.688959
+  type: 'test'
+  ...
+# Subtest: only the latest preview request may update the iframe
+ok 16 - only the latest preview request may update the iframe
+  ---
+  duration_ms: 0.390125
+  type: 'test'
+  ...
+# Subtest: preview message uses the exact configured target origin
+ok 17 - preview message uses the exact configured target origin
+  ---
+  duration_ms: 0.339584
+  type: 'test'
+  ...
+# Subtest: preview message can cross the iframe structured-clone boundary
+ok 18 - preview message can cross the iframe structured-clone boundary
+  ---
+  duration_ms: 0.235833
+  type: 'test'
+  ...
+# Subtest: normalizes gateway operation states into the CMS publish lifecycle
+ok 19 - normalizes gateway operation states into the CMS publish lifecycle
+  ---
+  duration_ms: 0.377333
+  type: 'test'
+  ...
+# WebSocket server error: Port is already in use
+# Subtest: published link uses the selected domain and avoids a shared origin for unbound sites
+ok 20 - published link uses the selected domain and avoids a shared origin for unbound sites
+  ---
+  duration_ms: 870.856458
+  type: 'test'
+  ...
+# WebSocket server error: Port is already in use
+# Subtest: controlled reactive parent supports consecutive add, toggle and reorder events
+ok 21 - controlled reactive parent supports consecutive add, toggle and reorder events
+  ---
+  duration_ms: 765.910375
+  type: 'test'
+  ...
+# Subtest: carousel edits real media refs and copy, normalizes order, and keeps required section
+ok 22 - carousel edits real media refs and copy, normalizes order, and keeps required section
+  ---
+  duration_ms: 9.346333
+  type: 'test'
+  ...
+# Subtest: FAQ and information cards have editable content
+ok 23 - FAQ and information cards have editable content
+  ---
+  duration_ms: 5.42675
+  type: 'test'
+  ...
+# Subtest: settings request keeps operations outside the strict theme contract
+ok 24 - settings request keeps operations outside the strict theme contract
+  ---
+  duration_ms: 129.247667
+  type: 'test'
+  ...
+# Subtest: empty carousel image prompt selects the first slide and clearing a CTA removes it
+ok 25 - empty carousel image prompt selects the first slide and clearing a CTA removes it
+  ---
+  duration_ms: 3.603708
+  type: 'test'
+  ...
+# Subtest: site image choices exclude legacy unbound and other-site media
+ok 26 - site image choices exclude legacy unbound and other-site media
+  ---
+  duration_ms: 21.337
+  type: 'test'
+  ...
+# WebSocket server error: Port is already in use
+# Browserslist: caniuse-lite is outdated. Please run:
+#   npx update-browserslist-db@latest
+#   Why you should do it regularly: https://github.com/browserslist/update-db\#readme
+# warn - The `content` option in your Tailwind CSS configuration is missing or empty.
+# warn - Configure your content sources or your generated CSS will be missing styles.
+# warn - https://tailwindcss.com/docs/content-configuration
+# Subtest: the actual wizard validates identity, imports explicitly, previews the selected site and preserves back navigation
+ok 27 - the actual wizard validates identity, imports explicitly, previews the selected site and preserves back navigation
+  ---
+  duration_ms: 1219.972792
+  type: 'test'
+  ...
+# Subtest: opening a ready site shows existing content and a public template uses an honest cover notice
+ok 28 - opening a ready site shows existing content and a public template uses an honest cover notice
+  ---
+  duration_ms: 6.812958
+  type: 'test'
+  ...
+# Subtest: changing only the new-site query remounts the wizard and never reuses the existing site scope
+ok 29 - changing only the new-site query remounts the wizard and never reuses the existing site scope
+  ---
+  duration_ms: 20.73225
+  type: 'test'
+  ...
+# Subtest: the dashboard site actions are hidden throughout setup and appear again at the workbench
+ok 30 - the dashboard site actions are hidden throughout setup and appear again at the workbench
+  ---
+  duration_ms: 15.236958
+  type: 'test'
+  ...
+# Subtest: pending-empty imports expose an explicit retry while fresh, importing and ready sites do not
+ok 31 - pending-empty imports expose an explicit retry while fresh, importing and ready sites do not
+  ---
+  duration_ms: 14.786958
+  type: 'test'
+  ...
+# Subtest: steps require a chosen template and a trimmed nonempty site name before import
+ok 32 - steps require a chosen template and a trimmed nonempty site name before import
+  ---
+  duration_ms: 1.054041
+  type: 'test'
+  ...
+# Subtest: selection and options resume only for the same user, workspace and site
+ok 33 - selection and options resume only for the same user, workspace and site
+  ---
+  duration_ms: 1.229209
+  type: 'test'
+  ...
+# Subtest: an importing response is persisted and refresh polls the same site without another import
+ok 34 - an importing response is persisted and refresh polls the same site without another import
+  ---
+  duration_ms: 0.488292
+  type: 'test'
+  ...
+# Subtest: a lost import response remains pending even if a subsequent read still sees the empty site
+ok 35 - a lost import response remains pending even if a subsequent read still sees the empty site
+  ---
+  duration_ms: 0.412709
+  type: 'test'
+  ...
+# Subtest: ready sites are never imported, adopted or renamed by opening or navigating the wizard
+ok 36 - ready sites are never imported, adopted or renamed by opening or navigating the wizard
+  ---
+  duration_ms: 0.112666
+  type: 'test'
+  ...
+# Subtest: without a selected site the wizard creates an empty site, persists progress and selects it before import
+ok 37 - without a selected site the wizard creates an empty site, persists progress and selects it before import
+  ---
+  duration_ms: 1.585375
+  type: 'test'
+  ...
+# Subtest: lost site creation responses reconcile a new matching site instead of posting another site
+ok 38 - lost site creation responses reconcile a new matching site instead of posting another site
+  ---
+  duration_ms: 0.250041
+  type: 'test'
+  ...
+# Subtest: uncertain creation stays recoverable without a second POST or accidentally using an old site
+ok 39 - uncertain creation stays recoverable without a second POST or accidentally using an old site
+  ---
+  duration_ms: 0.222
+  type: 'test'
+  ...
+# Subtest: public import pins the verified version/checksum and rejects conflicts or changed installed identity
+ok 40 - public import pins the verified version/checksum and rejects conflicts or changed installed identity
+  ---
+  duration_ms: 0.532667
+  type: 'test'
+  ...
+# Subtest: non administrators cannot create or import even if local saved state is populated
+ok 41 - non administrators cannot create or import even if local saved state is populated
+  ---
+  duration_ms: 1.181916
+  type: 'test'
+  ...
+# Subtest: overlapping submits create/import once and unreadable storage does not initiate unsafe mutations
+ok 42 - overlapping submits create/import once and unreadable storage does not initiate unsafe mutations
+  ---
+  duration_ms: 1.864041
+  type: 'test'
+  ...
+# Subtest: definite validation rejection unlocks an empty site while a lost response stays pending
+ok 43 - definite validation rejection unlocks an empty site while a lost response stays pending
+  ---
+  duration_ms: 0.829084
+  type: 'test'
+  ...
+# Subtest: unreadable saved progress fails closed before any create or import
+ok 44 - unreadable saved progress fails closed before any create or import
+  ---
+  duration_ms: 0.496584
+  type: 'test'
+  ...
+# Subtest: a second already-open wizard sees the persisted creation intent and never posts a second site
+ok 45 - a second already-open wizard sees the persisted creation intent and never posts a second site
+  ---
+  duration_ms: 0.778458
+  type: 'test'
+  ...
+# Subtest: a stale or mismatched import plan cannot install a different public version
+ok 46 - a stale or mismatched import plan cannot install a different public version
+  ---
+  duration_ms: 0.448542
+  type: 'test'
+  ...
+# Subtest: failed and stale imports resume with the installed identity and locked demo choice
+ok 47 - failed and stale imports resume with the installed identity and locked demo choice
+  ---
+  duration_ms: 0.781125
+  type: 'test'
+  ...
+# Subtest: corrupted saved state cannot erase pending-operation safeguards or open the publish step
+ok 48 - corrupted saved state cannot erase pending-operation safeguards or open the publish step
+  ---
+  duration_ms: 0.527125
+  type: 'test'
+  ...
+# Subtest: an explicit pending-empty retry recovers a request that never reached the server with the original pinned options
+ok 49 - an explicit pending-empty retry recovers a request that never reached the server with the original pinned options
+  ---
+  duration_ms: 1.513125
+  type: 'test'
+  ...
+# Subtest: explicit pending-empty recovery discovers importing or ready sites before deciding whether to send
+ok 50 - explicit pending-empty recovery discovers importing or ready sites before deciding whether to send
+  ---
+  duration_ms: 1.141083
+  type: 'test'
+  ...
+# Subtest: website settings exposes SEO, sharing, analytics and unavailable contact form state
+ok 51 - website settings exposes SEO, sharing, analytics and unavailable contact form state
+  ---
+  duration_ms: 0.8115
+  type: 'test'
+  ...
+# Subtest: operations panel keeps infrastructure details behind a site-scoped status endpoint
+ok 52 - operations panel keeps infrastructure details behind a site-scoped status endpoint
+  ---
+  duration_ms: 0.611
+  type: 'test'
+  ...
+# Subtest: site choices use an explicit workspace selector without inheriting the current site
+ok 53 - site choices use an explicit workspace selector without inheriting the current site
+  ---
+  duration_ms: 1.416708
+  type: 'test'
+  ...
+# Subtest: an inaccessible workspace does not hide other available sites
+ok 54 - an inaccessible workspace does not hide other available sites
+  ---
+  duration_ms: 0.119792
+  type: 'test'
+  ...
+# Subtest: cancelled navigation never changes the SDK selection
+ok 55 - cancelled navigation never changes the SDK selection
+  ---
+  duration_ms: 0.063583
+  type: 'test'
+  ...
+# Subtest: selection validation starts only after navigation guards accept leaving
+ok 56 - selection validation starts only after navigation guards accept leaving
+  ---
+  duration_ms: 0.061167
+  type: 'test'
+  ...
+# (!) Could not auto-determine entry point from rollupOptions or html files and there are no explicit optimizeDeps.include patterns. Skipping dependency pre-bundling.
+# Subtest: desktop and mobile navigation groups have native keyboard-operable disclosure controls
+ok 57 - desktop and mobile navigation groups have native keyboard-operable disclosure controls
+  ---
+  duration_ms: 384.227958
+  type: 'test'
+  ...
+# Subtest: renderer selection requires the explicitly supported identity/version and configured template origin
+ok 58 - renderer selection requires the explicitly supported identity/version and configured template origin
+  ---
+  duration_ms: 2.828291
+  type: 'test'
+  ...
+# Subtest: legacy built-in templates retain their existing display preview with honest capability notice
+ok 59 - legacy built-in templates retain their existing display preview with honest capability notice
+  ---
+  duration_ms: 2.043459
+  type: 'test'
+  ...
+# Subtest: ready handshake only accepts the chosen origin and actual iframe source
+ok 60 - ready handshake only accepts the chosen origin and actual iframe source
+  ---
+  duration_ms: 24.14875
+  type: 'test'
+  ...
+# Subtest: unsaved single page overlays the saved snapshot without losing cards or mutating source
+ok 61 - unsaved single page overlays the saved snapshot without losing cards or mutating source
+  ---
+  duration_ms: 1.195125
+  type: 'test'
+  ...
+# Subtest: template handshake verifies the renderer version instead of trusting any ready message
+ok 62 - template handshake verifies the renderer version instead of trusting any ready message
+  ---
+  duration_ms: 0.570792
+  type: 'test'
+  ...
+# Subtest: delivery sends selected snapshot path to exact origin without retaining Vue proxies
+ok 63 - delivery sends selected snapshot path to exact origin without retaining Vue proxies
+  ---
+  duration_ms: 0.171166
+  type: 'test'
+  ...
+# Subtest: template management requests an upgrade preview before adopting a public version
+ok 64 - template management requests an upgrade preview before adopting a public version
+  ---
+  duration_ms: 0.887334
+  type: 'test'
+  ...
+# Subtest: template adoption remains explicit and uses the selected version identity
+ok 65 - template adoption remains explicit and uses the selected version identity
+  ---
+  duration_ms: 0.152042
+  type: 'test'
+  ...
+# Subtest: login rejection explains the credentials problem before the generic 401 fallback
+ok 66 - login rejection explains the credentials problem before the generic 401 fallback
+  ---
+  duration_ms: 0.678834
+  type: 'test'
+  ...
+# Subtest: network, timeout, session and permission failures have distinct actionable reasons
+ok 67 - network, timeout, session and permission failures have distinct actionable reasons
+  ---
+  duration_ms: 1.30375
+  type: 'test'
+  ...
+# Subtest: validation identifies the invalid page path and the accepted format
+ok 68 - validation identifies the invalid page path and the accepted format
+  ---
+  duration_ms: 0.20075
+  type: 'test'
+  ...
+# Subtest: title conflict explains its workspace, group and language scope
+ok 69 - title conflict explains its workspace, group and language scope
+  ---
+  duration_ms: 0.476709
+  type: 'test'
+  ...
+# Subtest: release validation preserves the exact field and page that need correction
+ok 70 - release validation preserves the exact field and page that need correction
+  ---
+  duration_ms: 1.071209
+  type: 'test'
+  ...
+# Subtest: known Chinese errors are preserved without duplicating their text
+ok 71 - known Chinese errors are preserved without duplicating their text
+  ---
+  duration_ms: 1.177584
+  type: 'test'
+  ...
+# Subtest: unknown errors remain honest and do not expose stacks, tokens or database details
+ok 72 - unknown errors remain honest and do not expose stacks, tokens or database details
+  ---
+  duration_ms: 1.104167
+  type: 'test'
+  ...
+# Subtest: Axios response data keeps the specific reason instead of its generic status text
+ok 73 - Axios response data keeps the specific reason instead of its generic status text
+  ---
+  duration_ms: 0.100417
+  type: 'test'
+  ...
+# Subtest: domain diagnostics explain each failed check instead of hiding combined causes
+ok 74 - domain diagnostics explain each failed check instead of hiding combined causes
+  ---
+  duration_ms: 1.609708
+  type: 'test'
+  ...
+# Subtest: entry validation identifies the language and field requiring a value
+ok 75 - entry validation identifies the language and field requiring a value
+  ---
+  duration_ms: 0.596042
+  type: 'test'
+  ...
+# Subtest: schema type errors explain which input has the wrong format
+ok 76 - schema type errors explain which input has the wrong format
+  ---
+  duration_ms: 0.280375
+  type: 'test'
+  ...
+# Subtest: template import conflicts identify the incompatible field
+ok 77 - template import conflicts identify the incompatible field
+  ---
+  duration_ms: 0.237
+  type: 'test'
+  ...
+# Subtest: deployment failure codes explain the failed stage and a useful next step
+ok 78 - deployment failure codes explain the failed stage and a useful next step
+  ---
+  duration_ms: 0.410208
+  type: 'test'
+  ...
+# Subtest: Gateway request failures explain verified codes and keep unknown diagnostics private
+ok 79 - Gateway request failures explain verified codes and keep unknown diagnostics private
+  ---
+  duration_ms: 0.200417
+  type: 'test'
+  ...
+# Subtest: shared notifications translate warning and error paths, including push
+ok 80 - shared notifications translate warning and error paths, including push
+  ---
+  duration_ms: 18.244416
+  type: 'test'
+  ...
+1..80
+# tests 80
+# suites 0
+# pass 80
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1923.378833

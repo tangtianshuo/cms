@@ -3,10 +3,11 @@ import { defineComponent, onBeforeUnmount, onMounted, ref, type PropType } from 
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Button } from '@bcms/selfhosted-ui/components/button';
-import { createPublicationAction } from './gateway-publication';
+import { createPublicationAction, normalizePublishStatus, type PublishStatus } from './gateway-publication';
+import { publishedSiteUrl } from './published-site-url';
 
-interface Publication { requestKey?: string; operationId: string; releaseId: string; status: 'pending' | 'ready' | 'failed'; failureCode?: string }
-interface GatewayInfo { configured: boolean; bound: boolean; siteUrl: string; publishStatus: Publication | null }
+interface Publication { requestKey?: string; operationId: string; releaseId: string; status: PublishStatus; failureCode?: string; reason?: string; activeRevision?: number; operation?: 'publish' | 'rollback' }
+interface GatewayInfo { configured: boolean; bound: boolean; siteUrl: string; publicHostname?: string; defaultHost?: string; publishStatus: (Omit<Publication, 'status'> & { status: string }) | null }
 
 interface History {
     currentReleaseId: string;
@@ -21,6 +22,7 @@ interface Preflight {
     issues: string[];
     pageCount: number;
     diff: { added: string[]; changed: string[]; removed: string[]; navigationChanged: boolean;
+        mediaChanged?: boolean; templateChanged?: boolean; templateVersion?: string;
         redirects: Array<{ from: string; to: string }> } | null;
 }
 
@@ -35,6 +37,7 @@ export const ReleaseManager = defineComponent({
         const error = ref('');
         const gateway = ref<GatewayInfo | null>(null);
         const publication = ref<Publication | null>(null);
+        const phase = ref<PublishStatus>('draft');
         const action = createPublicationAction(sessionStorage,
             `${encodeURIComponent(sdk.context?.context.workspaceId || '')}/${encodeURIComponent(sdk.context?.context.siteId || '')}`,
             () => crypto.randomUUID());
@@ -42,34 +45,34 @@ export const ReleaseManager = defineComponent({
         let disposed = false;
         const origin = new URL(import.meta.env.VITE_STOREFRONT_ORIGIN || 'http://localhost:3000').origin;
         function siteUrl() {
-            try { const url = new URL(gateway.value?.siteUrl || ''); return ['https:', 'http:'].includes(url.protocol) ? url.href : ''; }
-            catch { return ''; }
+            return publishedSiteUrl(gateway.value, origin);
         }
         async function acceptPublication(value: Publication, notify = false) {
             publication.value = value;
+            phase.value = value.status;
             action.complete(value.status, value.requestKey);
-            if (value.status === 'pending') schedulePoll();
+            if (value.status === 'publishing') schedulePoll();
             if (value.status === 'failed') preflight.value = null;
-            if (value.status === 'ready' && notify) {
+            if ((value.status === 'ready' || value.status === 'rolled-back') && notify) {
                 preflight.value = null;
                 await refreshHistory();
                 await props.onSaved();
-                window.bcms.notification.success(t('presets.releasePublished'));
+                window.bcms.notification.success(t(value.status === 'rolled-back' ? 'presets.releaseRestored' : 'presets.releasePublished'));
             }
         }
         function schedulePoll() {
             if (pollTimer) clearTimeout(pollTimer);
-            if (disposed || publication.value?.status !== 'pending') return;
+            if (disposed || publication.value?.status !== 'publishing') return;
             pollTimer = setTimeout(async () => {
                 const id = publication.value?.operationId;
                 if (!id) { await refresh().catch(cause => { error.value = userErrorMessage(cause); schedulePoll(); }); return; }
                 try {
-                    const result = await sdk.send<{ id: string; releaseId: string; status: Publication['status']; failureCode?: string }>({
+                    const result = await sdk.send<{ id: string; releaseId: string; status: string; failureCode?: string; reason?: string; activeRevision?: number }>({
                         url: `/api/v4/presets/releases/gateway/operations/${encodeURIComponent(id)}`, method: 'GET',
                     });
                     if (disposed || publication.value?.operationId !== id) return;
                     error.value = '';
-                    await acceptPublication({ ...publication.value, ...result, operationId: result.id }, true);
+                    await acceptPublication({ ...publication.value, ...result, status: normalizePublishStatus(result.status, publication.value.operation || 'publish'), operationId: result.id }, true);
                 } catch (cause) {
                     if (disposed) return;
                     error.value = userErrorMessage(cause);
@@ -84,7 +87,7 @@ export const ReleaseManager = defineComponent({
             const info = await sdk.send<GatewayInfo>({ url: '/api/v4/presets/releases/gateway', method: 'GET' });
             gateway.value = info;
             await refreshHistory();
-            if (info.bound && info.publishStatus) await acceptPublication(info.publishStatus);
+            if (info.bound && info.publishStatus) await acceptPublication({ ...info.publishStatus, status: normalizePublishStatus(info.publishStatus.status, info.publishStatus.operation || 'publish') });
         }
         async function run(operation: () => Promise<void>) {
             if (busy.value) return;
@@ -96,16 +99,19 @@ export const ReleaseManager = defineComponent({
         }
         async function check() {
             await run(async () => {
+                phase.value = 'checking';
                 preflight.value = null;
                 await refresh();
                 preflight.value = await sdk.send<Preflight>({ url: '/api/v4/presets/releases/check', method: 'POST' });
+                if (!publication.value || publication.value.status !== 'publishing') phase.value = 'draft';
             });
         }
         async function publish() {
-            if (!preflight.value?.valid || !gateway.value || publication.value?.status === 'pending') return;
+            if (!preflight.value?.valid || !gateway.value || publication.value?.status === 'publishing') return;
             const expectedReleaseId = preflight.value.expectedReleaseId;
             const snapshotHash = preflight.value.snapshotHash;
             await run(async () => {
+                phase.value = 'publishing';
                 if (gateway.value?.bound) {
                     const requestKey = action.request();
                     let result: Publication;
@@ -116,7 +122,7 @@ export const ReleaseManager = defineComponent({
                         await refresh().catch(() => undefined);
                         throw cause;
                     }
-                    await acceptPublication({ ...result, requestKey }, true);
+                    await acceptPublication({ ...result, requestKey, status: normalizePublishStatus(result.status) }, true);
                     preflight.value = null;
                     return;
                 }
@@ -124,20 +130,22 @@ export const ReleaseManager = defineComponent({
                 preflight.value = null;
                 await refresh();
                 await props.onSaved();
+                phase.value = 'ready';
                 window.bcms.notification.success(t('presets.releasePublished'));
             });
         }
         async function rollback(releaseId: string) {
-            if (publication.value?.status === 'pending') return;
+            if (publication.value?.status === 'publishing') return;
             await run(async () => {
                 const requestKey = gateway.value?.bound ? action.request(`rollback/${releaseId}`) : undefined;
                 try {
                     const result = await sdk.send<Publication>({ url: '/api/v4/presets/releases/rollback', method: 'POST',
                         data: { releaseId, expectedReleaseId: history.value.currentReleaseId, ...(requestKey ? { requestKey } : {}) } });
                     preflight.value = null;
-                    if (gateway.value?.bound) { await acceptPublication({ ...result, requestKey }, true); return; }
+                    if (gateway.value?.bound) { await acceptPublication({ ...result, requestKey, operation: 'rollback', status: normalizePublishStatus(result.status, 'rollback') }, true); return; }
                     await refresh();
                     await props.onSaved();
+                    phase.value = 'rolled-back';
                     window.bcms.notification.success(t('presets.releaseRestored'));
                 } catch (cause) { await refresh().catch(() => undefined); throw cause; }
             });
@@ -148,8 +156,9 @@ export const ReleaseManager = defineComponent({
             <h2 class="text-lg font-semibold">{t('presets.releasesTitle')}</h2>
             <p class="mt-2 max-w-3xl text-sm opacity-70">{t(gateway.value?.bound ? 'presets.gatewayReleaseHint' : 'presets.releaseHint')}</p>
             {gateway.value?.bound && <p role="status" class="mt-3 text-sm">
-                {publication.value ? t(`presets.gatewayStatus.${publication.value.status}`) : t('presets.gatewayNotPublished')}
+                {t(`presets.gatewayStatus.${publication.value?.status || phase.value}`)}
                 {publication.value?.failureCode && <span class="ml-2">{userErrorMessage(publication.value.failureCode)}</span>}
+                {publication.value?.activeRevision ? <span class="ml-2 opacity-70">Revision {publication.value.activeRevision}</span> : null}
             </p>}
             {gateway.value?.bound && publication.value?.status === 'failed' && publication.value.failureCode &&
                 <details class="mt-2 text-sm">
@@ -161,11 +170,9 @@ export const ReleaseManager = defineComponent({
                 ? t('presets.activeRelease', { id: history.value.currentReleaseId.slice(0, 8) }) : t('presets.noRelease')}</p>
             }
             <div class="mt-4 flex flex-wrap items-center gap-4">
-                <Button disabled={busy.value || publication.value?.status === 'pending'} kind="secondary" onClick={check}>{t(gateway.value?.bound ? 'presets.checkGatewayRelease' : 'presets.checkRelease')}</Button>
-                <Button disabled={busy.value || !gateway.value || !preflight.value?.valid || publication.value?.status === 'pending'} onClick={publish}>{t('presets.publishRelease')}</Button>
-                {gateway.value?.bound ? history.value.currentReleaseId && siteUrl() &&
-                    <a href={siteUrl()} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>
-                    : history.value.currentReleaseId && <a href={origin} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
+                <Button disabled={busy.value || publication.value?.status === 'publishing'} kind="secondary" onClick={check}>{t(gateway.value?.bound ? 'presets.checkGatewayRelease' : 'presets.checkRelease')}</Button>
+                <Button disabled={busy.value || !gateway.value || !preflight.value?.valid || publication.value?.status === 'publishing'} onClick={publish}>{t('presets.publishRelease')}</Button>
+                {history.value.currentReleaseId && siteUrl() && <a href={siteUrl()} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
             </div>
             {busy.value && <p role="status" class="mt-3 text-sm">{t('common.loading')}</p>}
             {error.value && <p role="alert" class="mt-3 border-l-4 border-red bg-error px-3 py-2 text-sm leading-relaxed text-dark">{error.value}</p>}
@@ -182,6 +189,8 @@ export const ReleaseManager = defineComponent({
                         {!preflight.value!.diff![kind].length && <span class="opacity-60">—</span>}
                     </div>)}
                     {preflight.value.diff.navigationChanged && <p>{t('presets.navigationChanged')}</p>}
+                    {preflight.value.diff.mediaChanged && <p>{t('presets.releaseDiff.media')}</p>}
+                    {preflight.value.diff.templateChanged && <p>{t('presets.releaseDiff.template', { version: preflight.value.diff.templateVersion })}</p>}
                     {!!preflight.value.diff.redirects.length && <div class="sm:col-span-3">
                         <p class="font-medium">{t('presets.redirects')}</p>
                         {preflight.value.diff.redirects.map((item) => <p class="mt-1">{item.from} → {item.to}</p>)}
@@ -195,7 +204,7 @@ export const ReleaseManager = defineComponent({
                     <tbody>{history.value.items.map((item) => <tr class="border-t border-gray/40">
                         <td class="py-3">{item._id.slice(0, 8)} {item._id === history.value.currentReleaseId && t('presets.currentRelease')}</td>
                         <td>{new Date(item.createdAt).toLocaleString()}</td><td>{item.createdBy}</td><td>{item.pageCount}</td>
-                        <td>{item._id !== history.value.currentReleaseId && <Button disabled={busy.value || publication.value?.status === 'pending'}
+                        <td>{item._id !== history.value.currentReleaseId && <Button disabled={busy.value || publication.value?.status === 'publishing'}
                             onClick={() => rollback(item._id)}>{t('presets.rollbackRelease')}</Button>}</td>
                     </tr>)}</tbody>
                 </table>

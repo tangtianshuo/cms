@@ -3,6 +3,7 @@ import { Dialog, DialogPanel, DialogTitle } from '@headlessui/vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { DashboardLayoutAsideContent } from './aside-content';
+import { DashboardSiteActions } from './site-actions';
 import { studioSection, studioSections } from './navigation';
 import { StudioIcon } from '../../components/studio/icon';
 
@@ -50,7 +51,7 @@ export const DashboardLayout = defineComponent({
                         {template.value && <><StudioIcon name="chevron" size={14} /><span class="cms-breadcrumb-detail">{template.value.label}</span></>}
                     </div>
                     <div class="cms-topbar-actions">
-                        {sdk.context?.site && <a class="cms-preview-link" href="/d/presets/site-preview" target="_blank" rel="noopener">预览网站<StudioIcon name="external" size={14} /></a>}
+                        <DashboardSiteActions />
                         <button class="cms-top-avatar" type="button" aria-label="个人设置" onClick={() => window.bcms.modalService.handlers.userAddEdit.open({ data: { userId: sdk.store.user.methods.me()?._id } })}>{sdk.store.user.methods.me()?.username?.slice(0, 1).toUpperCase() || 'U'}</button>
                     </div>
                 </header>

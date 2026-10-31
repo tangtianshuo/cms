@@ -28,7 +28,7 @@ export const ReleaseController = createController({
                     const config = gatewayPublishConfig();
                     let site = await Repo.siteInstallation.methods.findSelected();
                     if (site && gatewayBound(site, config)) site = await recoverGatewayPublication(releaseSource(), config);
-                    let publishStatus: { operationId: string; releaseId: string; requestKey: string; status: string; failureCode?: string } | null = null;
+                    let publishStatus: { operationId: string; releaseId: string; requestKey: string; status: string; failureCode?: string; reason?: string; activeRevision?: number; operation?: 'publish' | 'rollback' } | null = null;
                     if (site?.gatewayPublishIntent) {
                         try {
                             const intent = JSON.parse(site.gatewayPublishIntent);
@@ -36,13 +36,18 @@ export const ReleaseController = createController({
                                 ['pending', 'ready', 'failed'].includes(intent.status)) {
                                 publishStatus = { operationId: typeof intent.operationId === 'string' ? intent.operationId : '',
                                     releaseId: intent.releaseId, requestKey: intent.requestKey,
-                                    status: intent.status, ...(intent.failureCode ? { failureCode: intent.failureCode } : {}) };
+                                    status: intent.status, activeRevision: site?.gatewayActiveRevision || 0,
+                                    ...(intent.operation === 'rollback' ? { operation: 'rollback' as const } : {}),
+                                    ...(intent.failureCode ? { failureCode: intent.failureCode, reason: intent.failureCode } : {}) };
                             }
                         } catch { /* malformed intents fail on publish or status request */ }
                     }
+                    const domains = site?.primaryDomainId ? await Repo.siteDomain.methods.list(site._id) : [];
+                    const primary = domains.find(domain => domain._id === site?.primaryDomainId && domain.enabled && domain.ownershipStatus === 'verified' && domain.connectionStatus === 'ready');
+                    const publicHostname = primary?.hostname || (site && ownerWorkspace(site) === 'default' && site.slot === 'default' ? Config.storefrontHost : undefined);
                     return { configured: !!config.gatewayBaseUrl && !!config.workspaceId && !!config.siteId &&
                         !!config.serviceSecret && !!config.cmsWorkspaceId && !!config.cmsSiteId && !!config.siteUrl,
-                    bound: gatewayBound(site, config), siteUrl: config.siteUrl, publishStatus };
+                    bound: gatewayBound(site, config), siteUrl: config.siteUrl, publicHostname, defaultHost: Config.storefrontHost, publishStatus };
                 },
             }),
             gatewayOperation: createControllerMethod({

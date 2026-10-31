@@ -41,7 +41,7 @@ export async function getProductPage(
     if (!entry) {
         return null;
     }
-    return previewProductPage(entry, site, template, await sources.findMedia());
+    return previewProductPage(entry, site, template, await sources.findMedia(), undefined, entries);
 }
 
 export async function previewProductPage(
@@ -50,6 +50,7 @@ export async function previewProductPage(
     template: Template,
     media: Media[],
     configInput?: unknown,
+    relatedEntries: Entry[] = [],
 ): Promise<StorefrontPage> {
     const config = configInput === undefined
         ? createDefaultPageConfig(template)
@@ -61,6 +62,6 @@ export async function previewProductPage(
             currency: site.currency,
         },
         config,
-        product: mapProduct(entry, template, media, site.language, config, site.mediaOrigin),
+        product: mapProduct(entry, template, media, site.language, config, site.mediaOrigin, relatedEntries),
     };
 }

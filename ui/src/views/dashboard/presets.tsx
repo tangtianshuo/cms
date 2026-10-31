@@ -1,6 +1,8 @@
 import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { computed, defineComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
+import { siteSetupHref } from '../../layouts/dashboard/navigation';
 import type { ChecklistStep } from '@bcms/selfhosted-backend/presets/checklist';
 import type { ImportPlan } from '@bcms/selfhosted-backend/presets/import';
 import type { SiteInstallation } from '@bcms/selfhosted-backend/presets/site-model';
@@ -18,6 +20,12 @@ interface PresetSummary {
     manifestChecksum?: string;
     theme: { background: string; foreground: string; accent: string; muted: string; font: string };
 }
+interface UpgradePreview {
+    compatible: boolean;
+    requiresNewInstallation: boolean;
+    contentImpact: string[];
+    templateImpact: string[];
+}
 
 const presetKey = (item: PresetSummary) => `${item.id}@${item.version}:${item.sourceCommit || 'builtin'}`;
 
@@ -34,6 +42,7 @@ export const PresetsView = defineComponent({
         const pageOptions = ref<Record<string, { allowed: string[]; required: string }>>({});
         const checklist = ref<ChecklistStep[]>([]);
         const plan = ref<ImportPlan | null>(null);
+        const upgradePreview = ref<UpgradePreview | null>(null);
         const name = ref('');
         const includeDemo = ref(false);
         const view = ref<DemoView>('home');
@@ -51,7 +60,7 @@ export const PresetsView = defineComponent({
         const installed = computed(() => sameTemplate.value && site.value?.presetVersion === selected.value?.version &&
             (!!site.value?.publishedTemplateRecord === !!selected.value?.sourceCommit));
         const canAdopt = computed(() => sameTemplate.value && !installed.value && !!selected.value?.sourceCommit && !!plan.value &&
-            !busy.value && !!sdk.context?.context.admin && conflicts.value.length === 0);
+            !busy.value && !!sdk.context?.context.admin && conflicts.value.length === 0 && upgradePreview.value?.compatible === true);
         const importInProgress = computed(() => site.value?.status === 'importing' &&
             Date.now() - site.value.updatedAt < 120000);
         const importOptionsLocked = computed(() => busy.value || (!!site.value && site.value.status !== 'empty'));
@@ -92,6 +101,7 @@ export const PresetsView = defineComponent({
             selectedKey.value = key;
             view.value = 'home';
             plan.value = null;
+            upgradePreview.value = null;
             error.value = '';
             try {
                 const result = await sdk.send<{ plan: ImportPlan; installedSite: SiteInstallation | null }>({
@@ -100,6 +110,17 @@ export const PresetsView = defineComponent({
                 if (selectedKey.value === key) {
                     plan.value = result.plan;
                     if (result.installedSite && !site.value) site.value = result.installedSite;
+                    if (site.value?.presetId === item.id && site.value.presetVersion !== item.version && item.sourceCommit) {
+                        try {
+                            upgradePreview.value = await sdk.send<UpgradePreview>({
+                                url: `/api/v4/presets/upgrade/${encodeURIComponent(item.id)}?version=${encodeURIComponent(item.version)}`,
+                                method: 'GET',
+                            });
+                        } catch (cause) {
+                            upgradePreview.value = { compatible: false, requiresNewInstallation: true,
+                                contentImpact: [userErrorMessage(cause)], templateImpact: [] };
+                        }
+                    }
                 }
             } catch (cause) {
                 error.value = userErrorMessage(cause);
@@ -181,6 +202,7 @@ export const PresetsView = defineComponent({
                         <p class="mt-2 max-w-2xl text-sm text-dark/70 dark:text-light/70">{t('presets.subtitle')}</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-4">
+                        {sdk.context?.context.admin && <RouterLink class="inline-flex min-h-[44px] items-center rounded-md border border-gray/60 px-4 py-2 text-sm" to={site.value?.status === 'ready' ? `${siteSetupHref}?new=1` : siteSetupHref}>创建网站向导 →</RouterLink>}
                         {site.value?.status === 'ready' && origin && <a
                             href={`/d/presets/site-preview?workspaceId=${encodeURIComponent(sdk.context?.context.workspaceId || '')}&siteId=${encodeURIComponent(sdk.context?.context.siteId || '')}`}
                             target="_blank"
@@ -286,6 +308,10 @@ export const PresetsView = defineComponent({
                                 {conflicts.value.length > 0 && <p class="mt-4 text-sm text-red">{t('presets.conflict')}</p>}
                                 {sameTemplate.value && !installed.value && selected.value.sourceCommit && <div class="mt-5">
                                     <p class="mb-3 text-sm opacity-70">{t('presets.adoptHint', { version: selected.value.version })}</p>
+                                    {upgradePreview.value && <div class="mb-4 border border-gray/60 p-4 text-sm dark:border-gray">
+                                        <strong>{upgradePreview.value.compatible ? '可以保留现有内容并采用此版本' : '此版本需要新建网站安装'}</strong>
+                                        <ul class="mt-2 list-disc pl-5 opacity-80">{[...upgradePreview.value.templateImpact, ...upgradePreview.value.contentImpact].map((item) => <li>{item}</li>)}</ul>
+                                    </div>}
                                     <Button disabled={!canAdopt.value} onClick={adoptSelected}>{t('presets.adoptVersion', { version: selected.value.version })}</Button>
                                 </div>}
                                 {installed.value ? <p class="mt-5 text-sm text-green dark:text-yellow">{t('presets.alreadyInstalled')}</p> : !sameTemplate.value && (

@@ -15,6 +15,21 @@ test('sidebar distinguishes Studio sections and honors model and entry deep link
   assert.equal(isDashboardLinkActive(route, '/d/studio?section=overview'), false);
   assert.equal(isDashboardLinkActive({ path: '/d/studio', query: {} }, '/d/studio?section=overview'), true);
 });
+test('website content stays selected across page and brand editing deep links', () => {
+  for (const query of [
+    { section: 'pages', pageKey: 'home' },
+    { section: 'products', modelKey: 'site-settings', entryId: 'brand' },
+    { section: 'content', modelKey: 'product', entryId: '123' },
+  ]) {
+    assert.equal(isDashboardLinkActive({ path: '/d/studio', query }, '/d/studio?section=content'), true);
+    assert.equal(isDashboardLinkActive({ path: '/d/studio', query }, '/d/studio?section=settings'), false);
+  }
+});
+test('the main media destination includes saved legacy Studio media links', () => {
+  assert.equal(isDashboardLinkActive({ path: '/d/studio', query: { section: 'media' } }, '/d/media'), true);
+  assert.equal(isDashboardLinkActive({ path: '/d/media', query: { parentId: 'folder' } }, '/d/media'), true);
+  assert.equal(isDashboardLinkActive({ path: '/d/media-other', query: {} }, '/d/media'), false);
+});
 test('administration matches nested routes on segment boundaries only', () => {
   assert.equal(isDashboardLinkActive({ path: '/d/template/123/entry/456', query: {} }, '/d/template'), true);
   assert.equal(isDashboardLinkActive({ path: '/d/template-other', query: {} }, '/d/template'), false);

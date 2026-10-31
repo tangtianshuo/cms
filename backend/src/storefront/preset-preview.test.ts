@@ -95,3 +95,23 @@ test('preview rejects a wrong template, unavailable language, and missing bound 
     assert.throws(() => previewPresetPage({ site, pageKey: 'home', entry: rogue,
         language: 'en', ...options }), /bound field/i);
 });
+
+test('configured carousel, gallery and SEO media resolve to CMS URLs and preview capabilities', () => {
+    const site = installation();
+    site.operations = { seoTitle: 'Social title', seoDescription: '', socialImage: { _id: 'image-1' }, favicon: { _id: 'image-1' }, contactFormEnabled: false };
+    site.pages.find(page => page.key === 'home')!.sectionConfigs = [{ type: 'hero-carousel', enabled: true, data: { slides: [{ image: { _id: 'image-1' }, title: 'Banner', order: 0 }] } }];
+    const media = [{ _id: 'image-1', siteId: 'site', mimetype: 'image/png', accessToken: 'preview-cap' }] as Media[];
+    const result = previewPresetPage({ site, pageKey: 'home', language: 'en', entry: entry('home', { title: ['Home'], slug: ['home'], headline: ['Hello'] }), ...options, media });
+    const expected = 'http://cms.local/api/v4/media/image-1/bin/image?cap=preview-cap';
+    assert.equal((result.sectionConfigs![0].data.slides as Array<{ image: string }>)[0].image, expected);
+    assert.equal(result.operations?.socialImageUrl, expected);
+    assert.equal(result.operations?.faviconUrl, expected);
+    assert.deepEqual((site.pages.find(page => page.key === 'home')!.sectionConfigs![0].data.slides as unknown[])[0], { image: { _id: 'image-1' }, title: 'Banner', order: 0 });
+    site.pages.find(page => page.key === 'product')!.sectionConfigs = [
+        { type: 'product-gallery', enabled: true, data: { images: [{ _id: 'image-1' }] } },
+        { type: 'product-information', enabled: true, data: {} },
+        { type: 'product-description', enabled: true, data: { body: 'Product details' } },
+    ];
+    const product = previewPresetPage({ site, pageKey: 'product', language: 'en', entry: entry('product', { title: ['Product'], slug: ['product'], price: [10] }), ...options, media });
+    assert.deepEqual(product.sectionConfigs![0].data.images, [expected]);
+});

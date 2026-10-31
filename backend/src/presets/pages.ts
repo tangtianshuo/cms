@@ -1,6 +1,8 @@
 import type { Entry } from '../entry/models/main';
 import { resolveInstalledPreset } from './installed';
 import type { SiteInstallation, SitePage } from './site-model';
+import { normalizeSectionConfigs, type SectionConfig } from '../storefront/section-schema';
+import { ownerWorkspace } from '../workspaces/context';
 
 const sectionOptions: Record<string, { allowed: string[]; required: string }> = {
     home: { allowed: ['hero', 'feature'], required: 'hero' },
@@ -20,6 +22,7 @@ export type PageDraft = SitePage & {
     seoTitle: string;
     seoDescription: string;
     sections: string[];
+    sectionConfigs?: SectionConfig[];
     entryId: string;
     enabled?: boolean;
     navigation?: boolean;
@@ -33,6 +36,7 @@ export interface PageDraftUpdate {
     seoTitle: string;
     seoDescription: string;
     sections: string[];
+    sectionConfigs?: SectionConfig[];
     entryId: string;
 }
 
@@ -46,6 +50,7 @@ export function pageDraft(site: SiteInstallation, key: string): PageDraft | null
         seoTitle: page.seoTitle ?? page.title,
         seoDescription: page.seoDescription ?? '',
         sections: [...(page.sections ?? options.allowed)],
+        sectionConfigs: page.sectionConfigs ? structuredClone(page.sectionConfigs) : undefined,
         entryId: page.entryId ?? '',
         enabled: page.enabled ?? true,
         navigation: page.navigation ?? !page.path.includes(':'),
@@ -99,13 +104,17 @@ export function updatePageDraft(
     if (input.entryId && enabled !== false) {
         const model = site.models.find((item) => item.key === page.modelKey);
         if ((page.layout !== 'home' && !page.blueprintKey) || !model || !boundEntry ||
-            boundEntry._id !== input.entryId || boundEntry.templateId !== model.templateId) {
+            boundEntry._id !== input.entryId || boundEntry.templateId !== model.templateId ||
+            ownerWorkspace(boundEntry) !== ownerWorkspace(site) || Boolean(boundEntry.siteId && boundEntry.siteId !== site._id)) {
             throw new Error('Invalid page Entry binding');
         }
     }
+    const publishedPaths = new Set(site.pages.filter(item => item.enabled !== false && !item.path.includes(':')).map(item => item.path));
+    const sectionConfigs = input.sectionConfigs ? normalizeSectionConfigs(page.layout, input.sectionConfigs, { publishedPaths }) : page.sectionConfigs;
     const updated: PageDraft = {
         ...page, title, path, seoTitle, seoDescription,
         sections: [...input.sections], entryId: input.entryId,
+        sectionConfigs,
         enabled: input.enabled ?? page.enabled,
         navigation: input.navigation ?? page.navigation,
     };

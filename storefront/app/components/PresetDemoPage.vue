@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import type { PresetDemo, PresetPagePreview } from '../types/preset';
+import NavigationMenu, { type NavigationItem } from './NavigationMenu.vue';
+import HeroCarousel from './sections/HeroCarousel.vue';
+import InfoGrid from './sections/InfoGrid.vue';
+import FaqSection from './sections/FaqSection.vue';
+import ProductSections from './sections/ProductSections.vue';
 
 const props = withDefaults(defineProps<{ preset: PresetDemo; view: string; sections?: string[];
-    mode?: 'demo' | 'draft' | 'published'; navigation?: Array<{ label: string; path: string }>;
-    items?: PresetPagePreview['items'] }>(), {
+    mode?: 'demo' | 'draft' | 'published'; navigation?: NavigationItem[];
+    items?: PresetPagePreview['items']; sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }> }>(), {
     mode: 'demo',
 });
 const themeStyle = computed(() => ({
@@ -15,28 +20,35 @@ const themeStyle = computed(() => ({
 }));
 const routeFor = (view: string) => ({ path: `/presets/${props.preset.id}`, query: { view } });
 const show = (section: string) => !props.sections || props.sections.includes(section);
+const configured = computed(() => props.sectionConfigs || []);
+const sectionItems = (section: { data: Record<string, unknown> }, key: string) => Array.isArray(section.data[key]) ? section.data[key] as any[] : [];
+const menuOpen = ref(false);
+const navigationNodes = computed(() => props.mode === 'published' ? (props.navigation || []) : [
+    { label: 'Home', href: routeFor('home').path }, { label: 'Collections', href: routeFor('collection').path }, { label: 'Our story', href: routeFor('page').path },
+]);
 </script>
 
 <template>
-    <AeroPresetPage v-if="preset.id === 'aeroframe'" :preset="preset" :view="view" :mode="mode" :navigation="navigation" :items="items" :sections="sections" />
+    <AeroPresetPage v-if="preset.id === 'aeroframe'" :preset="preset" :view="view" :mode="mode" :navigation="navigation" :items="items" :sections="sections" :section-configs="sectionConfigs" />
     <div v-else class="preset-demo" :class="[`preset-demo--${preset.id}`, { 'preset-demo--draft': mode === 'draft' }]" :style="themeStyle">
         <header class="preset-demo__header">
             <span v-if="mode === 'draft'" class="preset-demo__brand">{{ preset.demo.brand }}</span>
             <NuxtLink v-else class="preset-demo__brand" :to="mode === 'published' ? '/' : routeFor('home')">{{ preset.demo.brand }}</NuxtLink>
-            <nav aria-label="Store preview" :inert="mode === 'draft'">
-                <template v-if="mode === 'published'">
-                    <NuxtLink v-for="link in navigation" :key="link.path" :to="link.path">{{ link.label }}</NuxtLink>
-                </template>
-                <template v-else>
-                    <NuxtLink :to="routeFor('home')">Home</NuxtLink>
-                    <NuxtLink :to="routeFor('collection')">Collections</NuxtLink>
-                    <NuxtLink :to="routeFor('page')">Our story</NuxtLink>
-                </template>
-            </nav>
+            <nav aria-label="Store preview" :inert="mode === 'draft'"><NavigationMenu :nodes="navigationNodes" /></nav>
+            <button class="preset-demo__menu" type="button" :aria-expanded="menuOpen" @click="menuOpen = !menuOpen">{{ menuOpen ? '关闭' : '菜单' }}</button>
+            <div v-if="menuOpen" class="preset-demo__mobile-nav"><NavigationMenu :nodes="navigationNodes" mobile :on-navigate="() => { menuOpen = false; }" /></div>
             <span class="preset-demo__header-end" aria-hidden="true">○</span>
         </header>
 
         <main v-if="view === 'home'">
+            <template v-if="configured.length">
+                <template v-for="section in configured" :key="section.type">
+                    <HeroCarousel v-if="section.enabled && section.type === 'hero-carousel'" :slides="sectionItems(section, 'slides')" />
+                    <InfoGrid v-else-if="section.enabled && section.type === 'info-grid'" :items="sectionItems(section, 'items')" />
+                    <FaqSection v-else-if="section.enabled && section.type === 'faq'" :items="sectionItems(section, 'items')" />
+                </template>
+            </template>
+            <template v-else>
             <section v-if="show('hero')" class="preset-demo__hero" :class="{ 'preset-demo__hero--empty': !preset.demo.hero.image }"
                 :style="preset.demo.hero.image ? { backgroundImage: `url(${preset.demo.hero.image})` } : undefined">
                 <div class="preset-demo__hero-content">
@@ -61,6 +73,7 @@ const show = (section: string) => !props.sections || props.sections.includes(sec
                 </div>
                 <img v-if="preset.demo.collection.image" :src="preset.demo.collection.image" :alt="preset.demo.collection.title" />
             </section>
+            </template>
         </main>
 
         <main v-else-if="view === 'collection'" class="preset-demo__content">
@@ -91,6 +104,8 @@ const show = (section: string) => !props.sections || props.sections.includes(sec
         </main>
 
         <main v-else-if="view === 'product'" class="preset-demo__content">
+            <ProductSections v-if="configured.length" :product="preset.demo.product" :sections="configured" />
+            <template v-else>
             <p class="preset-demo__crumb">Home / Collections / {{ preset.demo.product.title }}</p>
             <div class="preset-demo__product-layout">
                 <div v-if="show('gallery')" class="preset-demo__product-image"><img v-if="preset.demo.product.image" :src="preset.demo.product.image" :alt="preset.demo.product.title" /></div>
@@ -103,6 +118,7 @@ const show = (section: string) => !props.sections || props.sections.includes(sec
                     <small v-if="mode === 'demo'">Store preview · Checkout is not connected</small>
                 </div>
             </div>
+        </template>
         </main>
 
         <main v-else class="preset-demo__content">
@@ -119,9 +135,7 @@ const show = (section: string) => !props.sections || props.sections.includes(sec
 
         <footer class="preset-demo__footer">
             <strong>{{ preset.demo.brand }}</strong>
-            <nav v-if="mode === 'published'" aria-label="Footer">
-                <NuxtLink v-for="link in navigation" :key="link.path" :to="link.path">{{ link.label }}</NuxtLink>
-            </nav>
+            <nav v-if="mode === 'published'" aria-label="Footer"><NavigationMenu :nodes="navigationNodes" /></nav>
             <span v-else>Explore · About · Contact</span>
             <small>© {{ preset.demo.brand }}</small>
         </footer>

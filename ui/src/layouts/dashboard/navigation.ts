@@ -1,11 +1,24 @@
+export const siteSetupHref = '/d/site-setup';
 export const studioSections = [
     { key: 'overview', label: '工作台', eyebrow: 'WORKSPACE OVERVIEW', description: '管理内容，掌握网站的每一次更新。', icon: 'overview' },
-    { key: 'products', label: '商品与内容', eyebrow: 'CONTENT LIBRARY', description: '管理商品与网站资料，保存草稿后预览确认。', icon: 'products' },
-    { key: 'pages', label: '网站页面', eyebrow: 'WEBSITE PAGES', description: '组织页面内容、导航与访问路径。', icon: 'pages' },
+    { key: 'operations', label: '运营状态', eyebrow: 'SITE OPERATIONS', description: '查看域名、备份、健康和最近发布状态。', icon: 'overview' },
+    { key: 'products', label: '网站内容', eyebrow: 'WEBSITE CONTENT', description: '在这里管理页面、商品和品牌资料。', icon: 'products' },
+    { key: 'pages', label: '网站内容', eyebrow: 'WEBSITE CONTENT', description: '在这里管理页面、商品和品牌资料。', icon: 'pages' },
     { key: 'media', label: '素材库', eyebrow: 'MEDIA LIBRARY', description: '上传、管理并复用网站素材。', icon: 'media' },
-    { key: 'settings', label: '网站设置', eyebrow: 'SITE SETTINGS', description: '设置网站名称与品牌外观，保存后统一发布。', icon: 'settings' },
-    { key: 'release', label: '发布中心', eyebrow: 'PUBLISH CENTER', description: '检查已保存的修改，确认后更新网站。', icon: 'release' },
+    { key: 'settings', label: '设置', eyebrow: 'SITE SETTINGS', description: '管理网站信息、外观与访问设置。', icon: 'settings' },
+    { key: 'release', label: '发布更新', eyebrow: 'PUBLISH', description: '检查本次修改，确认后更新网站。', icon: 'release' },
 ] as const;
+export const primaryNavigation = [
+    { label: '工作台', href: '/d/studio?section=overview', icon: 'overview' },
+    { label: '运营状态', href: '/d/studio?section=operations', icon: 'overview' },
+    { label: '网站内容', href: '/d/studio?section=content', icon: 'pages' },
+    { label: '素材库', href: '/d/media', icon: 'media' },
+    { label: '设置', href: '/d/studio?section=settings', icon: 'settings' },
+] as const;
+const modelLabels: Record<string, string> = { product: '商品', collection: '分类', home: '首页', 'content-page': '内容页面', 'site-settings': '品牌与联系' };
+export function studioModelLabel(model: { key: string; label: string }): string {
+    return modelLabels[model.key] || model.label;
+}
 export type StudioSection = typeof studioSections[number]['key'];
 export function studioSection(value: unknown): StudioSection {
     if (value === 'content') return 'products';
@@ -13,6 +26,13 @@ export function studioSection(value: unknown): StudioSection {
 }
 export function isDashboardLinkActive(route: { path: string; query: Record<string, unknown> }, href: string): boolean {
     const [path, query = ''] = href.split('?');
-    if (path === '/d/studio') return route.path === path && studioSection(route.query.section) === studioSection(new URLSearchParams(query).get('section'));
+    if (path === '/d/media' && route.path === '/d/studio') return studioSection(route.query.section) === 'media';
+    if (path === '/d/studio') {
+        const target = new URLSearchParams(query).get('section');
+        if (route.path !== path) return false;
+        const section = studioSection(route.query.section);
+        if (target === 'content') return section === 'products' || section === 'pages';
+        return section === studioSection(target);
+    }
     return route.path === path || route.path.startsWith(`${path}/`);
 }

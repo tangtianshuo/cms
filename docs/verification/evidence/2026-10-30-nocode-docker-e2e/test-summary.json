@@ -1,0 +1,19 @@
+{
+  "backend": {
+    "passed": 184,
+    "failed": 0,
+    "skipped": 0
+  },
+  "ui": {
+    "passed": 80,
+    "failed": 0,
+    "skipped": 0
+  },
+  "storefront": {
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0
+  },
+  "httpApiChecks": 11,
+  "browserChecklistItems": 16
+}
