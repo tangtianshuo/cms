@@ -16,10 +16,11 @@
 4. 用户可以从现有页面蓝图新增页面，填写标题、路径和内容，保存后直接进入可视化编辑器。
 5. 所有修改都先保存为草稿；预览读取草稿，发布继续由现有发布中心执行。
 6. 保持当前模板能力边界、权限模型、路径校验、媒体引用校验和 `expectedUpdatedAt` 并发保护。
+7. 第一阶段的模板区块编辑不能阻断后续结构化自由排版；未来可在同一份页面文档中加入容器、栅格和嵌套组件。
 
 ## 非目标
 
-- 第一阶段不做自由画布，不支持任意像素定位、任意容器嵌套或自定义 CSS。
+- 第一阶段不开放结构化自由排版能力，不支持任意像素定位、绝对定位或任意自定义 CSS；数据模型必须为后续容器、栅格和嵌套组件预留扩展点。
 - 第一阶段不允许添加模板蓝图未声明的区块。
 - 第一阶段不改变 Storefront 的路由体系、发布网关或模板安装流程。
 - 第一阶段不引入实时协作编辑、自动保存或跨页面撤销历史。
@@ -53,15 +54,17 @@
 - 中栏：复用 `DraftSitePreview` 的草稿预览。预览层提供区块 hover、选中、滚动到区块和当前页面路径切换，不改变真实站点路由。
 - 右栏：区块属性、页面基本资料、SEO、绑定内容、显示状态和导航状态。属性控件沿用现有字段组件与素材选择器。
 
-预览与 Studio 之间使用明确的消息协议同步选择状态。Studio 向预览发送当前页面和选中区块；预览向 Studio 回传区块点击和 hover 事件。消息必须包含页面 key、区块 type 和数组索引；未知消息被忽略，避免旧预览版本导致编辑器异常。
+预览与 Studio 之间使用明确的消息协议同步选择状态。Studio 向预览发送当前页面和选中节点；预览向 Studio 回传节点点击和 hover 事件。消息必须包含页面 key、节点 ID 和节点 type；未知消息被忽略，避免旧预览版本导致编辑器异常。
 
-拖拽行为采用指针事件实现，不依赖未纳入项目的重量级拖拽库。拖拽只在合法插入位置结束时提交本地状态；取消、按 Escape 或拖出编辑器时恢复拖拽前状态。区块仍遵循当前页面布局的唯一类型约束，第一阶段不支持同一类型的多个实例。
+拖拽行为采用指针事件实现，不依赖未纳入项目的重量级拖拽库。拖拽只在合法插入位置结束时提交本地状态；取消、按 Escape 或拖出编辑器时恢复拖拽前状态。区块仍遵循当前页面布局的唯一类型约束，第一阶段不支持同一类型的多个实例。拖拽状态机与节点操作必须以稳定节点 ID 为基础，不能把数组索引作为未来布局树的永久身份。
 
 ## 数据模型与边界
 
-### 页面区块
+### 页面区块兼容层
 
-继续使用 `SitePage.sectionConfigs`：
+现有模板渲染器继续读取 `SitePage.sectionConfigs`，以保证已有页面和发布快照兼容。编辑器保存时通过布局文档适配器生成 `sectionConfigs` 投影；后续自由排版可以逐步切换到布局文档渲染，不需要一次性重写所有模板。
+
+现有字段保持兼容：
 
 ```ts
 interface SectionConfig {
@@ -71,7 +74,39 @@ interface SectionConfig {
 }
 ```
 
-数组顺序是渲染顺序；`enabled` 控制显示；`data` 由区块类型决定。第一阶段不改变持久化结构，不增加自由布局字段。编辑器内部可以使用数组索引作为选择标识，保存前重新按数组顺序序列化。
+数组顺序是渲染顺序；`enabled` 控制显示；`data` 由区块类型决定。`sectionConfigs` 继续作为兼容字段保留；第一阶段新增的布局文档字段是可选的，不要求一次性迁移历史页面。编辑器内部使用稳定节点 ID 作为选择标识，保存时再按节点顺序生成兼容数组。
+
+### 可扩展布局文档
+
+新增可选的 `layoutDocument` 字段，作为未来结构化自由排版的规范化模型。第一阶段可以由 `sectionConfigs` 派生并保存平面节点；已有数据没有该字段时，读取边界必须自动生成等价文档。
+
+```ts
+interface LayoutDocument {
+  version: 1;
+  mode: 'template' | 'structured';
+  root: LayoutNode[];
+}
+
+interface LayoutNode {
+  id: string;
+  kind: 'section' | 'container' | 'component';
+  type: string;
+  enabled: boolean;
+  props: Record<string, unknown>;
+  children: LayoutNode[];
+  layout?: {
+    display?: 'flow' | 'grid' | 'flex';
+    columns?: number;
+    gap?: string;
+    align?: 'start' | 'center' | 'end' | 'stretch';
+    responsive?: Record<string, Record<string, unknown>>;
+  };
+}
+```
+
+第一阶段的 `mode` 固定为 `template`，`root` 是扁平 `section` 节点，`props` 映射当前 `sectionConfigs.data`。未来结构化自由排版使用 `mode: 'structured'`，允许 `container` 的 `children` 和受支持的 `component` 类型。布局字段只允许设计系统声明的值，不保存任意 CSS 字符串。
+
+布局文档需要稳定的节点 ID、版本号和迁移入口。发布快照必须保存规范化后的布局文档或其兼容投影，渲染器不得依赖编辑器临时状态。节点操作、选中状态、预览消息、撤销历史和差异比较都使用节点 ID。
 
 ### 页面与蓝图
 
@@ -91,7 +126,7 @@ interface NavigationNode {
 }
 ```
 
-前端负责拖拽后的树操作，后端 `normalizeNavigation` 负责清理 ID、兼容旧 `path` 字段、检查重复链接、检查链接是否对应可发布页面和检查节点结构。
+前端负责拖拽后的树操作，后端 `normalizeNavigation` 负责清理 ID、兼容旧 `path` 字段、检查重复链接、检查链接是否对应可发布页面和检查节点结构。导航树与未来布局树共享拖拽状态机的纯函数约定，但使用不同的领域校验器。
 
 ## API 与数据流
 
@@ -102,7 +137,7 @@ interface NavigationNode {
 - `POST /api/v4/studio/pages/:pageKey`：保存页面资料、区块顺序、区块配置、绑定内容、启用状态和导航状态。
 - `POST /api/v4/studio/settings`：保存主题、站点设置和导航树。
 
-前端保存时只提交当前编辑器对应的完整页面草稿或完整导航树，后端使用站点版本进行乐观并发检查。保存失败不清空本地状态；错误消息映射到现有 Studio 错误摘要，并将焦点移动到错误摘要。
+前端保存时提交当前编辑器对应的完整页面草稿或完整导航树。页面保存可同时提交 `layoutDocument` 和兼容的 `sectionConfigs`；后端先规范化布局文档，再生成模板投影，并使用站点版本进行乐观并发检查。保存失败不清空本地状态；错误消息映射到现有 Studio 错误摘要，并将焦点移动到错误摘要。
 
 如果新增页面需要同时写入内容和页面，继续复用现有 Studio 页面创建接口；不得在客户端先后调用两个无事务接口造成孤立内容或空页面。创建接口返回完整 `PageDraft`，前端以返回值作为编辑器初始状态。
 
@@ -124,9 +159,11 @@ interface NavigationNode {
 - `ui/src/components/studio/studio.css`：三栏布局、拖拽占位、焦点、窄屏面板和错误状态。
 - `ui/src/sdk/handlers/studio.ts`：补齐编辑器需要的类型与接口字段。
 - `backend/src/presets/pages.ts`、`backend/src/presets/navigation.ts`：保持并加强领域校验。
+- `backend/src/storefront/layout-document.ts`：新增布局文档类型、旧 `sectionConfigs` 迁移、模板投影和结构化布局校验。
 - `backend/src/studio/controller.ts`：维持页面、导航和并发保存边界。
 - `backend/src/presets/releases.ts`：确保新编辑器数据与发布快照验证一致。
 - `storefront/app/components/DraftSitePreview.vue`：接入区块选择和编辑器消息桥接。
+- `storefront/app/components/LayoutRenderer.vue`：未来承载模板区块和结构化容器的统一渲染入口；第一阶段可以只封装现有 `PresetDemoPage` 的投影调用。
 
 ### 新增建议文件
 
@@ -140,6 +177,7 @@ interface NavigationNode {
 ### 单元和集成测试
 
 - 区块拖拽在头部、中间、尾部插入后数组顺序正确；非法区块、重复区块和必需区块删除被拒绝。
+- `sectionConfigs` 与 `layoutDocument` 双向转换后页面语义不变；旧页面无 `layoutDocument` 时自动生成稳定节点 ID；未知布局版本被拒绝并保留原草稿。
 - 导航节点可以同级移动、拖入分组和移出分组；循环嵌套、重复链接、未发布页面链接被拒绝。
 - 蓝图创建页面时正确创建内容绑定；固定路径、保留路径、重复路径和错误模型被拒绝。
 - `expectedUpdatedAt` 不匹配时保存失败且不覆盖站点草稿。
@@ -155,11 +193,12 @@ interface NavigationNode {
 
 ## 分阶段交付
 
-1. **领域状态与拖拽核心**：抽出区块数组和导航树的纯函数操作，补齐服务端校验测试，保留现有按钮作为后备操作。
+1. **布局文档与领域状态**：定义 `LayoutDocument`、版本迁移、`sectionConfigs` 投影和区块/导航树的纯函数操作，补齐服务端校验测试，保留现有按钮作为后备操作。
 2. **导航可视化编辑**：导航树拖拽、分组嵌套、页面添加、键盘操作和保存状态。
 3. **页面区块可视化编辑**：三栏布局、区块拖拽、添加/隐藏、属性面板和素材选择。
 4. **预览联动与新增页面向导**：预览选中桥接、蓝图创建流程、创建后自动进入编辑器和加入导航选项。
-5. **发布前验证与体验收口**：并发冲突、权限、响应式、无障碍、错误摘要和回归测试。
+5. **结构化自由排版基础**：增加容器节点、组件注册表、受控布局属性和响应式断点；模板页面继续使用兼容投影。
+6. **发布前验证与体验收口**：并发冲突、权限、响应式、无障碍、错误摘要和回归测试。
 
 ## 成功标准
 
