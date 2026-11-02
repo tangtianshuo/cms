@@ -36,7 +36,7 @@ const publicFailureCodes = new Set([
     'invalid_template', 'template_not_found', 'invalid_release', 'template_pin_mismatch',
     'release_conflict', 'request_too_large', 'site_not_found', 'release_not_found',
     'template_pin_unavailable', 'release_unavailable', 'invalid_request', 'publish_pending',
-    'publication_state_unavailable',
+    'publication_state_unavailable', 'domain_state_unavailable',
     'template_registry_unavailable',
 ]);
 
@@ -69,7 +69,7 @@ export function gatewayPublishConfigs(env: NodeJS.ProcessEnv = process.env): Gat
         if (Object.keys(item).some(key => !keys.includes(key as typeof keys[number]))) {
             throw new Error(`Unexpected Gateway site binding field at index ${index}`);
         }
-        if (keys.some(key => typeof item[key] !== 'string' || !item[key].trim())) {
+        if (keys.some(key => { const value = item[key]; return typeof value !== 'string' || !value.trim(); })) {
             throw new Error(`Invalid Gateway site binding at index ${index}`);
         }
         const entry = item as unknown as GatewaySiteBinding;

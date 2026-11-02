@@ -20,6 +20,29 @@ interface DomainList {
         txtPrefix: string;
         challengePath: string;
     };
+    gateway?:
+        | {
+              status: 'ready';
+              route: {
+                  status: string;
+                  revision: number;
+                  releaseId: string | null;
+                  host: string | null;
+                  health: string;
+              };
+              domains: Array<{
+                  id: string;
+                  hostname: string;
+                  ownershipStatus: string;
+                  dnsStatus: string;
+                  certificateStatus: string;
+                  enabled: boolean;
+                  role: 'primary' | 'alias';
+                  lastCheckedAt: string | null;
+                  redirectTo: string | null;
+              }>;
+          }
+        | { status: 'unconfigured' | 'unavailable' };
 }
 interface Verification {
     txtName: string;
@@ -202,6 +225,60 @@ export default defineComponent({
                                 >
                                     {t('common.close')}
                                 </Button>
+                            </section>
+                        )}
+                        {data.value?.gateway && (
+                            <section class={panelClass}>
+                                <h2 class="font-semibold">
+                                    {t('domains.gatewayState')}
+                                </h2>
+                                <p class="mt-2 text-sm">
+                                    {t('domains.gatewayStatus', {
+                                        status:
+                                            data.value.gateway.status ===
+                                            'ready'
+                                                ? t('domains.gatewayReady')
+                                                : data.value.gateway.status ===
+                                                  'unconfigured'
+                                                ? t('domains.gatewayUnconfigured')
+                                                : t('domains.gatewayUnavailable'),
+                                    })}
+                                </p>
+                                {data.value.gateway.status === 'ready' && (
+                                    <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                                        <div>
+                                            <dt>{t('domains.connection')}</dt>
+                                            <dd>
+                                                {t(
+                                                    `domains.gateway${data.value.gateway.route.status[0].toUpperCase()}${data.value.gateway.route.status.slice(1)}`,
+                                                )}
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt>{t('domains.state')}</dt>
+                                            <dd>
+                                                {t('domains.gatewayRoute', {
+                                                    revision:
+                                                        data.value.gateway.route
+                                                            .revision,
+                                                    host:
+                                                        data.value.gateway.route
+                                                            .host || '—',
+                                                })}
+                                            </dd>
+                                        </div>
+                                        <div class="sm:col-span-2">
+                                            <dt>{t('domains.connection')}</dt>
+                                            <dd>
+                                                {t('domains.gatewayHealth', {
+                                                    health:
+                                                        data.value.gateway.route
+                                                            .health,
+                                                })}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                )}
                             </section>
                         )}
                         {data.value && (

@@ -4,6 +4,7 @@ import { RP } from '../security/route-protection/main';
 import { Config } from '../config';
 import { domainService } from './source';
 import { checkDomain } from './verification';
+import { readGatewayDomainState } from './gateway';
 
 export const SiteDomainController = createController({
     name: 'SiteDomains', path: '/api/v4',
@@ -21,7 +22,14 @@ export const SiteDomainController = createController({
                 },
             });
         return {
-            list: action('get', '', async () => domainService().list()),
+            list: action('get', '', async () => {
+                const service = domainService();
+                const listed = await service.list();
+                let gateway: Awaited<ReturnType<typeof readGatewayDomainState>> | { status: 'unavailable' };
+                try { gateway = await readGatewayDomainState((await service.site())._id); }
+                catch { gateway = { status: 'unavailable' }; }
+                return { ...listed, gateway };
+            }),
             add: action('post', '', async (_id, actor, body) => {
                 const parsed = z.object({ hostname: z.string().min(1).max(254) }).strict().parse(body);
                 return domainService().add(parsed.hostname, actor);
