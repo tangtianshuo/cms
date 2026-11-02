@@ -12,6 +12,8 @@ export const primaryNavigation = [
     { label: '工作台', href: '/d/studio?section=overview', icon: 'overview' },
     { label: '运营状态', href: '/d/studio?section=operations', icon: 'overview' },
     { label: '网站内容', href: '/d/studio?section=content', icon: 'pages' },
+    { label: '询盘', href: '/d/leads', icon: 'overview' },
+    { label: '访问数据', href: '/d/analytics', icon: 'overview' },
     { label: '素材库', href: '/d/media', icon: 'media' },
     { label: '设置', href: '/d/studio?section=settings', icon: 'settings' },
 ] as const;

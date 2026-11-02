@@ -13,6 +13,7 @@ import type { SiteInstallation } from './site-model';
 import { pageDraft } from './pages';
 import type { PublicTemplateRecord, VerifiedPublicTemplate } from './registry';
 import { resolveInstalledPreset } from './installed';
+import { classifyTemplateCompatibility, createMigrationPlan } from '../template-contract/compatibility';
 
 export interface ImportSource {
     findSite(): Promise<SiteInstallation | null>;
@@ -40,6 +41,7 @@ export interface ImportPlan {
 export interface TemplateUpgradePreview {
     compatible: boolean;
     requiresNewInstallation: boolean;
+    migrationPlan?: { from: string; to: string; steps: Array<Record<string, unknown>> };
     contentImpact: string[];
     templateImpact: string[];
 }
@@ -65,7 +67,13 @@ export function previewPublicTemplateUpgrade(site: SiteInstallation, selected: V
     if (installedRecord?.imageDigest !== selected.imageDigest) templateImpact.push('模板运行镜像已更新。');
     if (installedRecord?.manifestChecksum !== selected.manifestChecksum) templateImpact.push('模板清单已更新。');
     if (!templateImpact.length) templateImpact.push('模板版本与运行内容没有变化。');
-    return { compatible: schemaCompatible, requiresNewInstallation: !schemaCompatible, contentImpact, templateImpact };
+    let migrationPlan: TemplateUpgradePreview['migrationPlan'];
+    if (selected.manifest.compatibility) {
+        const request = { id: selected.id, version: selected.version, compatibility: selected.manifest.compatibility };
+        const status = classifyTemplateCompatibility({ id: site.presetId, version: site.presetVersion }, request);
+        if (status === 'migration-required') migrationPlan = createMigrationPlan({ id: site.presetId, version: site.presetVersion }, request);
+    }
+    return { compatible: schemaCompatible, requiresNewInstallation: !schemaCompatible, ...(migrationPlan ? { migrationPlan } : {}), contentImpact, templateImpact };
 }
 
 export function templateName(key: string, namespace?: string): string {

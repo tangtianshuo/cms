@@ -34,6 +34,7 @@ export interface PresetPagePreview {
     preset: PresetDemo;
     sections: string[];
     sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }>;
+    layoutDocument?: { version: 1; mode: 'template'; root: Array<{ id: string; type: string; enabled: boolean; props: Record<string, unknown>; children: unknown[] }> };
     seo: { title: string; description: string };
     operations?: { seoTitle: string; seoDescription: string; socialImage?: { _id: string }; favicon?: { _id: string }; socialImageUrl?: string; faviconUrl?: string; analyticsId?: string; contactFormEnabled: boolean };
     items?: Array<{ label: string; path: string; image: string; description: string; price: string }>;

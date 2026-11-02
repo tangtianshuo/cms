@@ -83,6 +83,18 @@ const routes: Array<RouteRecordRawExtended> = [
         component: () => import('./views/dashboard/studio'),
     },
     {
+        path: '/d/leads',
+        name: 'LeadsView',
+        meta: { title: '询盘', layout: 'DashboardLayout' },
+        component: () => import('./views/dashboard/leads'),
+    },
+    {
+        path: '/d/analytics',
+        name: 'AnalyticsView',
+        meta: { title: '访问数据', layout: 'DashboardLayout' },
+        component: () => import('./views/dashboard/analytics'),
+    },
+    {
         path: '/d/site-setup',
         name: 'SiteOnboardingView',
         meta: { title: '创建网站', layout: 'DashboardLayout' },

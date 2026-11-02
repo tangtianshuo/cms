@@ -8,6 +8,7 @@ import type { ReleaseSnapshot } from './releases';
 import { buildRelease, publishRelease, releaseDiff, rollbackRelease, ReleaseValidationError } from './releases';
 import { gatewayBound, gatewayPublishConfig, GatewayRevisionConflict, publishGatewayRelease, readGatewayOperation,
     publicRecord } from './gateway-publish';
+import { isGatewayUnavailable } from './gateway-client';
 import { releaseSource } from './release-source';
 export { releaseSource } from './release-source';
 import { reconcileGatewayState, snapshotFingerprint } from './gateway-state';
@@ -22,12 +23,16 @@ export const ReleaseController = createController({
     methods() {
         return {
             gateway: createControllerMethod({
-                path: '/gateway', type: 'get', preRequestHandler: RP.createWorkspaceAdminCheck(),
+                path: '/gateway', type: 'get', preRequestHandler: RP.createSiteCapabilityCheck('operations.read'),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const config = gatewayPublishConfig();
                     let site = await Repo.siteInstallation.methods.findSelected();
-                    if (site && gatewayBound(site, config)) site = await recoverGatewayPublication(releaseSource(), config);
+                    let gatewayUnavailable = false;
+                    if (site && gatewayBound(site, config)) {
+                        try { site = await recoverGatewayPublication(releaseSource(), config); }
+                        catch (cause) { if (!isGatewayUnavailable(cause)) throw cause; gatewayUnavailable = true; }
+                    }
                     let publishStatus: { operationId: string; releaseId: string; requestKey: string; status: string; failureCode?: string; reason?: string; activeRevision?: number; operation?: 'publish' | 'rollback' } | null = null;
                     if (site?.gatewayPublishIntent) {
                         try {
@@ -42,6 +47,7 @@ export const ReleaseController = createController({
                             }
                         } catch { /* malformed intents fail on publish or status request */ }
                     }
+                    if (gatewayUnavailable && publishStatus) publishStatus = { ...publishStatus, status: 'unknown', failureCode: 'gateway_unavailable', reason: 'gateway_unavailable' };
                     const domains = site?.primaryDomainId ? await Repo.siteDomain.methods.list(site._id) : [];
                     const primary = domains.find(domain => domain._id === site?.primaryDomainId && domain.enabled && domain.ownershipStatus === 'verified' && domain.connectionStatus === 'ready');
                     const publicHostname = primary?.hostname || (site && ownerWorkspace(site) === 'default' && site.slot === 'default' ? Config.storefrontHost : undefined);
@@ -51,7 +57,7 @@ export const ReleaseController = createController({
                 },
             }),
             gatewayOperation: createControllerMethod({
-                path: '/gateway/operations/:operationId', type: 'get', preRequestHandler: RP.createWorkspaceAdminCheck(),
+                path: '/gateway/operations/:operationId', type: 'get', preRequestHandler: RP.createSiteCapabilityCheck('operations.read'),
                 async handler({ request, reply, errorHandler }) {
                     reply.header('Cache-Control', 'no-store');
                     const site = await Repo.siteInstallation.methods.findSelected();
@@ -63,13 +69,16 @@ export const ReleaseController = createController({
                 },
             }),
             history: createControllerMethod({
-                path: '/', type: 'get', preRequestHandler: RP.createWorkspaceAdminCheck(),
+                path: '/', type: 'get', preRequestHandler: RP.createSiteCapabilityCheck('operations.read'),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
                     let site = await Repo.siteInstallation.methods.findSelected();
                     const config = gatewayPublishConfig();
                     const bound = gatewayBound(site, config);
-                    if (site && bound) site = await recoverGatewayPublication(releaseSource(), config);
+                    if (site && bound) {
+                        try { site = await recoverGatewayPublication(releaseSource(), config); }
+                        catch (cause) { if (!isGatewayUnavailable(cause)) throw cause; }
+                    }
                     if (!site) return { currentReleaseId: '', items: [], audit: [] };
                     const published = bound ? site.gatewayPublishedReleaseIds || [] : site.publishedReleaseIds || [site.currentReleaseId];
                     const records = await Repo.storefrontRelease.methods.findBySite(site._id);
@@ -82,7 +91,7 @@ export const ReleaseController = createController({
                 },
             }),
             check: createControllerMethod({
-                path: '/check', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(),
+                path: '/check', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('publish'),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const source = releaseSource();
@@ -110,7 +119,7 @@ export const ReleaseController = createController({
                 },
             }),
             publish: createControllerMethod({
-                path: '/publish', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(),
+                path: '/publish', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('publish'),
                 async handler({ request, token, errorHandler, reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const parsed = publishBody.safeParse(request.body);
@@ -131,7 +140,7 @@ export const ReleaseController = createController({
                 },
             }),
             rollback: createControllerMethod({
-                path: '/rollback', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(),
+                path: '/rollback', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('publish'),
                 async handler({ request, token, errorHandler, reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const parsed = publishBody.extend({ releaseId: z.string().min(1) }).safeParse(request.body);

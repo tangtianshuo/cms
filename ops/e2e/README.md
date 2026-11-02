@@ -60,6 +60,9 @@ node ops/e2e/test.mjs builtin
 node ops/e2e/test.mjs gateway-e2e
 node ops/e2e/test.mjs recovery
 node ops/e2e/test.mjs retirement
+node ops/e2e/test.mjs runtime-isolation
+node ops/e2e/test.mjs platform-baseline
+node ops/e2e/test.mjs quality-gate
 node ops/e2e/audit-containers.mjs
 ```
 

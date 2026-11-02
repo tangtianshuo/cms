@@ -23,12 +23,16 @@ import SharesView from './dashboard/shares';
 import StudioView from './dashboard/studio';
 import SitePreviewView from './dashboard/site-preview';
 import SiteOnboardingView from './dashboard/site-onboarding';
+import LeadsView from './dashboard/leads';
+import AnalyticsView from './dashboard/analytics';
 
 export const views = {
     LoginView,
     SignupAdminView,
     HomeView,
     StudioView,
+    LeadsView,
+    AnalyticsView,
 
     TemplatesView,
     PresetsView,

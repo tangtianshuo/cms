@@ -151,7 +151,7 @@ export const en = {
         publicationDiagnostics: 'Publication diagnostics',
         publicationFailureCode: 'Error code:',
         publicationOperationId: 'Operation ID:',
-        gatewayStatus: {"draft": "Draft changes are ready to validate.", "checking": "Checking your draft before publication…", "publishing": "Deploying and checking the homepage…", "pending": "Deploying and checking the homepage…", "ready": "Published. Your storefront has been updated.", "failed": "Publication failed. The previous site remains available.", "rolled-back": "Rollback completed. The selected release is active."},
+        gatewayStatus: {"draft": "Draft changes are ready to validate.", "checking": "Checking your draft before publication…", "publishing": "Deploying and checking the homepage…", "pending": "Deploying and checking the homepage…", "ready": "Published. Your storefront has been updated.", "failed": "Publication failed. The previous site remains available.", "rolled-back": "Rollback completed. The selected release is active.", "unknown": "Gateway status is unknown. The previous site remains available; retry after control service recovery."},
         title: 'Storefront presets',
         subtitle: 'Choose a complete storefront design and create the content models for your site.',
         colors: 'Theme colors',

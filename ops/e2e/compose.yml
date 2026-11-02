@@ -81,7 +81,10 @@ services:
             CMS_WORKSPACE_ID: ${E2E_GATEWAY_WORKSPACE:?}
             ALLOWED_TEMPLATE_IDS: aeroframe
             SNAPSHOT_STORAGE_PATH: /var/lib/gateway/snapshots
-        volumes: [gateway-snapshots:/var/lib/gateway/snapshots]
+            PUBLIC_TEMPLATE_REGISTRY_FILE: /var/lib/gateway/registry/public-registry.json
+        volumes:
+            - "${E2E_SNAPSHOT_HOST_DIR:?}:/var/lib/gateway/snapshots"
+            - "${E2E_PUBLIC_REGISTRY_FILE:?}:/var/lib/gateway/registry/public-registry.json:ro"
     admin:
         image: nginx:latest
         depends_on:
@@ -98,6 +101,7 @@ services:
             NUXT_PUBLIC_SITE_HOST: builtin.localhost
             NUXT_GATEWAY_SECRET: ${E2E_STOREFRONT_SECRET:?}
             NUXT_DOMAIN_SECRET: ${E2E_DOMAIN_SECRET:?}
+            NUXT_LEGACY_CMS_PUBLIC_READ: 'true'
     builtin-ingress:
         image: nginx:latest
         depends_on: [builtin-storefront]

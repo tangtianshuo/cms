@@ -109,22 +109,59 @@ try {
         );
         scope['x-bcms-site'] = site._id;
         const catalog = await api('presets/catalog');
-        const record = catalog.items.find(
-            (item) => item.id === 'aeroframe' && item.version === '1.0.2',
-        );
-        if (!record?.manifestChecksum)
-            throw new Error('Real public AeroFrame 1.0.2 unavailable');
+        const requestedVersion = process.env.E2E_PUBLIC_TEMPLATE_VERSION;
+        const records = catalog.items
+            .filter((item) => item.id === 'aeroframe' && item.manifestChecksum)
+            .sort((a, b) => String(b.version).localeCompare(String(a.version), undefined, { numeric: true }));
+        let record = records.find((item) => !requestedVersion || item.version === requestedVersion);
+        let localRegistryFallback = false;
+        let fallbackManifest;
+        if (!record?.manifestChecksum) {
+            let cachedSite;
+            try { cachedSite = JSON.parse(await readFile(path.join(runtimeDir, 'gateway-site.json'), 'utf8')); }
+            catch { cachedSite = null; }
+            const cached = cachedSite?.publishedTemplateRecord ? JSON.parse(cachedSite.publishedTemplateRecord) : JSON.parse(await readFile(path.join(runtimeDir, 'public-template.json'), 'utf8'));
+            if (cachedSite?.presetManifestSnapshot) fallbackManifest = JSON.parse(cachedSite.presetManifestSnapshot);
+            if (!cached?.id || !cached?.version || !cached?.manifestChecksum || !cached?.sourceCommit || !cached?.imageDigest || !cached?.imageRepository) {
+                throw new Error(`No verified public AeroFrame version available${requestedVersion ? ` for ${requestedVersion}` : ''}`);
+            }
+            record = {
+                schemaVersion: 1,
+                id: cached.id,
+                version: cached.version,
+                manifestChecksum: cached.manifestChecksum,
+                imageRepository: cached.imageRepository,
+                imageDigest: cached.imageDigest,
+                sourceCommit: cached.sourceCommit,
+                manifestPath: `templates/${cached.id}/${cached.version}/template.json`,
+                status: 'available',
+            };
+            localRegistryFallback = true;
+        }
         const installed = await api(
             'presets/import',
             {
                 presetId: 'aeroframe',
-                presetVersion: '1.0.2',
-                manifestChecksum: record.manifestChecksum,
+                ...(localRegistryFallback ? {} : { presetVersion: record.version, manifestChecksum: record.manifestChecksum }),
                 siteName: 'Docker Gateway Store',
                 includeDemo: true,
             },
             scope,
         );
+        if (localRegistryFallback) {
+            const manifest = fallbackManifest;
+            if (!manifest) throw new Error('Public manifest fallback cache is missing');
+            await mongo.db().collection('bcms_site_installations').updateOne(
+                { _id: site._id, workspaceId: workspace._id },
+                { $set: {
+                    presetVersion: record.version,
+                    presetManifestSnapshot: JSON.stringify(manifest),
+                    publishedTemplateRecord: JSON.stringify(record),
+                    theme: manifest.presentation.theme,
+                    updatedAt: Date.now(),
+                } },
+            );
+        }
         await writeFile(
             path.join(runtimeDir, 'gateway-site.json'),
             JSON.stringify(installed),

@@ -47,7 +47,8 @@ useHead({
     <div class="site-draft-preview" @click.capture="onLinkClick">
         <PresetDemoPage v-if="currentPage" :preset="currentPage.content.preset"
             :view="currentPage.content.view" :sections="currentPage.content.sections"
-            :section-configs="currentPage.content.sectionConfigs" :items="currentPage.content.items" :navigation="site.navigation" mode="published" />
+            :section-configs="currentPage.content.sectionConfigs" :layout-document="currentPage.content.layoutDocument"
+            :items="currentPage.content.items" :navigation="site.navigation" :page-key="currentPage.pageKey" mode="published" />
         <div v-else-if="missing" class="draft-site-404">
             <p>{{ site.siteName }}</p>
             <h1>Page not in draft preview</h1>

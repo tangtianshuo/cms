@@ -1,5 +1,5 @@
-import { GatewayRevisionConflict, gatewayRequest, validateConfig, type GatewayPublishConfig } from './gateway-client';
-export { gatewayPublishConfig, GatewayRevisionConflict, type GatewayPublishConfig } from './gateway-client';
+import { GatewayRevisionConflict, gatewayRequest, isGatewayUnavailable, validateConfig, type GatewayPublishConfig } from './gateway-client';
+export { gatewayPublishConfig, GatewayRevisionConflict, GatewayUnavailableError, type GatewayPublishConfig } from './gateway-client';
 import { createHash, randomUUID } from 'node:crypto';
 import { ownerWorkspace } from '../workspaces/context';
 import { MediaRetentionError } from '../media/retention';
@@ -7,6 +7,9 @@ import { buildRelease, type ReleaseSnapshot, type ReleaseSource } from './releas
 import type { PublicTemplateRecord } from './registry';
 import type { SiteInstallation } from './site-model';
 import { cmsSnapshot, reconcileGatewayState, retainGatewaySnapshot, snapshotFingerprint } from './gateway-state';
+import { collectReleaseAssets } from '../release-contract/assets';
+import { rewriteContractMediaUrls, toContractSnapshot } from '../release-contract/snapshot';
+import { validateReleaseContract } from '../release-contract/validator';
 
 export interface GatewayPublishIntent {
     requestKey: string;
@@ -29,6 +32,11 @@ export interface GatewayPublishIntent {
 export interface GatewayReleaseSource extends ReleaseSource {
     saveSite(site: SiteInstallation, expectedUpdatedAt: number): Promise<boolean>;
     projectGatewayRelease(site: SiteInstallation, releaseId: string, revision: number): Promise<boolean>;
+}
+
+function canProjectContractSnapshot(snapshot: ReleaseSnapshot): boolean {
+    return snapshot.pages.length > 0 && snapshot.pages.every(page => page.content?.kind === 'preset-page' &&
+        page.content?.preset?.id && page.content?.preset?.version);
 }
 
 export function publicRecord(site: SiteInstallation): PublicTemplateRecord {
@@ -77,6 +85,16 @@ function responseIntent(intent: GatewayPublishIntent, activeRevision = 0) {
         ...(intent.failureCode ? { failureCode: intent.failureCode, reason: intent.failureCode } : {}) };
 }
 
+async function persistGatewayUnavailable(source: GatewayReleaseSource, site: SiteInstallation, intent: GatewayPublishIntent) {
+    const updated = { ...intent, status: 'pending' as const, failureCode: 'gateway_unavailable' };
+    if (JSON.stringify(updated) !== JSON.stringify(intent)) {
+        const next = { ...site, gatewayPublishIntent: JSON.stringify(updated), updatedAt: Math.max(Date.now(), site.updatedAt + 1) };
+        if (!await source.saveSite(next, site.updatedAt)) throw new Error('CMS site changed while recording Gateway unavailable status');
+        Object.assign(site, next);
+    }
+    return responseIntent(updated, site.gatewayActiveRevision || 0);
+}
+
 export async function publishGatewayRelease(
     source: GatewayReleaseSource, actorId: string, expectedReleaseId: string, requestKey: string,
     config: GatewayPublishConfig, fetcher: typeof fetch = fetch, build: typeof buildRelease = buildRelease,
@@ -99,13 +117,26 @@ export async function publishGatewayRelease(
     if (intent?.requestKey === requestKey && intent.expectedReleaseId === expectedReleaseId && intent.operationId) {
         if (!sameRecord(intent.record, publicRecord(site)) && !options.restoreReleaseId) throw new Error('A persisted Gateway publication cannot change its immutable template record');
         if (intent.status === 'ready') {
-            const confirmed = await readGatewayOperation(source, site, intent.operationId, config, fetcher);
-            return { ...responseIntent(intent, site.gatewayActiveRevision || 0), status: confirmed.status || 'pending' };
+            try {
+                const confirmed = await readGatewayOperation(source, site, intent.operationId, config, fetcher);
+                return { ...responseIntent(intent, site.gatewayActiveRevision || 0), status: confirmed.status || 'pending' };
+            } catch (cause) {
+                if (isGatewayUnavailable(cause)) return persistGatewayUnavailable(source, site, intent);
+                throw cause;
+            }
         }
         return responseIntent(intent);
     }
     if (intent && intent.status !== 'ready' && intent.status !== 'failed' && intent.requestKey !== requestKey) throw new Error('A Gateway publication is still pending');
-    const gatewayState = await reconcileGatewayState(source, site, config, fetcher);
+    let gatewayUnavailable = false;
+    let gatewayState;
+    try {
+        gatewayState = await reconcileGatewayState(source, site, config, fetcher);
+    } catch (cause) {
+        if (!isGatewayUnavailable(cause)) throw cause;
+        gatewayUnavailable = true;
+        gatewayState = { revision: site.gatewayActiveRevision || 0, active: null };
+    }
     const replayingActive = intent?.requestKey === requestKey && intent.expectedReleaseId === expectedReleaseId && gatewayState.active?.releaseId === intent.releaseId;
     if (!replayingActive && (site.gatewayCurrentReleaseId || '') !== expectedReleaseId) throw new Error('Published site changed; refresh before continuing');
     const previous = site.gatewayCurrentReleaseId ? await source.findRelease(site.gatewayCurrentReleaseId) : null;
@@ -139,8 +170,16 @@ export async function publishGatewayRelease(
     if (intent && intent.status !== 'ready' && intent.status !== 'failed' && intent.requestKey !== requestKey) throw new Error('A Gateway publication is still pending');
     if (!intent || intent.requestKey !== requestKey || intent.expectedReleaseId !== expectedReleaseId) {
         const revision = gatewayState.revision;
-        const snapshot = cmsSnapshot(restoring ? JSON.parse(restoring.payload) : build({ ...await source.loadContent(site), site, previous: prior }), site);
-        if (options.snapshotHash && options.snapshotHash !== snapshotFingerprint(snapshot, record)) throw new Error('Draft content changed after validation; check again before publishing');
+        const content = restoring ? null : await source.loadContent(site);
+        const built = restoring ? JSON.parse(restoring.artifactPayload || restoring.payload) as ReleaseSnapshot : build({ ...content!, site, previous: prior });
+        const cmsRelease = cmsSnapshot(built, site);
+        const assets = canProjectContractSnapshot(built) ? await collectReleaseAssets(built, content?.media || []) : [];
+        const projected = canProjectContractSnapshot(built)
+            ? toContractSnapshot(rewriteContractMediaUrls(built, assets), assets)
+            : built;
+        if (canProjectContractSnapshot(built)) validateReleaseContract(projected);
+        const snapshot = cmsSnapshot(projected, site);
+        if (options.snapshotHash && options.snapshotHash !== snapshotFingerprint(cmsRelease, record)) throw new Error('Draft content changed after validation; check again before publishing');
         const bytes = Buffer.from(JSON.stringify({ ...snapshot, workspaceId: config.workspaceId, siteId: config.siteId }), 'utf8');
         intent = {
             requestKey, expectedReleaseId, releaseId: randomUUID(), idempotencyKey: requestKey,
@@ -152,12 +191,19 @@ export async function publishGatewayRelease(
         if (!await source.saveSite(prepared, site.updatedAt)) throw new Error('CMS site changed while preparing Gateway publication');
         Object.assign(site, prepared);
     }
+    if (gatewayUnavailable) return persistGatewayUnavailable(source, site, intent);
     const now = Date.now();
     try {
+        const retained = await source.findRelease(intent.releaseId);
+        const retainedPayload = retained?.payload
+            ? JSON.parse(retained.payload)
+            : cmsSnapshot(JSON.parse(Buffer.from(intent.snapshot, 'base64').toString('utf8')), site);
         await retainGatewaySnapshot(source, { _id: intent.releaseId, workspaceId: ownerWorkspace(site), siteId: site._id,
             createdAt: intent.createdAt || now, updatedAt: now, createdBy: intent.actorId || actorId,
-            previousReleaseId: intent.expectedReleaseId, payload: JSON.stringify(cmsSnapshot(JSON.parse(Buffer.from(intent.snapshot, 'base64').toString('utf8')), site)),
-            target: 'gateway', templateRecord: JSON.stringify(intent.record), requestKey: intent.requestKey, sourceReleaseId: intent.sourceReleaseId });
+            previousReleaseId: intent.expectedReleaseId,
+            payload: JSON.stringify(retainedPayload),
+            target: 'gateway', templateRecord: JSON.stringify(intent.record), requestKey: intent.requestKey, sourceReleaseId: intent.sourceReleaseId,
+            artifactPayload: intent.snapshot ? Buffer.from(intent.snapshot, 'base64').toString('utf8') : undefined });
     } catch (cause) {
         if (cause instanceof MediaRetentionError) {
             const failed = { ...site, gatewayPublishIntent: JSON.stringify({ ...intent, status: 'failed', failureCode: 'media_retention_failed' }),

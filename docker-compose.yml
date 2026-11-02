@@ -108,6 +108,7 @@ services:
             - NUXT_CMS_INTERNAL_ORIGIN=http://backend:8080
             - NUXT_PUBLIC_SITE_HOST=localhost:3000
             - NUXT_PUBLIC_ADMIN_ORIGIN=http://localhost:8080
+            - NUXT_LEGACY_CMS_PUBLIC_READ=true
         ports:
             - '3000:3000'
         volumes:

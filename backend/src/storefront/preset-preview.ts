@@ -13,6 +13,7 @@ export interface PresetPagePreview {
     preset: Pick<PresetManifest, 'id' | 'version' | 'name' | 'description' | 'theme' | 'demo' | 'showcase'>;
     sections: string[];
     sectionConfigs?: SectionConfig[];
+    layoutDocument?: unknown;
     seo: { title: string; description: string };
     operations?: SiteOperations & { socialImageUrl?: string; faviconUrl?: string };
 }
@@ -83,7 +84,7 @@ function resolvedSections(sections: SectionConfig[] | undefined, media: Media[],
         const result = structuredClone(section);
         if (!result.enabled) return result;
         if (result.type === 'hero-carousel') result.data.slides = (result.data.slides as Array<Record<string, unknown>>).map(slide => ({ ...slide, image: mediaUrl((slide.image as { _id: string })._id, media, origin) }));
-        if (result.type === 'product-gallery') result.data.images = (result.data.images as Array<{ _id: string }>).map(image => mediaUrl(image._id, media, origin));
+        if (result.type === 'product-gallery') result.data.images = (result.data.images as Array<{ _id: string }>).map(imageValue => mediaUrl(imageValue._id, media, origin));
         return result;
     });
 }
@@ -104,7 +105,8 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
     const manifest = resolveInstalledPreset(site);
     const page = pageDraft(site, input.pageKey);
     if (!page) throw new Error('Unknown preset page');
-    if (page.sectionConfigs) validateSectionMediaReferences(page.layout, page.sectionConfigs, {
+    const contractPage = Boolean(manifest.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
+    if (page.sectionConfigs && !contractPage) validateSectionMediaReferences(page.layout, page.sectionConfigs, {
         media: input.media, site,
         publishedPaths: new Set(site.pages.filter(item => item.enabled !== false && !item.path.includes(':')).map(item => item.path)),
     });
@@ -185,6 +187,7 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
             theme: site.theme, demo, showcase: manifest.showcase ? structuredClone(manifest.showcase) : undefined },
         sections: page.sections,
         sectionConfigs: resolvedSections(page.sectionConfigs, input.media, input.mediaOrigin),
+        ...(page.layoutDocument ? { layoutDocument: structuredClone(page.layoutDocument) } : {}),
         seo: { title: page.seoTitle || operations.seoTitle || (view === 'page' ? demo.page.title : site.name), description: seoDescription },
         operations: { ...structuredClone(operations), socialImageUrl: mediaUrl(operations.socialImage?._id, input.media, input.mediaOrigin), faviconUrl: mediaUrl(operations.favicon?._id, input.media, input.mediaOrigin) },
     };

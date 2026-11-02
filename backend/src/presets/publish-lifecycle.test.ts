@@ -6,6 +6,7 @@ test('maps gateway states to stable user-facing publish lifecycle states', () =>
     assert.equal(normalizePublishStatus('pending'), 'publishing');
     assert.equal(normalizePublishStatus('ready'), 'ready');
     assert.equal(normalizePublishStatus('failed'), 'failed');
+    assert.equal(normalizePublishStatus('unknown'), 'unknown');
     assert.equal(normalizePublishStatus('ready', 'rollback'), 'rolled-back');
     assert.equal(normalizePublishStatus('unexpected'), 'draft');
 });

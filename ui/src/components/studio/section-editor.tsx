@@ -1,3 +1,5 @@
+/* The editor intentionally nests short callback scopes for each editable list item. */
+/* eslint-disable no-shadow, @typescript-eslint/no-shadow */
 import { defineComponent, type PropType } from 'vue';
 
 export type SectionType = 'hero-carousel' | 'info-grid' | 'faq' | 'product-gallery' | 'product-information' | 'product-description';

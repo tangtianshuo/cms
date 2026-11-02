@@ -12,5 +12,5 @@ test('normalizes gateway operation states into the CMS publish lifecycle', () =>
     assert.equal(normalizePublishStatus('ready'), 'ready');
     assert.equal(normalizePublishStatus('failed'), 'failed');
     assert.equal(normalizePublishStatus('ready', 'rollback'), 'rolled-back');
-    assert.equal(normalizePublishStatus('unknown'), 'draft');
+    assert.equal(normalizePublishStatus('unknown'), 'unknown');
 });

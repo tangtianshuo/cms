@@ -78,7 +78,8 @@ export async function reconcileGatewayState(source: GatewayReleaseSource, site: 
         createdAt: Date.parse(active.createdAt), updatedAt: now,
         createdBy: intent.releaseId === active.releaseId ? intent.actorId || 'legacy-gateway' : 'gateway-reconciliation',
         previousReleaseId: intent.releaseId === active.releaseId ? intent.expectedReleaseId || '' : site.gatewayCurrentReleaseId || '',
-        payload: JSON.stringify(cmsSnapshot(active.snapshot, site)), target: 'gateway', templateRecord: JSON.stringify(record) });
+        payload: JSON.stringify(cmsSnapshot(active.snapshot, site)), target: 'gateway', templateRecord: JSON.stringify(record),
+        artifactPayload: JSON.stringify(active.snapshot) });
     if (!await source.projectGatewayRelease(site, active.releaseId, active.routeRevision)) {
         throw new Error('A newer Gateway deployment was already recorded; refresh');
     }

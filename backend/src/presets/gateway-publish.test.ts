@@ -176,6 +176,23 @@ test('Gateway publication pins the persisted version, reads revision and persist
         (h.calls.find((call) => call.url.endsWith('/publish-operations'))?.init.headers as Record<string, string>).Authorization, 'Bearer test-secret');
 });
 
+test('Gateway control outage persists a pending intent without claiming readiness', async () => {
+    const h = harness();
+    const outage = async (url: string | URL | Request, init?: RequestInit) => {
+        if (String(url).endsWith('/publication-state')) throw new Error('connect ECONNREFUSED');
+        return h.fetcher(url, init);
+    };
+    const result = await publishGatewayRelease(h.state, 'admin', '', requestKey, config, outage, () => snapshot);
+    assert.equal(result.status, 'pending');
+    assert.equal(result.operationId, '');
+    assert.equal(result.failureCode, 'gateway_unavailable');
+    const intent = JSON.parse(h.site.gatewayPublishIntent || '{}');
+    assert.equal(intent.status, 'pending');
+    assert.equal(intent.operationId, undefined);
+    assert.equal(h.calls.some(call => call.url.endsWith('/template-pin') || call.url.endsWith('/releases') || call.url.endsWith('/publish-operations')), false);
+    assert.equal(h.site.gatewayCurrentReleaseId, undefined);
+});
+
 test('same request key reuses the exact release intent without additional Gateway writes', async () => {
     const h = harness();
     const first = await publishGatewayRelease(h.state, 'admin', '', requestKey, config, h.fetcher, () => snapshot);

@@ -1,5 +1,5 @@
 import { siteContext } from '../utils/site-context';
-import { fetchPublishedSite } from '../utils/release.mjs';
+import { loadPublicSite } from '../utils/public-runtime.mjs';
 
 export default defineEventHandler(async (event) => {
     const config = useRuntimeConfig(event);
@@ -10,10 +10,14 @@ export default defineEventHandler(async (event) => {
     setHeader(event, 'Cache-Control', 'no-store');
     let page;
     try {
-        page = await fetchPublishedSite({ path,
+        page = await loadPublicSite({ path,
             host: siteContext(event), expectedHost: config.public.siteHost, gatewaySecret: config.gatewaySecret,
-            cmsOrigin: config.cmsInternalOrigin, fetcher: $fetch });
-    } catch {
+            cmsOrigin: config.cmsInternalOrigin, fetcher: $fetch,
+            artifactRoot: config.runtimeArtifactRoot, releaseId: config.runtimeReleaseId,
+            legacyCmsPublicRead: config.legacyCmsPublicRead });
+    } catch (error) {
+        const detail = error as { code?: unknown; message?: unknown };
+        console.error('Published runtime read failed', { code: detail?.code, message: detail?.message });
         throw createError({ statusCode: 502, statusMessage: 'Published site unavailable' });
     }
     if (!page) throw createError({ statusCode: 404, statusMessage: 'Page not found' });

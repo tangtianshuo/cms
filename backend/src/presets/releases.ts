@@ -13,6 +13,7 @@ import type { SiteInstallation } from './site-model';
 import { normalizeNavigation, type NavigationNode } from './navigation';
 import { validateSectionConfigs, validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
 import type { SiteOperations } from './operations';
+import type { LayoutDocument } from '../storefront/layout-document';
 
 export interface ReleaseLink { label: string; path: string }
 export interface ReleaseItem extends ReleaseLink { image: string; description: string; price: string }
@@ -26,6 +27,7 @@ export interface ReleasePage {
     pageKey: string;
     entryId: string;
     content: PublishedContent;
+    layoutDocument?: LayoutDocument;
 }
 export interface ReleaseSnapshot {
     schemaVersion: 1;
@@ -49,6 +51,8 @@ export interface ReleaseRecord extends MongoDBEntry {
     templateRecord?: string;
     requestKey?: string;
     sourceReleaseId?: string;
+    /** Gateway upload artifact retained beside the CMS snapshot for rollback. */
+    artifactPayload?: string;
 }
 export interface ReleaseAudit extends MongoDBEntry {
     workspaceId?: string;
@@ -206,7 +210,12 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         const page = pageDraft(site, sourcePage.key)!;
         const model = site.models.find((item) => item.key === page.modelKey);
         const bound = entries.find((entry) => entry._id === page.entryId);
-        updatePageDraft(site, page.key, page, bound);
+        const contractPage = Boolean(preset.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
+        // A legacy import may not have saved section data yet. Keep its
+        // preset demo publishable until an editor explicitly saves sections.
+        if (contractPage || sourcePage.sectionConfigs || sourcePage.layoutDocument) {
+            updatePageDraft(site, page.key, page, bound);
+        }
         if (page.enabled === false) continue;
         if (!page.seoTitle.trim()) throw new Error(`SEO title is required: ${page.title}`);
         const candidates = entries.filter((entry) => entry.templateId === model?.templateId &&
@@ -225,7 +234,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
             if (page.layout === 'collection-list' && !page.blueprintKey) {
                 content.preset.demo.collection = { title: page.title, description: '', image: '' };
             }
-            pages.push({ path, pageKey: page.key, entryId: entry._id, content });
+            pages.push({ path, pageKey: page.key, entryId: entry._id, content, ...(page.layoutDocument ? { layoutDocument: page.layoutDocument } : {}) });
         }
     }
     const pageForEntry = (id: string) => pages.find((page) => page.entryId === id && page.path !== '/collections');
@@ -288,8 +297,11 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
     const publishedPaths = new Set([...pages.map(page => page.path), ...redirects.keys()]);
     for (const page of site.pages) {
         if (page.sectionConfigs) {
-            validateSectionConfigs(page.layout, page.sectionConfigs, { publishedPaths });
-            validateSectionMediaReferences(page.layout, page.sectionConfigs, { publishedPaths, media: input.media, site });
+            const contractPage = Boolean(preset.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
+            if (!contractPage) {
+                validateSectionConfigs(page.layout, page.sectionConfigs, { publishedPaths });
+                validateSectionMediaReferences(page.layout, page.sectionConfigs, { publishedPaths, media: input.media, site });
+            }
         }
     }
     const navigation = normalizeNavigation(site.navigation === undefined ? legacyNavigation : site.navigation, { publishedPaths });
@@ -386,3 +398,6 @@ export async function rollbackRelease(source: ReleaseSource, actorId: string, re
         throw cause;
     }
 }
+
+export { toContractSnapshot } from '../release-contract/snapshot';
+export type { ContractAsset, ContractSnapshotV1, ContractTemplateIdentity } from '../release-contract/snapshot';

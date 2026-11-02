@@ -1,4 +1,5 @@
 import { PropType } from '../prop/models/main';
+import type { TemplateCompatibility, TemplateEditorContract, TemplateRendererContract } from '../template-contract/model';
 
 export interface PresetField {
     key: string;
@@ -30,6 +31,9 @@ export interface PresetManifest {
     version: string;
     name: string;
     description: string;
+    compatibility?: TemplateCompatibility;
+    editor?: TemplateEditorContract;
+    renderer?: TemplateRendererContract;
     theme: {
         background: string;
         foreground: string;

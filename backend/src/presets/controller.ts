@@ -9,9 +9,10 @@ import { RP } from '../security/route-protection/main';
 import { LanguageFactory } from '../language/factory';
 import { buildChecklist } from './checklist';
 import { getPreset, listPresets } from './catalog';
+import { resolveInstalledPreset } from './installed';
 import { adoptPublicTemplate, importPreset, planImport, previewPublicTemplateUpgrade, type ImportSource } from './import';
 import { getPublicRegistry, getPublicTemplate } from './registry';
-import { createPageDraft, pageDraft, pageSectionOptions, updatePageDraft } from './pages';
+import { createPageDraft, pageDraft, pageSectionOptionsForPage, updatePageDraft } from './pages';
 import { gatewayBound, gatewayPublishConfig } from './gateway-publish';
 import { buildSiteOperationsStatus } from './operations';
 import { ownerWorkspace } from '../workspaces/context';
@@ -36,7 +37,7 @@ const pageBody = z.object({
     entryId: z.string(),
     enabled: z.boolean().optional(),
     navigation: z.boolean().optional(),
-    sectionConfigs: z.array(z.object({ type: z.enum(['hero-carousel', 'info-grid', 'faq', 'product-gallery', 'product-information', 'product-description']), enabled: z.boolean(), data: z.record(z.unknown()) }).strict()).optional(),
+    sectionConfigs: z.array(z.object({ type: z.string().trim().min(1).max(120), enabled: z.boolean(), data: z.record(z.unknown()) }).strict()).optional(),
 }).strict();
 
 export function importSource(): ImportSource {
@@ -76,7 +77,7 @@ async function siteView() {
     return {
         site: { ...site, pages: site.pages.map((page) => pageDraft(site, page.key)) },
         checklist: buildChecklist(site, templates, entries, gatewayReady),
-        pageOptions: Object.fromEntries(site.pages.map((page) => [page.key, pageSectionOptions(page.layout)])),
+        pageOptions: Object.fromEntries(site.pages.map((page) => [page.key, pageSectionOptionsForPage(site, page.key)])),
     };
 }
 
@@ -154,7 +155,7 @@ export const PresetController = createController({
             }),
             operations: createControllerMethod({
                 path: '/operations', type: 'get',
-                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                preRequestHandler: RP.createSiteCapabilityCheck('operations.read'),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
                     const site = await Repo.siteInstallation.methods.findSelected();
@@ -204,7 +205,7 @@ export const PresetController = createController({
             }),
             pages: createControllerMethod({
                 path: '/pages/:pageKey', type: 'post',
-                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                preRequestHandler: RP.createSiteCapabilityCheck('pages.manage'),
                 async handler({ request, errorHandler }) {
                     const { pageKey } = request.params as { pageKey: string };
                     const parsed = pageBody.safeParse(request.body);
@@ -220,7 +221,8 @@ export const PresetController = createController({
                     }
                     if (parsed.data.sectionConfigs) {
                         const draft = pageDraft(site, pageKey)!;
-                        validateSectionMediaReferences(draft.layout, parsed.data.sectionConfigs as never, {
+                        const contractPage = Boolean(resolveInstalledPreset(site).editor?.pages.some(item => item.pageKey === (draft.blueprintKey || pageKey)));
+                        if (!contractPage) validateSectionMediaReferences(draft.layout, parsed.data.sectionConfigs as never, {
                             media: await Repo.media.findAll(), site,
                             publishedPaths: new Set(site.pages.filter(page => page.enabled !== false && !page.path.includes(':')).map(page => page.path)),
                         });
@@ -239,7 +241,7 @@ export const PresetController = createController({
             }),
             addPage: createControllerMethod({
                 path: '/pages', type: 'post',
-                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                preRequestHandler: RP.createSiteCapabilityCheck('pages.manage'),
                 async handler({ request, errorHandler }) {
                     const parsed = pageBody.extend({ blueprintKey: z.string().min(1) }).safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid new page');

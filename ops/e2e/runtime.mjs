@@ -59,6 +59,7 @@ export function workerEnv(e) {
             process.env.GATEWAY_DOCKER_PLATFORM || 'linux/amd64',
         GATEWAY_PROXY_PORT: '18090',
         GATEWAY_ROUTE_STATE_PATH: path.join(runtimeDir, 'gateway-routes.json'),
+        GATEWAY_SNAPSHOT_HOST_DIR: path.join(runtimeDir, 'gateway-snapshots'),
     };
 }
 if (
@@ -84,6 +85,7 @@ if (
                 E2E_GATEWAY_SITE: randomUUID(),
                 E2E_CMS_WORKSPACE: '',
                 E2E_CMS_SITE: '',
+                E2E_SNAPSHOT_HOST_DIR: path.join(runtimeDir, 'gateway-snapshots'),
                 E2E_EMAIL: 'docker-e2e@acceptance.invalid',
                 E2E_PASSWORD: secret(),
             });

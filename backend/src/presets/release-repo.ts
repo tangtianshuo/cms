@@ -24,6 +24,7 @@ export const ReleaseRepo = createMongoDBRepository<ReleaseRecord, {
         templateRecord: { __type: 'string', __required: false },
         requestKey: { __type: 'string', __required: false },
         sourceReleaseId: { __type: 'string', __required: false },
+        artifactPayload: { __type: 'string', __required: false },
     },
     indexes: [{ key: { siteId: 1, createdAt: -1 }, name: 'release_history' }],
     methods({ mdb, identityCollection }) {

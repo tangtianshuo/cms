@@ -152,7 +152,7 @@ export const zhCN: typeof en = {
         publicationDiagnostics: '发布诊断信息',
         publicationFailureCode: '错误码：',
         publicationOperationId: '操作编号：',
-        gatewayStatus: {"draft": "草稿修改已准备好，可以开始校验。", "checking": "正在校验草稿，请稍候…", "publishing": "正在部署并检查首页，请稍候…", "pending": "正在部署并检查首页，请稍候…", "ready": "发布成功，独立站已更新。", "failed": "发布失败，原有站点继续提供服务。", "rolled-back": "回滚完成，已恢复所选版本。"},
+        gatewayStatus: {"draft": "草稿修改已准备好，可以开始校验。", "checking": "正在校验草稿，请稍候…", "publishing": "正在部署并检查首页，请稍候…", "pending": "正在部署并检查首页，请稍候…", "ready": "发布成功，独立站已更新。", "failed": "发布失败，原有站点继续提供服务。", "rolled-back": "回滚完成，已恢复所选版本。", "unknown": "暂时无法确认网关状态，原有站点继续提供服务；控制服务恢复后可重试。"},
         title: '独立站预制模版',
         subtitle: '选择整站设计，并生成建站所需的内容模型。',
         colors: '主题颜色',

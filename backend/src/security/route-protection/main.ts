@@ -11,6 +11,7 @@ import { RPBodyCheck } from '@bcms/selfhosted-backend/security/route-protection/
 import { RPJwt } from '@bcms/selfhosted-backend/security/route-protection/jwt';
 import { RPApiKey } from '@bcms/selfhosted-backend/security/route-protection/api-key';
 import type { UserRoleName } from '@bcms/selfhosted-backend/user/models/role';
+import { hasSiteCapability, type SiteCapability } from '../../authorization/site-access';
 
 export interface RPBodyCheckResult<Body> {
     body: Body;
@@ -85,6 +86,15 @@ export class RP {
             const result = await this.createJwtCheck(['USER'])(data);
             const context = (result as RPJwtCheckResult & { [verifiedWorkspace]: WorkspaceContext })[verifiedWorkspace];
             if (!context.admin) throw data.errorHandler(HttpStatus.Forbidden, 'Workspace administrator required');
+            return result;
+        };
+    }
+
+    static createSiteCapabilityCheck(capability: SiteCapability): ControllerMethodPreRequestHandler<RPJwtCheckResult> {
+        return async (data) => {
+            const result = await this.createJwtCheck(['USER'])(data);
+            const context = (result as RPJwtCheckResult & { [verifiedWorkspace]: WorkspaceContext })[verifiedWorkspace];
+            if (!hasSiteCapability(context, capability)) throw data.errorHandler(HttpStatus.Forbidden, `Site capability required: ${capability}`);
             return result;
         };
     }

@@ -14,7 +14,7 @@ async function snapshot(root, name) {
     const files = execFileSync(
         'git',
         ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
-        { cwd: root, encoding: 'utf8' },
+        { cwd: root, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 },
     )
         .split('\0')
         .filter(Boolean);

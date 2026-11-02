@@ -14,6 +14,8 @@ const props = withDefaults(defineProps<{
     items?: PresetPagePreview['items'];
     sections?: string[];
     sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }>;
+    layoutDocument?: PresetPagePreview['layoutDocument'];
+    pageKey?: string;
 }>(), { mode: 'demo' });
 
 const menuOpen = ref(false);
@@ -28,6 +30,15 @@ const quoteHref = computed(() => props.preset.demo.contactEmail
 const navigationNodes = computed(() => props.navigation || []);
 const flattenNavigation = (nodes: NavigationItem[]): NavigationItem[] => nodes.flatMap(node => [node, ...flattenNavigation(node.children || [])]);
 const flatNavigation = computed(() => flattenNavigation(navigationNodes.value));
+const config = useRuntimeConfig();
+const nodeIdFor = (type: string, index = 0) => props.layoutDocument?.root.filter(node => node.type === type)[index]?.id || `section-${type}-${index + 1}`;
+function onNodeClick(event: MouseEvent) {
+    if (!['draft', 'published'].includes(props.mode) || window.parent === window || !props.pageKey) return;
+    const target = (event.target as Element | null)?.closest?.('[data-studio-node-id]') as HTMLElement | null;
+    if (!target?.dataset.studioNodeId) return;
+    window.parent.postMessage({ type: 'studio:node-selected', pageKey: props.pageKey, nodeId: target.dataset.studioNodeId,
+        nodeType: target.dataset.studioNodeType || 'section', templateId: props.preset.id, templateVersion: props.preset.version }, new URL(config.public.adminOrigin).origin);
+}
 const publishedCollection = computed(() => flatNavigation.value.find((link) => (link.href || link.path) !== '/')?.href || flatNavigation.value.find((link) => (link.href || link.path) !== '/')?.path || '/collections');
 const publishedCompany = computed(() => { const link = flatNavigation.value.find((item) => /about|company|story|page/i.test(item.label)); return link?.href || link?.path || '/pages/about'; });
 const products = computed(() => props.mode === 'published'
@@ -58,16 +69,18 @@ const products = computed(() => props.mode === 'published'
             </div>
         </header>
 
-        <main v-if="view === 'home'">
+        <main v-if="view === 'home'" @click.capture="onNodeClick">
             <template v-if="configured.length">
-                <template v-for="section in configured" :key="section.type">
-                    <HeroCarousel v-if="section.enabled && section.type === 'hero-carousel'" :slides="sectionItems(section, 'slides')" />
-                    <InfoGrid v-else-if="section.enabled && section.type === 'info-grid'" :items="sectionItems(section, 'items')" />
-                    <FaqSection v-else-if="section.enabled && section.type === 'faq'" :items="sectionItems(section, 'items')" />
+                <template v-for="(section, index) in configured" :key="`${section.type}-${index}`">
+                    <div v-if="section.enabled && ['hero-carousel', 'info-grid', 'faq'].includes(section.type)" class="studio-preview-section" :data-studio-node-id="nodeIdFor(section.type, index)" :data-studio-node-type="section.type">
+                        <HeroCarousel v-if="section.type === 'hero-carousel'" :slides="sectionItems(section, 'slides')" />
+                        <InfoGrid v-else-if="section.type === 'info-grid'" :items="sectionItems(section, 'items')" />
+                        <FaqSection v-else :items="sectionItems(section, 'items')" />
+                    </div>
                 </template>
             </template>
             <template v-else>
-            <section v-if="show('hero')" class="aero-hero" :style="{ '--aero-hero-image': `url('${preset.demo.hero.image}')` }">
+            <section v-if="show('hero')" class="aero-hero" data-studio-node-type="hero" :data-studio-node-id="nodeIdFor('hero')" :style="{ '--aero-hero-image': `url('${preset.demo.hero.image}')` }">
                 <div class="aero-hero__content">
                     <p class="aero-kicker">{{ showcase?.heroLabel || 'UNMANNED SYSTEMS / FIELD PROVEN' }}</p>
                     <h1>{{ preset.demo.hero.title }}</h1>
@@ -84,7 +97,7 @@ const products = computed(() => props.mode === 'published'
             </section>
 
             <template v-if="show('feature')">
-            <section class="aero-intro aero-wrap">
+            <section class="aero-intro aero-wrap" data-studio-node-type="feature" :data-studio-node-id="nodeIdFor('feature')">
                 <p class="aero-kicker">{{ showcase?.eyebrow }}</p>
                 <h2>{{ preset.demo.collection.title }}</h2>
                 <p>{{ preset.demo.collection.description }}</p>
@@ -134,19 +147,19 @@ const products = computed(() => props.mode === 'published'
             </template>
         </main>
 
-        <main v-else-if="view === 'collection'" class="aero-inner aero-wrap">
-            <template v-if="show('heading')"><p class="aero-kicker">AIRCRAFT / PRODUCT RANGE</p><h1>{{ preset.demo.collection.title }}</h1><p class="aero-page-intro">{{ preset.demo.collection.description }}</p></template>
-            <div v-if="show('grid')" class="aero-product-grid aero-product-grid--catalog"><NuxtLink v-for="(item, index) in products" :key="item.path" class="aero-product-card" :to="mode === 'published' ? item.path : routeFor('product')"><div class="aero-product-card__image"><img v-if="item.image" :src="item.image" :alt="item.label" loading="lazy" /><span class="aero-index">0{{ index + 1 }}</span><span class="aero-arrow" aria-hidden="true">↗</span></div><div class="aero-product-card__body"><div><p class="aero-kicker">MULTIROTOR / MODULAR</p><h3>{{ item.label }}</h3></div><strong>{{ item.price }}</strong></div><p class="aero-product-card__description">{{ item.description }}</p></NuxtLink></div>
+        <main v-else-if="view === 'collection'" class="aero-inner aero-wrap" @click.capture="onNodeClick">
+            <template v-if="show('heading')"><div data-studio-node-type="heading" :data-studio-node-id="nodeIdFor('heading')"><p class="aero-kicker">AIRCRAFT / PRODUCT RANGE</p><h1>{{ preset.demo.collection.title }}</h1><p class="aero-page-intro">{{ preset.demo.collection.description }}</p></div></template>
+            <div v-if="show('grid')" class="aero-product-grid aero-product-grid--catalog" data-studio-node-type="grid" :data-studio-node-id="nodeIdFor('grid')"><NuxtLink v-for="(item, index) in products" :key="item.path" class="aero-product-card" :to="mode === 'published' ? item.path : routeFor('product')"><div class="aero-product-card__image"><img v-if="item.image" :src="item.image" :alt="item.label" loading="lazy" /><span class="aero-index">0{{ index + 1 }}</span><span class="aero-arrow" aria-hidden="true">↗</span></div><div class="aero-product-card__body"><div><p class="aero-kicker">MULTIROTOR / MODULAR</p><h3>{{ item.label }}</h3></div><strong>{{ item.price }}</strong></div><p class="aero-product-card__description">{{ item.description }}</p></NuxtLink></div>
         </main>
 
-        <main v-else-if="view === 'product'" class="aero-product-page aero-wrap">
+        <main v-else-if="view === 'product'" class="aero-product-page aero-wrap" @click.capture="onNodeClick">
             <ProductSections v-if="configured.length" :product="preset.demo.product" :sections="configured" />
             <template v-else>
-            <p class="aero-kicker">PLATFORM / {{ preset.demo.brand }}</p><div class="aero-product-page__grid"><div v-if="show('gallery')" class="aero-product-page__image"><img v-if="preset.demo.product.image" :src="preset.demo.product.image" :alt="preset.demo.product.title" /></div><div class="aero-product-page__info"><p class="aero-kicker">MODULAR MULTIROTOR SYSTEM</p><h1>{{ preset.demo.product.title }}</h1><strong v-if="show('information')">{{ preset.demo.product.price }}</strong><p v-if="show('description')">{{ preset.demo.product.description }}</p><ul v-if="show('information')"><li v-for="stat in showcase?.stats" :key="stat.label"><span>{{ stat.label }}</span><b>{{ stat.value }}</b></li></ul><a class="aero-button aero-button--primary" :href="quoteHref">Configure this platform <span aria-hidden="true">↗</span></a><small>Final configuration and pricing depend on payload and mission requirements.</small></div></div>
+            <p class="aero-kicker">PLATFORM / {{ preset.demo.brand }}</p><div class="aero-product-page__grid"><div v-if="show('gallery')" class="aero-product-page__image" data-studio-node-type="gallery" :data-studio-node-id="nodeIdFor('gallery')"><img v-if="preset.demo.product.image" :src="preset.demo.product.image" :alt="preset.demo.product.title" /></div><div class="aero-product-page__info"><p class="aero-kicker">MODULAR MULTIROTOR SYSTEM</p><h1>{{ preset.demo.product.title }}</h1><strong v-if="show('information')" data-studio-node-type="information" :data-studio-node-id="nodeIdFor('information')">{{ preset.demo.product.price }}</strong><p v-if="show('description')" data-studio-node-type="description" :data-studio-node-id="nodeIdFor('description')">{{ preset.demo.product.description }}</p><ul v-if="show('information')"><li v-for="stat in showcase?.stats" :key="stat.label"><span>{{ stat.label }}</span><b>{{ stat.value }}</b></li></ul><a class="aero-button aero-button--primary" :href="quoteHref">Configure this platform <span aria-hidden="true">↗</span></a><small>Final configuration and pricing depend on payload and mission requirements.</small></div></div>
         </template>
         </main>
 
-        <main v-else class="aero-inner aero-wrap"><p class="aero-kicker">{{ preset.demo.brand }} / COMPANY</p><div v-if="show('story')" class="aero-about"><div><h1>{{ preset.demo.page.title }}</h1><p>{{ preset.demo.page.body }}</p><a class="aero-button aero-button--primary" :href="quoteHref">Contact the team <span aria-hidden="true">↗</span></a></div><img v-if="preset.demo.page.image" :src="preset.demo.page.image" :alt="preset.demo.page.title" /></div></main>
+        <main v-else class="aero-inner aero-wrap" @click.capture="onNodeClick"><p class="aero-kicker">{{ preset.demo.brand }} / COMPANY</p><div v-if="show('story')" class="aero-about" data-studio-node-type="story" :data-studio-node-id="nodeIdFor('story')"><div><h1>{{ preset.demo.page.title }}</h1><p>{{ preset.demo.page.body }}</p><a class="aero-button aero-button--primary" :href="quoteHref">Contact the team <span aria-hidden="true">↗</span></a></div><img v-if="preset.demo.page.image" :src="preset.demo.page.image" :alt="preset.demo.page.title" /></div></main>
 
         <footer class="aero-footer"><NuxtLink class="aero-brand" :to="mode === 'published' ? '/' : routeFor('home')"><span class="aero-brand__mark" aria-hidden="true">A</span><span>{{ preset.demo.brand }}</span></NuxtLink><span>UNMANNED SYSTEMS / FIELD PROVEN</span><small>© {{ new Date().getFullYear() }} {{ preset.demo.brand }}</small></footer>
     </div>

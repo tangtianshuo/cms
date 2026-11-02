@@ -8,7 +8,8 @@ import ProductSections from './sections/ProductSections.vue';
 
 const props = withDefaults(defineProps<{ preset: PresetDemo; view: string; sections?: string[];
     mode?: 'demo' | 'draft' | 'published'; navigation?: NavigationItem[];
-    items?: PresetPagePreview['items']; sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }> }>(), {
+    items?: PresetPagePreview['items']; sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }>;
+    layoutDocument?: PresetPagePreview['layoutDocument']; pageKey?: string }>(), {
     mode: 'demo',
 });
 const themeStyle = computed(() => ({
@@ -26,10 +27,22 @@ const menuOpen = ref(false);
 const navigationNodes = computed(() => props.mode === 'published' ? (props.navigation || []) : [
     { label: 'Home', href: routeFor('home').path }, { label: 'Collections', href: routeFor('collection').path }, { label: 'Our story', href: routeFor('page').path },
 ]);
+const config = useRuntimeConfig();
+const nodeIdFor = (type: string, index = 0) => props.layoutDocument?.root.filter(node => node.type === type)[index]?.id || `section-${type}-${index + 1}`;
+function studioMessage(type: string, nodeId: string, nodeType: string) {
+    if (!['draft', 'published'].includes(props.mode) || window.parent === window || !props.pageKey) return;
+    const origin = new URL(config.public.adminOrigin).origin;
+    window.parent.postMessage({ type, pageKey: props.pageKey, nodeId, nodeType,
+        templateId: props.preset.id, templateVersion: props.preset.version }, origin);
+}
+function onNodeClick(event: MouseEvent) {
+    const target = (event.target as Element | null)?.closest?.('[data-studio-node-id]') as HTMLElement | null;
+    if (target?.dataset.studioNodeId) studioMessage('studio:node-selected', target.dataset.studioNodeId, target.dataset.studioNodeType || 'section');
+}
 </script>
 
 <template>
-    <AeroPresetPage v-if="preset.id === 'aeroframe'" :preset="preset" :view="view" :mode="mode" :navigation="navigation" :items="items" :sections="sections" :section-configs="sectionConfigs" />
+    <AeroPresetPage v-if="preset.id === 'aeroframe'" :preset="preset" :view="view" :mode="mode" :navigation="navigation" :items="items" :sections="sections" :section-configs="sectionConfigs" :layout-document="layoutDocument" :page-key="pageKey" />
     <div v-else class="preset-demo" :class="[`preset-demo--${preset.id}`, { 'preset-demo--draft': mode === 'draft' }]" :style="themeStyle">
         <header class="preset-demo__header">
             <span v-if="mode === 'draft'" class="preset-demo__brand">{{ preset.demo.brand }}</span>
@@ -40,16 +53,18 @@ const navigationNodes = computed(() => props.mode === 'published' ? (props.navig
             <span class="preset-demo__header-end" aria-hidden="true">○</span>
         </header>
 
-        <main v-if="view === 'home'">
+        <main v-if="view === 'home'" @click.capture="onNodeClick">
             <template v-if="configured.length">
-                <template v-for="section in configured" :key="section.type">
-                    <HeroCarousel v-if="section.enabled && section.type === 'hero-carousel'" :slides="sectionItems(section, 'slides')" />
-                    <InfoGrid v-else-if="section.enabled && section.type === 'info-grid'" :items="sectionItems(section, 'items')" />
-                    <FaqSection v-else-if="section.enabled && section.type === 'faq'" :items="sectionItems(section, 'items')" />
+                <template v-for="(section, index) in configured" :key="`${section.type}-${index}`">
+                    <div v-if="section.enabled && ['hero-carousel', 'info-grid', 'faq'].includes(section.type)" class="studio-preview-section" :data-studio-node-id="nodeIdFor(section.type, index)" :data-studio-node-type="section.type">
+                        <HeroCarousel v-if="section.type === 'hero-carousel'" :slides="sectionItems(section, 'slides')" />
+                        <InfoGrid v-else-if="section.type === 'info-grid'" :items="sectionItems(section, 'items')" />
+                        <FaqSection v-else :items="sectionItems(section, 'items')" />
+                    </div>
                 </template>
             </template>
             <template v-else>
-            <section v-if="show('hero')" class="preset-demo__hero" :class="{ 'preset-demo__hero--empty': !preset.demo.hero.image }"
+            <section v-if="show('hero')" class="preset-demo__hero" :data-studio-node-id="nodeIdFor('hero')" data-studio-node-type="hero" :class="{ 'preset-demo__hero--empty': !preset.demo.hero.image }"
                 :style="preset.demo.hero.image ? { backgroundImage: `url(${preset.demo.hero.image})` } : undefined">
                 <div class="preset-demo__hero-content">
                     <p>NEW SEASON</p>
@@ -64,7 +79,7 @@ const navigationNodes = computed(() => props.mode === 'published' ? (props.navig
                     <strong>{{ item.label }}</strong><span>{{ item.price }}</span>
                 </NuxtLink>
             </div>
-            <section v-if="show('feature') && (mode === 'demo' || preset.demo.collection.title)" class="preset-demo__feature">
+            <section v-if="show('feature') && (mode === 'demo' || preset.demo.collection.title)" class="preset-demo__feature" :data-studio-node-id="nodeIdFor('feature')" data-studio-node-type="feature">
                 <div>
                     <p>CURATED FOR YOU</p>
                     <h2>{{ preset.demo.collection.title }}</h2>
@@ -76,9 +91,9 @@ const navigationNodes = computed(() => props.mode === 'published' ? (props.navig
             </template>
         </main>
 
-        <main v-else-if="view === 'collection'" class="preset-demo__content">
+        <main v-else-if="view === 'collection'" class="preset-demo__content" @click.capture="onNodeClick">
             <p class="preset-demo__crumb">Home / Collections</p>
-            <div v-if="show('heading')" class="preset-demo__collection-heading">
+            <div v-if="show('heading')" class="preset-demo__collection-heading" :data-studio-node-id="nodeIdFor('heading')" data-studio-node-type="heading">
                 <div>
                     <p>THE COLLECTION</p>
                     <h1>{{ preset.demo.collection.title }}</h1>
@@ -87,7 +102,7 @@ const navigationNodes = computed(() => props.mode === 'published' ? (props.navig
                 <span v-if="mode !== 'published'">01 item</span>
                 <span v-else>{{ items?.length || 0 }} items</span>
             </div>
-            <div v-if="show('grid')" class="preset-demo__collection-grid">
+            <div v-if="show('grid')" class="preset-demo__collection-grid" :data-studio-node-id="nodeIdFor('grid')" data-studio-node-type="grid">
                 <NuxtLink v-if="mode !== 'published' && (mode === 'demo' || preset.demo.product.title)" :to="routeFor('product')" class="preset-demo__product-tile" :inert="mode === 'draft'">
                     <img v-if="preset.demo.product.image" :src="preset.demo.product.image" :alt="preset.demo.product.title" />
                     <strong>{{ preset.demo.product.title }}</strong>
@@ -103,17 +118,17 @@ const navigationNodes = computed(() => props.mode === 'published' ? (props.navig
             </div>
         </main>
 
-        <main v-else-if="view === 'product'" class="preset-demo__content">
+        <main v-else-if="view === 'product'" class="preset-demo__content" @click.capture="onNodeClick">
             <ProductSections v-if="configured.length" :product="preset.demo.product" :sections="configured" />
             <template v-else>
             <p class="preset-demo__crumb">Home / Collections / {{ preset.demo.product.title }}</p>
             <div class="preset-demo__product-layout">
-                <div v-if="show('gallery')" class="preset-demo__product-image"><img v-if="preset.demo.product.image" :src="preset.demo.product.image" :alt="preset.demo.product.title" /></div>
+                <div v-if="show('gallery')" class="preset-demo__product-image" :data-studio-node-id="nodeIdFor('gallery')" data-studio-node-type="gallery"><img v-if="preset.demo.product.image" :src="preset.demo.product.image" :alt="preset.demo.product.title" /></div>
                 <div class="preset-demo__product-detail">
                     <p>BEST SELLER</p>
                     <h1>{{ preset.demo.product.title }}</h1>
-                    <strong v-if="show('information')">{{ preset.demo.product.price }}</strong>
-                    <p v-if="show('description')">{{ preset.demo.product.description }}</p>
+                    <strong v-if="show('information')" :data-studio-node-id="nodeIdFor('information')" data-studio-node-type="information">{{ preset.demo.product.price }}</strong>
+                    <p v-if="show('description')" :data-studio-node-id="nodeIdFor('description')" data-studio-node-type="description">{{ preset.demo.product.description }}</p>
                     <button v-if="mode === 'demo'" type="button" disabled>Add to bag</button>
                     <small v-if="mode === 'demo'">Store preview · Checkout is not connected</small>
                 </div>
@@ -121,9 +136,9 @@ const navigationNodes = computed(() => props.mode === 'published' ? (props.navig
         </template>
         </main>
 
-        <main v-else class="preset-demo__content">
+        <main v-else class="preset-demo__content" @click.capture="onNodeClick">
             <p class="preset-demo__crumb">Home / {{ preset.demo.page.title }}</p>
-            <div v-if="show('story')" class="preset-demo__story">
+            <div v-if="show('story')" class="preset-demo__story" :data-studio-node-id="nodeIdFor('story')" data-studio-node-type="story">
                 <div>
                     <p>OUR STORY</p>
                     <h1>{{ preset.demo.page.title }}</h1>

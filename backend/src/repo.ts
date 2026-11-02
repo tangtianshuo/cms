@@ -15,6 +15,8 @@ import { TemplateOrganizerRepo } from '@bcms/selfhosted-backend/template-organiz
 import { BackupRepo } from '@bcms/selfhosted-backend/backup/repo';
 import { SiteInstallationRepo } from '@bcms/selfhosted-backend/presets/site-repo';
 import { ReleaseRepo, ReleaseAuditRepo } from '@bcms/selfhosted-backend/presets/release-repo';
+import { LeadRepo } from './leads/repo';
+import { AnalyticsRepo } from './analytics/repo';
 
 export class Repo {
     static readonly resourceShare = ResourceShareRepo;
@@ -36,4 +38,6 @@ export class Repo {
     static readonly siteInstallation = SiteInstallationRepo;
     static readonly storefrontRelease = ReleaseRepo;
     static readonly storefrontReleaseAudit = ReleaseAuditRepo;
+    static readonly lead = LeadRepo;
+    static readonly analytics = AnalyticsRepo;
 }

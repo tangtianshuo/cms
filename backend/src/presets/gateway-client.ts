@@ -20,6 +20,18 @@ export interface GatewaySiteBinding {
 
 export class GatewayRevisionConflict extends Error {}
 
+export class GatewayUnavailableError extends Error {
+    readonly code = 'gateway_unavailable';
+    constructor(message = 'Gateway control is unavailable', options?: { cause?: unknown }) {
+        super(message, options);
+        this.name = 'GatewayUnavailableError';
+    }
+}
+
+export function isGatewayUnavailable(cause: unknown): cause is GatewayUnavailableError {
+    return cause instanceof GatewayUnavailableError;
+}
+
 const publicFailureCodes = new Set([
     'invalid_template', 'template_not_found', 'invalid_release', 'template_pin_mismatch',
     'release_conflict', 'request_too_large', 'site_not_found', 'release_not_found',
@@ -110,8 +122,17 @@ export function validateConfig(config: GatewayPublishConfig) {
 }
 
 export async function gatewayRequest(fetcher: typeof fetch, url: string, secret: string, init: RequestInit = {}): Promise<unknown> {
-    const response = await fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000),
-        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json', ...init.headers } });
+    let response: Response;
+    try {
+        response = await fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000),
+            headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json', ...init.headers } });
+    } catch (cause) {
+        const detail = cause instanceof Error && cause.message ? `: ${cause.message}` : '';
+        throw new GatewayUnavailableError(`Gateway control is unavailable${detail}`, { cause });
+    }
+    if ([502, 503, 504].includes(response.status)) {
+        throw new GatewayUnavailableError(`Gateway control is unavailable (${response.status})`);
+    }
     if (response.status === 409) throw new GatewayRevisionConflict('Gateway rejected a concurrent change; refresh the site state and retry');
     if (!response.ok) {
         let code = '';

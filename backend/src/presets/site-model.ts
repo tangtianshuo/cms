@@ -4,6 +4,7 @@ import type { ObjectSchema } from '../_utils/object-utility';
 import type { NavigationNode } from './navigation';
 import type { SectionConfig } from '../storefront/section-schema';
 import type { SiteOperations } from './operations';
+import type { LayoutDocument } from '../storefront/layout-document';
 
 export interface SiteInstallation extends MongoDBEntry {
     workspaceId?: string;
@@ -64,6 +65,7 @@ export interface SitePage {
     blueprintKey?: string;
     enabled?: boolean;
     navigation?: boolean;
+    layoutDocument?: LayoutDocument;
 }
 
 export const SiteInstallationSchema: ObjectSchema = {
@@ -153,6 +155,7 @@ export const SiteInstallationSchema: ObjectSchema = {
                 sectionConfigs: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
                     type: { __type: 'string', __required: true }, enabled: { __type: 'boolean', __required: true }, data: { __type: 'object', __required: true },
                 } } },
+                layoutDocument: { __type: 'object', __required: false },
                 entryId: { __type: 'string', __required: false },
                 blueprintKey: { __type: 'string', __required: false },
                 enabled: { __type: 'boolean', __required: false },

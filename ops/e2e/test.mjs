@@ -4,6 +4,26 @@ import { open, mkdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { cmsRoot, gatewayRoot, runtimeDir, readEnv } from './runtime.mjs';
+if (process.argv[2] === 'contract') {
+    const { runContractRoundtrip } = await import('./contract-roundtrip.mjs');
+    await runContractRoundtrip();
+    process.exit(0);
+}
+if (process.argv[2] === 'platform-baseline') {
+    const { collectPlatformBaseline } = await import('./platform-baseline.mjs');
+    const document = await collectPlatformBaseline();
+    if (!document.acceptance.publicArtifactRequestsRemainIndependent)
+        throw new Error('platform baseline failed: artifact availability changed during a control-plane outage');
+    if (!document.acceptance.hasFailureCodes)
+        throw new Error('platform baseline failed: one or more probe failures has no stable error code');
+    console.log('platform-baseline: PASS');
+    process.exit(0);
+}
+if (process.argv[2] === 'analytics-isolation') {
+    const { execFileSync } = await import('node:child_process');
+    execFileSync(process.execPath, ['ops/e2e/analytics-isolation.mjs'], { cwd: cmsRoot, stdio: 'inherit' });
+    process.exit(0);
+}
 const e = await readEnv();
 const templatesRoot = path.resolve(
     process.env.E2E_TEMPLATES_ROOT ||
@@ -82,6 +102,27 @@ const suites = {
     recovery: {
         cwd: cmsRoot,
         cmd: ['node', '--test', 'ops/e2e/gateway-recovery.test.mjs'],
+    },
+    'publication-control-plane': {
+        cwd: cmsRoot,
+        cmd: [
+            'node',
+            '--test',
+            'ops/e2e/gateway-flow.test.mjs',
+            'ops/e2e/gateway-recovery.test.mjs',
+        ],
+    },
+    'runtime-isolation': {
+        cwd: cmsRoot,
+        cmd: ['node', 'ops/e2e/runtime-isolation.mjs'],
+    },
+    'platform-baseline': {
+        cwd: cmsRoot,
+        cmd: ['node', 'ops/e2e/platform-baseline.mjs'],
+    },
+    'quality-gate': {
+        cwd: cmsRoot,
+        cmd: ['node', 'ops/e2e/quality-gate.mjs'],
     },
 };
 const selected = process.argv[2];

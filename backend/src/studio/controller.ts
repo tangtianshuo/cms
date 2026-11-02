@@ -5,18 +5,20 @@ import { RP } from '../security/route-protection/main';
 import { Repo } from '../repo';
 import { canReadContent, canWriteContent, workspaceContext } from '../workspaces/context';
 import { resolveInstalledPreset } from '../presets/installed';
-import { pageDraft, pageSectionOptions, updatePageDraft } from '../presets/pages';
+import { pageDraft, pageSectionOptionsForPage, updatePageDraft } from '../presets/pages';
 import type { SiteInstallation } from '../presets/site-model';
 import { assertStudioWrite, entryValues, fieldDescriptors, pageOperationIds, patchEntry, type StudioValue } from './business';
 import { createStudioPage } from './page-create';
 import { normalizeNavigation, type NavigationNode } from '../presets/navigation';
 import { normalizeSiteOperations } from '../presets/operations';
 import { validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
+import { editorSchemaForSite } from '../template-contract/editor-schema';
+import { buildContentForm, validateContentValues } from '../content-editor/schema-form';
 
 const studioValueSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.array(z.object({ _id: z.string().min(1), alt_text: z.string().optional(), caption: z.string().optional() }).strict()), z.array(z.object({ tid: z.string().min(1), eid: z.string().min(1) }).strict())]);
 const entryBody = z.object({ entryId: z.string().min(1).optional(), operationId: z.string().uuid(), expectedUpdatedAt: z.number().int().nonnegative().optional(), fields: z.record(studioValueSchema) }).strict();
-const sectionConfigBody = z.object({ type: z.enum(['hero-carousel', 'info-grid', 'faq', 'product-gallery', 'product-information', 'product-description']), enabled: z.boolean(), data: z.record(z.unknown()) }).strict();
-const pageBody = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().min(1).max(160), seoTitle: z.string().max(120), seoDescription: z.string().max(320), sections: z.array(z.string()).min(1), sectionConfigs: z.array(sectionConfigBody).optional(), entryId: z.string(), enabled: z.boolean(), navigation: z.boolean() }).strict();
+const sectionConfigBody = z.object({ type: z.string().trim().min(1).max(120), enabled: z.boolean(), data: z.record(z.unknown()) }).strict();
+const pageBody = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().min(1).max(160), seoTitle: z.string().max(120), seoDescription: z.string().max(320), sections: z.array(z.string()).min(1), sectionConfigs: z.array(sectionConfigBody).optional(), layoutDocument: z.unknown().optional(), entryId: z.string(), enabled: z.boolean(), navigation: z.boolean() }).strict();
 const navigationBody: z.ZodType<NavigationNode> = z.lazy(() => z.object({
     id: z.string().min(1).max(160), label: z.string().trim().min(1).max(120), href: z.string().trim().max(500).optional(),
     children: z.array(navigationBody), enabled: z.boolean(),
@@ -50,10 +52,11 @@ export function assertStudioPageEntryBinding(siteId: string, entryId: string, bo
 }
 export const StudioController = createController({ name: 'Studio', path: '/api/v4/studio', methods() {
     return {
-        site: createControllerMethod({ path: '/site', type: 'get', preRequestHandler: RP.createJwtCheck(['USER']), async handler({ errorHandler }) {
+        site: createControllerMethod({ path: '/site', type: 'get', preRequestHandler: RP.createSiteCapabilityCheck('content.read'), async handler({ errorHandler }) {
             const site = await Repo.siteInstallation.methods.findSelected();
             if (!site || site.status !== 'ready') return { site: null, status: site?.status || 'empty', models: [] };
             const preset = resolveInstalledPreset(site);
+            const editorSchema = editorSchemaForSite(preset);
             const models = [];
             for (const mapping of site.models) {
                 if (!canReadContent('Template', { _id: mapping.templateId })) continue;
@@ -62,7 +65,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 const entries = (await Repo.entry.methods.findAllByTemplateId(template._id)).filter(entry => !entry.siteId || entry.siteId === site._id);
                 models.push({ key: mapping.key, label: template.label, templateId: template._id, singleEntry: template.singleEntry,
                     canCreate: canWriteContent('Entry', { templateId: template._id }, 'post'), canEdit: canWriteContent('Entry', { templateId: template._id }, 'put'),
-                    fields: fieldDescriptors(site, template, mapping.key), entries: entries.map(entry => ({ id: entry._id, updatedAt: entry.updatedAt, fields: entryValues(site, mapping.key, entry),
+                    fields: fieldDescriptors(site, template, mapping.key), editorFields: editorSchema.models[mapping.key] || [], entries: entries.map(entry => ({ id: entry._id, updatedAt: entry.updatedAt, fields: entryValues(site, mapping.key, entry),
                         hasLanguage: entry.meta.some(meta => meta.lng === (site.language || 'en')) })) });
             }
             if (!workspaceContext()) throw errorHandler(HttpStatus.Forbidden, 'Workspace context required');
@@ -70,10 +73,11 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 publicTemplate: Boolean(site.publishedTemplateRecord), theme: site.theme, pages: site.pages.map(page => pageDraft(site, page.key)),
                 navigation: site.navigation,
                 operations: site.operations || normalizeSiteOperations({ contactFormEnabled: false }),
-                pageOptions: Object.fromEntries(site.pages.map(page => [page.key, pageSectionOptions(page.layout)])),
-                blueprints: preset.pages.filter(page => page.layout === 'content-page'), canManage: Boolean(workspaceContext()?.admin) }, models };
+                contactDeliveryConfigured: Boolean(process.env.GATEWAY_BASE_URL && process.env.CMS_SERVICE_SECRET),
+                pageOptions: Object.fromEntries(site.pages.map(page => [page.key, pageSectionOptionsForPage(site, page.key)])),
+                blueprints: preset.pages.filter(page => page.layout === 'content-page'), editorContract: preset.editor || null, canManage: Boolean(workspaceContext()?.admin) }, models };
         } }),
-        entry: createControllerMethod({ path: '/entries/:modelKey', type: 'post', preRequestHandler: RP.createJwtCheck(['USER']), async handler({ request, errorHandler }) {
+        entry: createControllerMethod({ path: '/entries/:modelKey', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('content.write'), async handler({ request, errorHandler }) {
             const parsed = entryBody.safeParse(request.body);
             if (!parsed.success || (parsed.data.entryId && parsed.data.expectedUpdatedAt === undefined)) throw errorHandler(HttpStatus.BadRequest, 'Invalid Studio content request');
             try {
@@ -84,6 +88,10 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 const previous = parsed.data.entryId ? await Repo.entry.findById(parsed.data.entryId) : null;
                 if (parsed.data.entryId && !previous) throw new Error('Entry not found');
                 if (previous && previous.updatedAt !== parsed.data.expectedUpdatedAt) throw conflict();
+                const form = buildContentForm(resolveInstalledPreset(site), key);
+                const existingValues = previous ? entryValues(site, key, previous) : {};
+                const fieldErrors = validateContentValues(form, { ...existingValues, ...parsed.data.fields });
+                if (Object.keys(fieldErrors).length) throw new Error(`Invalid content fields: ${Object.entries(fieldErrors).map(([field, message]) => `${field}: ${message}`).join('; ')}`);
                 await validateSelectedMedia(site, key, parsed.data.fields);
                 const id = createHash('sha256').update(`${site._id}:studio:${key}:${template.singleEntry ? 'single' : parsed.data.operationId}`).digest('hex').slice(0, 24);
                 if (!previous && template.singleEntry) {
@@ -110,7 +118,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 return { id: saved._id, updatedAt: saved.updatedAt };
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Save failed'); }
         } }),
-        addPage: createControllerMethod({ path: '/pages', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(), async handler({ request, errorHandler }) {
+        addPage: createControllerMethod({ path: '/pages', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('pages.manage'), async handler({ request, errorHandler }) {
             const parsed = z.object({ operationId: z.string().uuid(), expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().max(160), blueprintKey: z.string(), fields: z.record(studioValueSchema) }).strict().safeParse(request.body);
             if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid new page');
             try {
@@ -132,7 +140,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 });
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Page creation failed'); }
         } }),
-        page: createControllerMethod({ path: '/pages/:pageKey', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(), async handler({ request, errorHandler }) {
+        page: createControllerMethod({ path: '/pages/:pageKey', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('pages.manage'), async handler({ request, errorHandler }) {
             const parsed = pageBody.safeParse(request.body);
             if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid page draft');
             try {
@@ -142,17 +150,22 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 const bound = parsed.data.entryId ? await Repo.entry.findById(parsed.data.entryId) : null;
                 if (parsed.data.entryId) assertStudioPageEntryBinding(site._id, parsed.data.entryId, bound);
                 if (parsed.data.sectionConfigs) {
-                    const media = await Repo.media.findAll();
-                    validateSectionMediaReferences(pageDraft(site, key)?.layout || '', parsed.data.sectionConfigs as never, {
-                        media, site, publishedPaths: new Set(site.pages.filter(page => page.enabled !== false && !page.path.includes(':')).map(page => page.path)),
-                    });
+                    const draft = pageDraft(site, key);
+                    const preset = resolveInstalledPreset(site);
+                    const contractPage = Boolean(draft && preset.editor?.pages.some(item => item.pageKey === (draft.blueprintKey || key)));
+                    if (!contractPage) {
+                        const media = await Repo.media.findAll();
+                        validateSectionMediaReferences(draft?.layout || '', parsed.data.sectionConfigs as never, {
+                            media, site, publishedPaths: new Set(site.pages.filter(page => page.enabled !== false && !page.path.includes(':')).map(page => page.path)),
+                        });
+                    }
                 }
                 const updated = updatePageDraft(site, key, parsed.data, bound);
                 if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) throw conflict();
                 return pageDraft(updated, key);
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Page save failed'); }
         } }),
-        settings: createControllerMethod({ path: '/settings', type: 'post', preRequestHandler: RP.createWorkspaceAdminCheck(), async handler({ request, errorHandler }) {
+        settings: createControllerMethod({ path: '/settings', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('pages.manage'), async handler({ request, errorHandler }) {
             const parsed = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), name: z.string().trim().min(1).max(80), theme: z.object({ background: z.string().regex(/^#[a-f0-9]{6}$/i), foreground: z.string().regex(/^#[a-f0-9]{6}$/i), accent: z.string().regex(/^#[a-f0-9]{6}$/i), muted: z.string().regex(/^#[a-f0-9]{6}$/i) }).strict(), navigation: z.array(navigationBody).optional(), operations: z.object({ seoTitle: z.string().max(120), seoDescription: z.string().max(320), socialImage: z.object({ _id: z.string().min(1) }).optional(), favicon: z.object({ _id: z.string().min(1) }).optional(), analyticsId: z.string().optional(), contactFormEnabled: z.boolean() }).strict().optional() }).strict().safeParse(request.body);
             if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Name and four six-digit theme colors are required');
             const site = await selectedSite();
@@ -166,7 +179,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
             if (parsed.data.operations !== undefined) {
                 const availableMedia = await Repo.media.findAll();
                 const mediaIds = new Set(availableMedia.filter(item => ['IMG', 'SVG', 'GIF'].includes(item.type) && mediaAuthorizedForSite(item, site, { requireSiteBinding: true })).map(item => item._id));
-                try { operations = normalizeSiteOperations(parsed.data.operations, mediaIds); }
+                try { operations = normalizeSiteOperations(parsed.data.operations, mediaIds, { contactDeliveryConfigured: Boolean(process.env.GATEWAY_BASE_URL && process.env.CMS_SERVICE_SECRET) }); }
                 catch (cause) { throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Invalid website operations'); }
             }
             const updated = { ...site, name: parsed.data.name, theme: { ...site.theme, ...parsed.data.theme }, navigation, operations };

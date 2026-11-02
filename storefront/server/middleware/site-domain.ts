@@ -1,5 +1,6 @@
-import { fetchPublishedSite, aliasRedirect } from '../utils/release.mjs';
+import { aliasRedirect } from '../utils/release.mjs';
 import { siteContext } from '../utils/site-context';
+import { loadPublicSite } from '../utils/public-runtime.mjs';
 export default defineEventHandler(async (event) => {
     const path = event.path;
     if (path.startsWith('/_nuxt/') || path.startsWith('/presets/') || path.startsWith('/api/presets/') || path.split('?')[0] === '/preview') return;
@@ -8,9 +9,21 @@ export default defineEventHandler(async (event) => {
     if (path.startsWith('/api/') || path.startsWith('/.well-known/')) return;
     const config = useRuntimeConfig(event);
     let site;
-    try { site = await fetchPublishedSite({ host, expectedHost: config.public.siteHost,
-        gatewaySecret: config.gatewaySecret, cmsOrigin: config.cmsInternalOrigin, path: undefined, fetcher: $fetch }); }
-    catch { throw createError({ statusCode: 502, statusMessage: 'Published site unavailable' }); }
+    try {
+        site = await loadPublicSite({
+            host,
+            path: undefined,
+            expectedHost: config.public.siteHost,
+            gatewaySecret: config.gatewaySecret,
+            cmsOrigin: config.cmsInternalOrigin,
+            fetcher: $fetch,
+            artifactRoot: config.runtimeArtifactRoot,
+            releaseId: config.runtimeReleaseId,
+            legacyCmsPublicRead: config.legacyCmsPublicRead,
+        });
+    } catch {
+        throw createError({ statusCode: 502, statusMessage: 'Published site unavailable' });
+    }
     if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not published' });
     const redirect = aliasRedirect(host, site.primaryHostname, path);
     if (redirect) return sendRedirect(event, redirect, 301);

@@ -106,3 +106,36 @@ test('registry exposes a separately identified FireGuard template using the supp
     pinned.manifestChecksum = sha(fireguard);
     await assert.rejects(() => readPublicRegistry(fetcher), /model profile is incompatible/i);
 });
+
+test('registry accepts a contract-driven template with a new model and page profile', async () => {
+    const contractManifest = {
+        ...manifest,
+        id: 'custom-store', version: '2.0.0', name: 'Custom Store',
+        models: [{ key: 'article', label: 'Articles', description: 'Articles', singleEntry: false,
+            fields: [{ key: 'title', label: 'Title', type: 'STRING', required: true, array: false }] }],
+        pages: [{ key: 'landing', title: 'Landing', path: '/', modelKey: 'article', layout: 'landing' }],
+        compatibility: { cmsSchema: 1, releaseSchema: 1, migrations: [] },
+        editor: {
+            schemaVersion: 1,
+            models: [{ modelKey: 'article', fields: [{ key: 'title', label: 'Title', control: 'text', required: true }] }],
+            pages: [{ pageKey: 'landing', modelKey: 'article', pathRule: { type: 'fixed', value: '/' }, allowNavigation: true, sections: ['hero'] }],
+            sections: [{ type: 'hero', label: 'Hero', allowedPages: ['landing'], singleton: true, required: true, props: { title: { control: 'text', required: true } } }],
+            operations: { canCreatePages: true, canEditNavigation: true, canPublish: true },
+        },
+        renderer: { contractVersion: 1, templateId: 'custom-store', templateVersion: '2.0.0',
+            preview: { protocolVersion: 1, capabilities: ['select-node'] }, assets: { mode: 'published', basePath: '/_assets/' } },
+    };
+    const pinned = { ...record, id: 'custom-store', version: '2.0.0',
+        imageRepository: 'ghcr.io/tangtianshuo/independent-website-templates/custom-store',
+        manifestPath: 'templates/custom-store/2.0.0/template.json', manifestChecksum: sha(contractManifest) };
+    const fetcher = async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes('/commits/registry')) return Response.json({ sha: sourceCommit });
+        if (url.endsWith('/registry/index.json')) return Response.json({ schemaVersion: 1, records: [pinned] });
+        return Response.json(contractManifest);
+    };
+    const result = await readPublicRegistry(fetcher);
+    assert.equal(result.records[0].manifest.id, 'custom-store');
+    assert.equal(result.records[0].manifest.editor?.pages[0].pageKey, 'landing');
+    assert.equal(result.records[0].manifest.renderer?.templateVersion, '2.0.0');
+});

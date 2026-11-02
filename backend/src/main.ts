@@ -61,6 +61,8 @@ import { ensureProductTemplate } from '@bcms/selfhosted-backend/storefront/setup
 import { StudioController } from '@bcms/selfhosted-backend/studio/controller';
 import { PresetController } from '@bcms/selfhosted-backend/presets/controller';
 import { SiteDomainController } from './site-domains/controller';
+import { LeadsController } from './leads/controller';
+import { AnalyticsController } from './analytics/controller';
 import { ReleaseController } from '@bcms/selfhosted-backend/presets/release-controller';
 import { createGatewayReconciliationJob } from './presets/gateway-jobs';
 
@@ -173,6 +175,8 @@ async function main() {
             StudioController,
             ReleaseController,
             SiteDomainController,
+            LeadsController,
+            AnalyticsController,
         ],
 
         middleware: [IPMiddleware, UIProxy],

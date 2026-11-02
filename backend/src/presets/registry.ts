@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { PropType } from '../prop/models/main';
 import { getPreset, type PresetManifest } from './catalog';
+import { validateTemplateContract } from '../template-contract/model';
+import { createLegacyEditorAdapter } from '../template-contract/compatibility';
 
 const OWNER = 'tangtianshuo';
 const REPOSITORY = 'Independent-Website-Templates';
@@ -25,6 +27,7 @@ export interface VerifiedPublicTemplate extends PublicTemplateRecord {
     manifest: PresetManifest;
     /** The raw manifest that was hashed by the registry record. */
     manifestSnapshot?: unknown;
+    editorContractSource?: 'manifest' | 'legacy-model-fields';
 }
 
 let registryCache: { until: number; value: Awaited<ReturnType<typeof readPublicRegistry>> } | undefined;
@@ -67,8 +70,9 @@ export function normalizePublicManifest(value: unknown, record: PublicTemplateRe
         !Array.isArray(value.models) || !Array.isArray(value.pages) || typeof value.name !== 'string' || typeof value.description !== 'string') {
         throw new Error('Public template manifest has an unsupported shape');
     }
-    if (!hasOnlyKeys(value, ['schemaVersion', 'id', 'version', 'name', 'description', 'compatibility', 'models', 'pages', 'presentation', 'assets']) ||
-        !hasOnlyKeys(value.compatibility, ['cmsSchema', 'releaseSchema']) || !hasOnlyKeys(value.presentation, ['theme', 'demo', 'showcase']) ||
+    const contractDriven = object(value.editor) && object(value.renderer);
+    if (!hasOnlyKeys(value, ['schemaVersion', 'id', 'version', 'name', 'description', 'compatibility', 'editor', 'renderer', 'models', 'pages', 'presentation', 'assets']) ||
+        !hasOnlyKeys(value.compatibility, ['cmsSchema', 'releaseSchema', 'migrations']) || !hasOnlyKeys(value.presentation, ['theme', 'demo', 'showcase']) ||
         !hasOnlyKeys(value.presentation.theme, ['background', 'foreground', 'accent', 'muted', 'font']) ||
         !hasOnlyKeys(value.presentation.demo, ['brand', 'contactEmail', 'hero', 'product', 'collection', 'page']) ||
         !object(value.presentation.demo.hero) || !hasOnlyKeys(value.presentation.demo.hero, ['title', 'subtitle', 'image']) ||
@@ -77,6 +81,13 @@ export function normalizePublicManifest(value: unknown, record: PublicTemplateRe
         !object(value.presentation.demo.page) || !hasOnlyKeys(value.presentation.demo.page, ['title', 'body', 'image'])) {
         throw new Error('Public template manifest contains unsupported fields');
     }
+    const contract = contractDriven ? validateTemplateContract(value, { id: record.id, version: record.version }) : undefined;
+    const legacyEditor = !contractDriven ? createLegacyEditorAdapter({
+        id: record.id,
+        version: record.version,
+        models: value.models as Array<{ key: string; label?: string; fields?: Array<{ key: string; label?: string; type?: unknown; required?: boolean; array?: boolean }> }>,
+        pages: value.pages as Array<{ key: string; modelKey?: string; path?: string; layout?: string | string[] }>,
+    }) : undefined;
     const theme = value.presentation.theme;
     const demo = value.presentation.demo;
     if (!['background', 'foreground', 'accent', 'muted'].every((key) => typeof theme[key] === 'string' && /^#[a-f0-9]{6}$/i.test(theme[key] as string)) ||
@@ -119,8 +130,8 @@ export function normalizePublicManifest(value: unknown, record: PublicTemplateRe
         }
     }
     const builtin = getPreset('aeroframe', '1.0.0');
-    if (!builtin || modelKeys.size !== builtin.models.length) throw new Error('Public template model profile is incompatible');
-    for (const expected of builtin.models) {
+    if (!contractDriven && (!builtin || modelKeys.size !== builtin.models.length)) throw new Error('Public template model profile is incompatible');
+    for (const expected of contractDriven ? [] : builtin!.models) {
         const found = models.find((item) => (item as Record<string, unknown>).key === expected.key) as Record<string, unknown> | undefined;
         if (!found || found.singleEntry !== expected.singleEntry) throw new Error(`Public template model ${expected.key} is incompatible`);
         const fields = found.fields as Array<Record<string, unknown>>;
@@ -144,22 +155,22 @@ export function normalizePublicManifest(value: unknown, record: PublicTemplateRe
     for (const item of value.pages) {
         if (!object(item) || !hasOnlyKeys(item, ['key', 'title', 'path', 'modelKey', 'layout']) ||
             typeof item.key !== 'string' || pageKeys.has(item.key) || typeof item.modelKey !== 'string' ||
-            !modelKeys.has(item.modelKey) || !['home', 'collection-list', 'product-detail', 'content-page'].includes(String(item.layout)) ||
+            !modelKeys.has(item.modelKey) || typeof item.layout !== 'string' || (!contractDriven && !['home', 'collection-list', 'product-detail', 'content-page'].includes(String(item.layout))) ||
             typeof item.title !== 'string' || typeof item.path !== 'string') throw new Error('Public template page is incompatible');
         pageKeys.add(item.key);
         const path = String(item.path);
-        const route = item.layout === 'home' && path === '/' || item.layout === 'collection-list' && path === '/collections' ||
+        const route = contractDriven || item.layout === 'home' && path === '/' || item.layout === 'collection-list' && path === '/collections' ||
             item.layout === 'product-detail' && path === '/products/:slug' || item.layout === 'content-page' &&
             (path === '/pages/:slug' || /^\/(?!api(?:\/|$)|preview(?:\/|$)|presets(?:\/|$)|products(?:\/|$)|collections(?:\/|$))[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(path));
         if (!route) throw new Error('Public template page route is incompatible');
         if (pagePaths.has(String(item.path))) throw new Error('Public template page paths conflict');
         pagePaths.add(String(item.path));
         const expected = requiredRoutes[String(item.key)];
-        if (expected && (item.path !== expected[0] || item.modelKey !== expected[1] || item.layout !== expected[2])) {
+        if (!contractDriven && expected && (item.path !== expected[0] || item.modelKey !== expected[1] || item.layout !== expected[2])) {
             throw new Error('Public template page mapping is incompatible');
         }
     }
-    for (const page of ['home', 'collections', 'product', 'content']) if (!pageKeys.has(page)) throw new Error(`Public template is missing page ${page}`);
+    if (!contractDriven) for (const page of ['home', 'collections', 'product', 'content']) if (!pageKeys.has(page)) throw new Error(`Public template is missing page ${page}`);
     if (Array.isArray(value.assets)) for (const asset of value.assets) {
         if (!object(asset) || !hasOnlyKeys(asset, ['path', 'checksum', 'mimeType']) ||
             typeof asset.path !== 'string' || asset.path.startsWith('/') || asset.path.includes('\\') ||
@@ -189,6 +200,7 @@ export function normalizePublicManifest(value: unknown, record: PublicTemplateRe
     const { showcase } = value.presentation;
     return {
         id: record.id, version: record.version, name: value.name, description: value.description,
+        ...(contract ? { compatibility: contract.compatibility, editor: contract.editor, renderer: contract.renderer } : { editor: legacyEditor?.contract }),
         theme: theme as PresetManifest['theme'], demo: demo as PresetManifest['demo'],
         ...(showcase ? { showcase: showcase as PresetManifest['showcase'] } : {}),
         models: models as PresetManifest['models'], pages: value.pages as PresetManifest['pages'],
@@ -238,7 +250,9 @@ export async function readPublicRegistry(fetcher: typeof fetch = fetch): Promise
         const manifestValue = await readJson(fetcher, `${rawRoot}/${record.sourceCommit}/${record.manifestPath}`);
         const checksum = `sha256:${createHash('sha256').update(canonicalJson(manifestValue), 'utf8').digest('hex')}`;
         if (checksum !== record.manifestChecksum) throw new Error('Public template manifest checksum mismatch');
-        records.push({ ...record, manifest: normalizePublicManifest(manifestValue, record), manifestSnapshot: manifestValue });
+        const manifest = normalizePublicManifest(manifestValue, record);
+        records.push({ ...record, manifest, manifestSnapshot: manifestValue,
+            editorContractSource: object(manifestValue) && object(manifestValue.editor) && object(manifestValue.renderer) ? 'manifest' : 'legacy-model-fields' });
     }
     return { commit, records };
 }
