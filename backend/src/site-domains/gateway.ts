@@ -1,4 +1,4 @@
-import { gatewayPublishConfig, gatewayRequest, validateConfig, type GatewayPublishConfig } from '../presets/gateway-client';
+import { gatewayPublishConfig, gatewayRequest, validateConfig } from '../presets/gateway-client';
 
 export interface GatewayDomainProjection {
     status: 'ready';

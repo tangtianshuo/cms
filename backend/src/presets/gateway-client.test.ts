@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { gatewayPublishConfig, gatewayPublishConfigs, gatewayRequest, GatewayRevisionConflict } from './gateway-client';
+import { gatewayPublishConfig, gatewayPublishConfigs, gatewayRequest, GatewayRevisionConflict, GatewayUnavailableError } from './gateway-client';
 import { runWithWorkspace } from '../workspaces/context';
 
 const bindingEnv = {
@@ -102,17 +102,15 @@ test('Gateway failures preserve a recognized error code without returning respon
 test('Gateway failures discard unknown codes and non-JSON error responses', async () => {
     for (const response of [Response.json({ error: 'token=private' }, { status: 502 }), new Response('internal password=private', { status: 502 })]) {
         const fetcher = (async () => response) as typeof fetch;
-        await assert.rejects(gatewayRequest(fetcher, 'https://gateway.invalid', 'fixture-secret'), {
-            message: 'Gateway request failed (502)',
-        });
+        await assert.rejects(gatewayRequest(fetcher, 'https://gateway.invalid', 'fixture-secret'), (error: unknown) =>
+            error instanceof GatewayUnavailableError && error.message === 'Gateway control is unavailable (502)');
     }
 });
 
 test('Gateway registry outages retain a safe code distinct from invalid template data', async () => {
     const fetcher = (async () => Response.json({ error: 'template_registry_unavailable', details: 'token=private' }, { status: 503 })) as typeof fetch;
-    await assert.rejects(gatewayRequest(fetcher, 'https://gateway.invalid', 'fixture-secret'), {
-        message: 'Gateway request failed (503): template_registry_unavailable',
-    });
+    await assert.rejects(gatewayRequest(fetcher, 'https://gateway.invalid', 'fixture-secret'), (error: unknown) =>
+        error instanceof GatewayUnavailableError && error.message === 'Gateway control is unavailable (503)');
 });
 
 test('Gateway conflict responses retain the existing revision-conflict behavior', async () => {

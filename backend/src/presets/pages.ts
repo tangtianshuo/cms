@@ -192,16 +192,33 @@ export function updatePageDraft(
         }
     }
     const publishedPaths = new Set(site.pages.filter(item => item.enabled !== false && !item.path.includes(':')).map(item => item.path));
-    const incomingLayout = input.layoutDocument ? normalizeLayoutDocument(structuredClone(input.layoutDocument) as LayoutDocument, layoutSchema) : page.layoutDocument ? normalizeLayoutDocument(structuredClone(page.layoutDocument), layoutSchema) : undefined;
-    const layoutDocument = incomingLayout || normalizeLayoutDocument(layoutFromSectionConfigs(input.sectionConfigs || (input.sections || []).map(legacySectionConfig)), layoutSchema);
-    const projectedSections = sectionConfigsFromLayout(layoutDocument, layoutSchema) as SectionConfig[];
-    const sectionConfigs = pageContract
-        ? projectedSections
-        : (input.layoutDocument || !page.sectionConfigs
-            ? normalizeSectionConfigs(page.layout, projectedSections, { publishedPaths })
-            : input.sectionConfigs
-                ? normalizeSectionConfigs(page.layout, input.sectionConfigs as SectionConfig[], { publishedPaths })
-                : page.sectionConfigs);
+    const hasExplicitLayout = input.layoutDocument !== undefined || input.sectionConfigs !== undefined;
+    const hasStoredLayout = page.layoutDocument !== undefined || page.sectionConfigs !== undefined;
+    let layoutDocument: LayoutDocument | undefined;
+    let sectionConfigs: SectionConfig[] | undefined;
+    if (pageContract) {
+        const incomingLayout = input.layoutDocument !== undefined
+            ? normalizeLayoutDocument(structuredClone(input.layoutDocument) as LayoutDocument, layoutSchema)
+            : page.layoutDocument
+                ? normalizeLayoutDocument(structuredClone(page.layoutDocument), layoutSchema)
+                : undefined;
+        layoutDocument = incomingLayout || normalizeLayoutDocument(layoutFromSectionConfigs(input.sectionConfigs || (input.sections || []).map(legacySectionConfig)), layoutSchema);
+        sectionConfigs = sectionConfigsFromLayout(layoutDocument, layoutSchema) as SectionConfig[];
+    } else if (hasExplicitLayout || hasStoredLayout) {
+        const incomingLayout = input.layoutDocument !== undefined
+            ? normalizeLayoutDocument(structuredClone(input.layoutDocument) as LayoutDocument)
+            : page.layoutDocument
+                ? normalizeLayoutDocument(structuredClone(page.layoutDocument))
+                : undefined;
+        if (incomingLayout) {
+            layoutDocument = incomingLayout;
+            sectionConfigs = normalizeSectionConfigs(page.layout, sectionConfigsFromLayout(incomingLayout) as SectionConfig[], { publishedPaths });
+        } else if (input.sectionConfigs) {
+            sectionConfigs = normalizeSectionConfigs(page.layout, input.sectionConfigs as SectionConfig[], { publishedPaths });
+        } else if (page.sectionConfigs) {
+            sectionConfigs = normalizeSectionConfigs(page.layout, page.sectionConfigs, { publishedPaths });
+        }
+    }
     const updated: PageDraft = {
         ...page, title, path, seoTitle, seoDescription,
         sections: [...input.sections], entryId: input.entryId,
