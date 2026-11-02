@@ -63,7 +63,7 @@ jobs:
           node -r ts-node/register -r tsconfig-paths/register --test --test-force-exit --test-timeout=60000 "${tests[@]}"
       - name: Run UI tests
         working-directory: ui
-        run: node --test test/*.test.mjs
+        run: node --test --test-concurrency=1 test/*.test.mjs
       - name: Check backend types
         working-directory: backend
         run: npm run build:noEmit
