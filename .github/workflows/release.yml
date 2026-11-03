@@ -61,9 +61,63 @@ jobs:
           mapfile -t tests < <(find src -type f -name '*.test.ts' -print | sort)
           test "${#tests[@]}" -gt 0
           node -r ts-node/register -r tsconfig-paths/register --test --test-force-exit --test-timeout=60000 "${tests[@]}"
-      - name: Run UI tests
+      - name: Run UI test dashboard-navigation
         working-directory: ui
-        run: node --test --test-concurrency=1 test/*.test.mjs
+        run: node --test test/dashboard-navigation.test.mjs
+      - name: Run UI test entry-create
+        working-directory: ui
+        run: node --test test/entry-create.test.mjs
+      - name: Run UI test gateway-publication
+        working-directory: ui
+        run: node --test test/gateway-publication.test.mjs
+      - name: Run UI test leads.
+        working-directory: ui
+        run: node --test test/leads.test.mjs
+      - name: Run UI test local-preview-policy
+        working-directory: ui
+        run: node --test test/local-preview-policy.test.mjs
+      - name: Run UI test navigation-editor
+        working-directory: ui
+        run: node --test test/navigation-editor.test.mjs
+      - name: Run UI test page-preview
+        working-directory: ui
+        run: node --test test/page-preview.test.mjs
+      - name: Run UI test product-preview
+        working-directory: ui
+        run: node --test test/product-preview.test.mjs
+      - name: Run UI test publish-status
+        working-directory: ui
+        run: node --test test/publish-status.test.mjs
+      - name: Run UI test published-site-url
+        working-directory: ui
+        run: node --test test/published-site-url.test.mjs
+      - name: Run UI test section-editor
+        working-directory: ui
+        run: node --test test/section-editor.test.mjs
+      - name: Run UI test site-onboarding-ui
+        working-directory: ui
+        run: node --test test/site-onboarding-ui.test.mjs
+      - name: Run UI test site-onboarding
+        working-directory: ui
+        run: node --test test/site-onboarding.test.mjs
+      - name: Run UI test site-operations
+        working-directory: ui
+        run: node --test test/site-operations.test.mjs
+      - name: Run UI test site-picker
+        working-directory: ui
+        run: node --test test/site-picker.test.mjs
+      - name: Run UI test storefront-navigation
+        working-directory: ui
+        run: node --test test/storefront-navigation.test.mjs
+      - name: Run UI test template-preview
+        working-directory: ui
+        run: node --test test/template-preview.test.mjs
+      - name: Run UI test template-upgrade
+        working-directory: ui
+        run: node --test test/template-upgrade.test.mjs
+      - name: Run UI test user-message
+        working-directory: ui
+        run: node --test test/user-message.test.mjs
       - name: Check backend types
         working-directory: backend
         run: npm run build:noEmit
