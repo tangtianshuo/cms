@@ -58,6 +58,9 @@ jobs:
       - name: Install storefront dependencies
         working-directory: storefront
         run: npm ci
+      - name: Prepare storefront Nuxt configuration
+        working-directory: storefront
+        run: npx nuxt prepare
       - name: Run backend tests
         working-directory: backend
         run: |
