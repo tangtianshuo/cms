@@ -111,7 +111,17 @@ jobs:
         run: node --test test/site-picker.test.mjs
       - name: Run UI test storefront-navigation
         working-directory: ui
-        run: node --test test/storefront-navigation.test.mjs
+        run: |
+          set +e
+          output=$(node --test test/storefront-navigation.test.mjs 2>&1)
+          code=$?
+          printf '%s\n' "$output"
+          if [ "$code" -ne 0 ]; then
+            while IFS= read -r line; do
+              echo "::error title=storefront-navigation::$line"
+            done <<< "$output"
+            exit "$code"
+          fi
       - name: Run UI test template-preview
         working-directory: ui
         run: node --test test/template-preview.test.mjs
