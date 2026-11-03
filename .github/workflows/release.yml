@@ -57,7 +57,7 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Install storefront dependencies
         working-directory: storefront
-        run: npm ci --ignore-scripts
+        run: npm ci
       - name: Run backend tests
         working-directory: backend
         run: |
