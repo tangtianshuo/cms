@@ -55,6 +55,9 @@ jobs:
       - name: Install UI dependencies
         working-directory: ui
         run: npm ci --ignore-scripts
+      - name: Install storefront dependencies
+        working-directory: storefront
+        run: npm ci --ignore-scripts
       - name: Run backend tests
         working-directory: backend
         run: |
