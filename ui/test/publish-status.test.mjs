@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const source = await readFile(new URL('../src/components/storefront/gateway-publication.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { normalizePublishStatus } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const { normalizePublishStatus, publicationSuccessMessageKey } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 test('normalizes gateway operation states into the CMS publish lifecycle', () => {
     assert.equal(normalizePublishStatus('pending'), 'publishing');
@@ -13,4 +13,9 @@ test('normalizes gateway operation states into the CMS publish lifecycle', () =>
     assert.equal(normalizePublishStatus('failed'), 'failed');
     assert.equal(normalizePublishStatus('ready', 'rollback'), 'rolled-back');
     assert.equal(normalizePublishStatus('unknown'), 'unknown');
+});
+
+test('unbound releases report snapshot creation instead of public availability', () => {
+    assert.equal(publicationSuccessMessageKey(false, 'ready'), 'presets.releaseSnapshotCreated');
+    assert.equal(publicationSuccessMessageKey(true, 'ready'), 'presets.releasePublished');
 });

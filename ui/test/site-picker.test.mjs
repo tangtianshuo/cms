@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadSiteChoices, selectSiteAfterNavigation } from '../src/layouts/dashboard/site-picker.ts';
+import { recoverableStaleSiteSelection } from '../src/sdk/context.ts';
 
 test('site choices use an explicit workspace selector without inheriting the current site', async () => {
     const requests = [];
@@ -32,4 +33,11 @@ test('selection validation starts only after navigation guards accept leaving', 
     const events = [];
     assert.equal(await selectSiteAfterNavigation(async () => { events.push('leave'); }, async () => { events.push('select'); }), true);
     assert.deepEqual(events, ['leave', 'select']);
+});
+
+test('only an explicitly missing site is recovered without discarding the workspace', () => {
+    const selection = { workspaceId: 'workspace-a', siteId: 'deleted-site' };
+    assert.deepEqual(recoverableStaleSiteSelection(new Error('Site not found in workspace'), selection), { workspaceId: 'workspace-a' });
+    assert.equal(recoverableStaleSiteSelection(new Error('Workspace access denied'), selection), null);
+    assert.equal(recoverableStaleSiteSelection(new Error('Site not found in workspace'), { workspaceId: 'workspace-a' }), null);
 });

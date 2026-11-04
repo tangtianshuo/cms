@@ -1,5 +1,5 @@
 import type { AxiosError, AxiosRequestConfig } from 'axios';
-import type { ScopeSelection, SelectedContext } from './context';
+import { recoverableStaleSiteSelection, type ScopeSelection, type SelectedContext } from './context';
 import axios from 'axios';
 import { Buffer } from 'buffer';
 import type { UserJwt } from '@bcms/selfhosted-backend/user/models/main';
@@ -55,16 +55,28 @@ export class Sdk {
                 const selected = this.storage.get<ScopeSelection>(
                     'selection',
                 ) || { workspaceId: 'default' };
-                const result = await this.send<SelectedContext>({
+                const requestContext = (selection: ScopeSelection) => this.send<SelectedContext>({
                     url: '/api/v4/workspaces/current',
-                    selectorOverride: selected,
+                    selectorOverride: selection,
                 });
+                let effectiveSelection = selected;
+                let result: SelectedContext;
+                try {
+                    result = await requestContext(selected);
+                } catch (error) {
+                    const recovered = recoverableStaleSiteSelection(error, selected);
+                    if (!recovered) throw error;
+                    if (!(await this.storage.set('selection', recovered)))
+                        throw new Error('Could not recover stale site selection');
+                    effectiveSelection = recovered;
+                    result = await requestContext(recovered);
+                }
                 if (result.context.siteId) {
                     const sites = await this.send<{
                         items: import('@bcms/selfhosted-backend/presets/site-model').SiteInstallation[];
                     }>({
                         url: '/api/v4/workspaces/current/sites',
-                        selectorOverride: selected,
+                        selectorOverride: effectiveSelection,
                     });
                     result.site = sites.items.find(
                         (site) => site._id === result.context.siteId,

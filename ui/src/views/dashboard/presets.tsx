@@ -9,6 +9,7 @@ import type { SiteInstallation } from '@bcms/selfhosted-backend/presets/site-mod
 import { Button } from '@bcms/selfhosted-ui/components/button';
 import { PageDraftEditor } from '@bcms/selfhosted-ui/components/storefront/page-draft-editor';
 import { ReleaseManager } from '@bcms/selfhosted-ui/components/storefront/release-manager';
+import type { PageSectionOptions } from '@bcms/selfhosted-backend/presets/pages';
 
 interface PresetSummary {
     id: string;
@@ -39,7 +40,7 @@ export const PresetsView = defineComponent({
         const catalog = ref<PresetSummary[]>([]);
         const selectedKey = ref('');
         const site = ref<SiteInstallation | null>(null);
-        const pageOptions = ref<Record<string, { allowed: string[]; required: string }>>({});
+        const pageOptions = ref<Record<string, PageSectionOptions>>({});
         const checklist = ref<ChecklistStep[]>([]);
         const plan = ref<ImportPlan | null>(null);
         const upgradePreview = ref<UpgradePreview | null>(null);
@@ -72,7 +73,7 @@ export const PresetsView = defineComponent({
         async function refreshSite() {
             const wasImporting = site.value?.status === 'importing';
             const result = await sdk.send<{ site: SiteInstallation | null; checklist: ChecklistStep[];
-                pageOptions: Record<string, { allowed: string[]; required: string }> }>({
+                pageOptions: Record<string, PageSectionOptions> }>({
                 url: '/api/v4/presets/site', method: 'GET',
             });
             site.value = result.site;

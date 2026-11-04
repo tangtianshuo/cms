@@ -19,6 +19,7 @@ export const SitePreviewView = defineComponent({
         const target = computed(() => resolvePreviewTarget(payload.value, {
             templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
             legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
+            renderers: import.meta.env.VITE_TEMPLATE_PREVIEW_RENDERERS,
         }));
         const siteName = computed(() => sdk.context?.site?.name || sdk.context?.workspace.name || '');
         let connectionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -36,7 +37,10 @@ export const SitePreviewView = defineComponent({
             }
         }
         function onReady(event: MessageEvent) {
-            if (!isPreviewReady(event, frame.value, target.value.origin, target.value.mode === 'template')) return;
+            const expected = target.value.mode === 'template' && target.value.templateId && target.value.templateVersion
+                ? { id: target.value.templateId, version: target.value.templateVersion }
+                : undefined;
+            if (!isPreviewReady(event, frame.value, target.value.origin, expected)) return;
             ready.value = true;
             connectionError.value = '';
             clearTimeout(connectionTimer);
@@ -50,6 +54,11 @@ export const SitePreviewView = defineComponent({
             }, 10000);
         }
         watch(frame, value => { if (value && !ready.value) onFrameLoad(); });
+        watch(() => `${target.value.mode}:${target.value.origin || ''}:${target.value.templateId || ''}:${target.value.templateVersion || ''}`, () => {
+            ready.value = false;
+            connectionError.value = '';
+            clearTimeout(connectionTimer);
+        });
         async function refresh() {
             const sequence = ++requestSequence;
             loading.value = true;
@@ -98,13 +107,13 @@ export const SitePreviewView = defineComponent({
             {error.value && <div role="alert" class="border-b border-red/60 bg-error px-4 py-3 text-sm leading-relaxed text-dark">
                 {error.value}
             </div>}
-            {!loading.value && payload.value && <div role="status" class="border-b border-white/20 px-4 py-3 text-sm leading-relaxed">{target.value.mode === 'template' && !ready.value ? 'AeroFrame 1.0.3 · 正在核对预览服务，草稿尚未发送。' : target.value.notice}{target.value.mode === 'unsupported' && <a class="ml-3 underline" href="/d/presets">前往模板管理</a>}</div>}
+            {!loading.value && payload.value && <div role="status" class="border-b border-white/20 px-4 py-3 text-sm leading-relaxed">{target.value.mode === 'template' && !ready.value ? `${target.value.templateId} ${target.value.templateVersion} · 正在核对预览服务，草稿尚未发送。` : target.value.notice}{['unsupported', 'config-error'].includes(target.value.mode) && <a class="ml-3 underline" href="/d/presets">前往模板管理</a>}</div>}
             {connectionError.value && <p role="alert" class="m-0 border-b border-red/60 bg-error px-4 py-3 text-sm text-dark">{connectionError.value}</p>}
             <div class="relative flex min-h-0 flex-1 justify-center overflow-hidden bg-black/40">
                 {(loading.value || (target.value.origin && !ready.value && !connectionError.value)) && <div class="absolute inset-0 z-10 grid place-items-center bg-dark/80 text-sm">
                     <span role="status">{loading.value ? t('presets.sitePreviewLoading') : '正在连接并核对预览服务版本…'}</span>
                 </div>}
-                {target.value.origin && payload.value && <iframe ref={frame} title={t('presets.sitePreviewTitle')} src={`${target.value.origin}/preview`}
+                {target.value.origin && payload.value && <iframe key={`${target.value.templateId || target.value.mode}@${target.value.templateVersion || ''}:${target.value.origin}`} ref={frame} title={t('presets.sitePreviewTitle')} src={`${target.value.origin}/preview`}
                     onLoad={onFrameLoad}
                     class="h-full border-0 bg-white shadow-2xl transition-[width] duration-200"
                     style={{ width: viewport.value === 'mobile' ? '390px' : '100%', maxWidth: '100%' }} />}

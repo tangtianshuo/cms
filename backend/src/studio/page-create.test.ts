@@ -28,3 +28,21 @@ test('CAS failure reports saved Entry and permits retry binding', async () => {
     succeed = true;
     assert.equal((await createStudioPage(site, 'op', entry, input, source)).entryId, entry._id);
 });
+
+test('content page instances accept concrete paths from both supported UAT forms', async () => {
+    for (const path of ['/uat-acceptance', '/pages/uat-acceptance']) {
+        const operationId = `op-${path.includes('/pages/') ? 'prefixed' : 'root'}`;
+        const id = pageOperationIds('site', operationId);
+        const contentEntry = { ...entry, _id: id.entryId } as Entry;
+        let saved: Entry | null = null;
+        const source = {
+            findEntry: async () => saved,
+            addEntry: async (value: Entry) => { saved = value; return value; },
+            saveSite: async () => true,
+            findSite: async () => site,
+        };
+        const created = await createStudioPage(site, operationId, contentEntry, { ...input, path }, source);
+        assert.equal(created.path, path);
+        assert.equal(created.blueprintKey, 'content');
+    }
+});

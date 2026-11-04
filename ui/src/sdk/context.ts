@@ -14,3 +14,9 @@ export interface SiteList {
     items: SiteInstallation[];
     selectedSiteId: string;
 }
+
+export function recoverableStaleSiteSelection(error: unknown, selection: ScopeSelection): ScopeSelection | null {
+    if (!selection.siteId) return null;
+    if ((error as { message?: unknown } | null)?.message !== 'Site not found in workspace') return null;
+    return { workspaceId: selection.workspaceId };
+}

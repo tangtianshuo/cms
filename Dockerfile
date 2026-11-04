@@ -26,10 +26,12 @@ COPY . /app
 
 ARG VITE_STOREFRONT_ORIGIN
 ARG VITE_TEMPLATE_PREVIEW_ORIGIN
+ARG VITE_TEMPLATE_PREVIEW_RENDERERS
 
 RUN npm run build:types \
     && VITE_STOREFRONT_ORIGIN="${VITE_STOREFRONT_ORIGIN}" \
-       VITE_TEMPLATE_PREVIEW_ORIGIN="${VITE_TEMPLATE_PREVIEW_ORIGIN}" npm run build:ui \
+       VITE_TEMPLATE_PREVIEW_ORIGIN="${VITE_TEMPLATE_PREVIEW_ORIGIN}" \
+       VITE_TEMPLATE_PREVIEW_RENDERERS="${VITE_TEMPLATE_PREVIEW_RENDERERS}" npm run build:ui \
     && npm run build:backend \
     && rm -rf _scripts node_modules cli client proxy ui/public ui/node_modules ui/src backend/plugins
 

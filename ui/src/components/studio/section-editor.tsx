@@ -22,6 +22,7 @@ export const SectionEditor = defineComponent({
         media: { type: Array as PropType<ImageOption[]>, default: () => [] },
         onUpload: Function as PropType<() => void>,
         disabled: Boolean,
+        labels: { type: Object as PropType<Record<string, string>>, default: () => ({}) },
     },
     emits: ['update:modelValue'],
     setup(props, { emit }) {
@@ -81,18 +82,20 @@ export const SectionEditor = defineComponent({
                 <button type="button" disabled={props.disabled} onClick={() => listEdit(index, 'images', list => list.push({ _id: '' }))}>添加商品图片</button>{props.onUpload && <button type="button" disabled={props.disabled} onClick={() => props.onUpload?.()}>上传新图片</button>}
             </div>;
             if (section.type === 'product-description') return field('详情正文', section.data.body, value => edit(index, section => { section.data.body = value; }), true);
-            return <div class="studio-section-content"><p class="studio-help">商品名称和价格使用商品内容中的资料。</p>{items(section, 'specifications').map((item, row, list) => <div class="studio-section-item" key={row}>
+            if (section.type === 'product-information') return <div class="studio-section-content"><p class="studio-help">商品名称和价格使用商品内容中的资料。</p>{items(section, 'specifications').map((item, row, list) => <div class="studio-section-item" key={row}>
                 {field(`规格 ${row + 1} 名称`, item.label, value => listEdit(index, 'specifications', list => { list[row].label = value; }))}{field(`规格 ${row + 1} 值`, item.value, value => listEdit(index, 'specifications', list => { list[row].value = value; }))}{rowActions(index, 'specifications', row, `规格 ${row + 1}`, list.length)}
             </div>)}<button type="button" disabled={props.disabled} onClick={() => listEdit(index, 'specifications', list => list.push({ label: '', value: '' }))}>添加商品规格</button></div>;
+            return <div class="studio-warning" role="status">不支持的区块类型“{section.type}”。请刷新模板配置，不会显示其他区块的字段。</div>;
         };
+        const labelFor = (type: string) => props.labels[type] || labels[type as SectionType] || '不支持的区块类型';
         return () => <section class="studio-section-editor" aria-label="页面区块">
             <div class="studio-card-heading"><div><h3>页面区块</h3><p class="studio-help">添加、排序或隐藏首页和详情页内容。隐藏的区块不会显示在网站上。</p></div></div>
-            <div class="studio-section-actions">{props.allowed.filter(type => !props.modelValue.some(item => item.type === type)).map(type => <button type="button" disabled={props.disabled} onClick={() => add(type)}>添加{labels[type]}</button>)}</div>
+            <div class="studio-section-actions">{props.allowed.filter(type => !props.modelValue.some(item => item.type === type)).map(type => <button type="button" disabled={props.disabled} onClick={() => add(type)}>添加{labelFor(type)}</button>)}</div>
             <ul class="studio-section-list">{props.modelValue.map((section, index) => <li key={section.type}>
-                <div class="studio-section-heading"><strong>{labels[section.type]}</strong><label class="studio-check"><input type="checkbox" checked={section.enabled} disabled={props.disabled} onChange={event => edit(index, section => { section.enabled = (event.target as HTMLInputElement).checked; })} />显示</label>
-                <button type="button" aria-label={`上移 ${labels[section.type]}`} disabled={props.disabled || index === 0} onClick={() => move(index, -1)}>上移</button>
-                <button type="button" aria-label={`下移 ${labels[section.type]}`} disabled={props.disabled || index === props.modelValue.length - 1} onClick={() => move(index, 1)}>下移</button>
-                <button type="button" aria-label={`移除 ${labels[section.type]}`} disabled={props.disabled || props.required.includes(section.type)} onClick={() => update(props.modelValue.filter((_, itemIndex) => itemIndex !== index))}>移除</button></div>
+                <div class="studio-section-heading"><strong>{labelFor(section.type)}</strong><label class="studio-check"><input type="checkbox" checked={section.enabled} disabled={props.disabled} onChange={event => edit(index, section => { section.enabled = (event.target as HTMLInputElement).checked; })} />显示</label>
+                <button type="button" aria-label={`上移 ${labelFor(section.type)}`} disabled={props.disabled || index === 0} onClick={() => move(index, -1)}>上移</button>
+                <button type="button" aria-label={`下移 ${labelFor(section.type)}`} disabled={props.disabled || index === props.modelValue.length - 1} onClick={() => move(index, 1)}>下移</button>
+                <button type="button" aria-label={`移除 ${labelFor(section.type)}`} disabled={props.disabled || props.required.includes(section.type)} onClick={() => update(props.modelValue.filter((_, itemIndex) => itemIndex !== index))}>移除</button></div>
                 {section.enabled && renderData(section, index)}
             </li>)}</ul>
         </section>;

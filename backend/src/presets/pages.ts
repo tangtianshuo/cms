@@ -5,25 +5,57 @@ import { normalizeSectionConfigs, type SectionConfig } from '../storefront/secti
 import { ownerWorkspace } from '../workspaces/context';
 import { layoutFromSectionConfigs, normalizeLayoutDocument, sectionConfigsFromLayout, type LayoutContract, type LayoutDocument } from '../storefront/layout-document';
 
-const sectionOptions: Record<string, { allowed: string[]; required: string }> = {
-    home: { allowed: ['hero', 'feature'], required: 'hero' },
-    'collection-list': { allowed: ['heading', 'grid'], required: 'heading' },
-    'product-detail': { allowed: ['gallery', 'information', 'description'], required: 'information' },
-    'content-page': { allowed: ['story'], required: 'story' },
+const sectionOptions: Record<string, { allowed: string[]; required: string[] }> = {
+    home: { allowed: ['hero-carousel', 'info-grid', 'faq'], required: ['hero-carousel'] },
+    'collection-list': { allowed: ['info-grid', 'faq'], required: [] },
+    'product-detail': { allowed: ['product-gallery', 'product-information', 'product-description', 'faq'], required: ['product-gallery', 'product-information', 'product-description'] },
+    'content-page': { allowed: ['info-grid', 'faq'], required: [] },
 };
 
 const reservedPathSegments = new Set(['api', 'preview', 'presets', 'products', '_nuxt', '__nuxt', 'sitemap.xml', 'robots.txt']);
 
-export function pageSectionOptions(layout: string): { allowed: string[]; required: string } | null {
-    const options = sectionOptions[layout];
-    return options ? { allowed: [...options.allowed], required: options.required } : null;
+export interface PageSectionOptions {
+    allowed: string[];
+    required: string;
+    requiredSections: string[];
+    labels: Record<string, string>;
+    visual: boolean;
 }
 
-export function pageSectionOptionsForPage(site: SiteInstallation, pageKey: string): { allowed: string[]; required: string } | null {
+const defaultLabels: Record<string, string> = {
+    'hero-carousel': '首页轮播',
+    'info-grid': '信息卡片',
+    faq: '常见问题',
+    'product-gallery': '商品图片',
+    'product-information': '商品信息',
+    'product-description': '商品详情',
+};
+
+function sectionOptionsResult(allowed: string[], required: string[],
+    labels: Record<string, string> = {}, visual = false): PageSectionOptions {
+    return {
+        allowed: [...allowed],
+        required: required[0] || '',
+        requiredSections: [...required],
+        labels: Object.fromEntries(allowed.map(type => [type, labels[type] || defaultLabels[type] || type])),
+        visual,
+    };
+}
+
+export function pageSectionOptions(layout: string): PageSectionOptions | null {
+    const options = sectionOptions[layout];
+    return options ? sectionOptionsResult(options.allowed, options.required) : null;
+}
+
+export function pageSectionOptionsForPage(site: SiteInstallation, pageKey: string): PageSectionOptions | null {
     const page = site.pages.find(item => item.key === pageKey);
     if (!page) return null;
     const contract = contractForPage(resolveInstalledPreset(site), page);
-    if (contract) return { allowed: [...contract.allowed], required: contract.required[0] || '' };
+    if (contract) {
+        const definitions = resolveInstalledPreset(site).editor?.sections || [];
+        const labels = Object.fromEntries(definitions.map(section => [section.type, section.label]));
+        return sectionOptionsResult(contract.allowed, contract.required, labels, true);
+    }
     return pageSectionOptions(page.layout);
 }
 
@@ -50,6 +82,10 @@ function contractForPage(preset: ReturnType<typeof resolveInstalledPreset>, page
     if (!editorPage) return null;
     const sections = preset.editor?.sections || [];
     const allowed = [...new Set(editorPage.sections.length ? editorPage.sections : sections.filter(section => section.allowedPages.includes(editorPage.pageKey)).map(section => section.type))];
+    // Legacy public manifests create an editor adapter for model fields and
+    // routes, but do not declare editable page sections. They must continue to
+    // use the renderer's established section contract.
+    if (allowed.length === 0) return null;
     const definitions = new Map(sections.map(section => [section.type, section]));
     const required = allowed.filter(type => Boolean(definitions.get(type)?.required));
     return {
@@ -162,7 +198,8 @@ export function updatePageDraft(
     if (pageContract?.pathRule?.type === 'pattern' && !pathRuleMatches(pageContract.pathRule, path)) {
         throw new Error('Invalid page path');
     }
-    if ((page.path === '/' || page.path.includes(':')) && !pageContract?.pathRule && path !== page.path) {
+    const customContentPage = Boolean(page.blueprintKey && page.layout === 'content-page');
+    if (!customContentPage && (page.path === '/' || page.path.includes(':')) && !pageContract?.pathRule && path !== page.path) {
         throw new Error('This page path is fixed');
     }
     if (!/^\/(?:[a-z0-9-]+(?:\/[a-z0-9-]+)*)?$/.test(path)) {
@@ -173,11 +210,12 @@ export function updatePageDraft(
         throw new Error('Page path is reserved');
     }
     if (site.pages.some((other) => other.key !== key &&
+        !(customContentPage && other.key === page.blueprintKey && !other.blueprintKey && other.layout === 'content-page') &&
         (patternMatches(other.path, path) || patternMatches(path, other.path)))) {
         throw new Error('Page path conflicts with another blueprint');
     }
     const allowedSections = pageContract?.allowed || options!.allowed;
-    const requiredSections = pageContract?.required || [options!.required];
+    const requiredSections = pageContract?.required || options!.required;
     if (input.sections.length === 0 || requiredSections.some((section) => !input.sections.includes(section)) ||
         new Set(input.sections).size !== input.sections.length || input.sections.some((section) => !allowedSections.includes(section))) {
         throw new Error('Invalid page sections');

@@ -26,3 +26,21 @@ cd ../ui
 node --test test/template-upgrade.test.mjs
 npm run type-check
 ```
+
+## 同版本草稿预览服务
+
+CMS 使用精确的正向映射选择草稿渲染器。构建变量
+`VITE_TEMPLATE_PREVIEW_RENDERERS` 必须是 JSON 对象，键为
+`templateId@version`，值为不含路径、凭据、查询和片段的规范 HTTP(S)
+origin：
+
+```dotenv
+VITE_TEMPLATE_PREVIEW_RENDERERS='{"aeroframe@1.0.3":"https://aeroframe-preview.example.com","fireguard@1.0.0":"https://fireguard-preview.example.com"}'
+```
+
+映射项缺失、JSON 无效、键缺少精确版本或 origin 带路径时，预览会失败关闭并显示配置错误，不会借用其他版本或其他行业的渲染器。`VITE_TEMPLATE_PREVIEW_ORIGIN`
+仅保留为 AeroFrame 1.0.3 的旧配置兼容项；新模板和新版本应登记到映射中。
+
+每个渲染器还需设置精确的 CMS 管理端 origin，并通过父窗口来源、iframe
+来源、模板 ID 和模板版本四项握手校验。公开预览入口为
+`<renderer-origin>/preview`，草稿只保存在 iframe 内存中。

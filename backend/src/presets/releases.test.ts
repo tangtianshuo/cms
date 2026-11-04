@@ -83,7 +83,7 @@ test('new fixed pages stay out of the old release and path changes create direct
     const content = input.entries.find((entry) => entry.templateId === 'content-page')!;
     input.site = createPageDraft(input.site, 'delivery', { blueprintKey: 'content',
         title: 'Delivery', path: '/delivery', seoTitle: 'Delivery', seoDescription: 'Details',
-        sections: ['story'], entryId: content._id }, content);
+        sections: ['info-grid'], entryId: content._id }, content);
     const added = buildRelease({ ...input, previous });
     assert.equal(previous.pages.some((page) => page.path === '/delivery'), false);
     assert.ok(added.navigation.some((link) => link.path === '/delivery'));
@@ -94,6 +94,17 @@ test('new fixed pages stay out of the old release and path changes create direct
     assert.deepEqual(buildRelease({ ...input, previous: renamed }).redirects, [
         { from: '/delivery', to: '/shipping-info' }, { from: '/shipping', to: '/shipping-info' },
     ]);
+});
+
+test('a concrete content path does not duplicate its Entry through the parameterized blueprint', () => {
+    const input = fixture();
+    const content = input.entries.find((entry) => entry.templateId === 'content-page')!;
+    input.site = createPageDraft(input.site, 'about-concrete', { blueprintKey: 'content',
+        title: 'About concrete', path: '/pages/about', seoTitle: 'About', seoDescription: '',
+        sections: ['info-grid'], entryId: content._id }, content);
+    const pages = buildRelease(input).pages.filter(page => page.path === '/pages/about');
+    assert.equal(pages.length, 1);
+    assert.equal(pages[0].pageKey, 'about-concrete');
 });
 
 test('release rejects missing required values, broken fields, media, links and duplicate paths', () => {
@@ -226,7 +237,7 @@ test('a fixed collection page retains its bound description and cover', () => {
     input.media.push({ _id: 'cover', mimetype: 'image/jpeg' } as Media);
     input.site = createPageDraft(input.site, 'summer', { blueprintKey: 'collections',
         title: 'Summer', path: '/summer', seoTitle: 'Summer', seoDescription: '',
-        sections: ['heading', 'grid'], entryId: collection._id }, collection);
+        sections: ['info-grid'], entryId: collection._id }, collection);
     const page = buildRelease(input).pages.find((item) => item.path === '/summer')!;
     assert.equal(page.content.preset.demo.collection.description, 'Summer collection');
     assert.equal(page.content.preset.demo.collection.image, 'https://cms.test/api/v4/media/cover/bin/image');
@@ -251,7 +262,7 @@ test('a fixed page can be retired after its bound Entry has been deleted', () =>
     const content = input.entries.find((entry) => entry.templateId === 'content-page')!;
     input.site = createPageDraft(input.site, 'delivery', { blueprintKey: 'content',
         title: 'Delivery', path: '/delivery', seoTitle: 'Delivery', seoDescription: '',
-        sections: ['story'], entryId: content._id }, content);
+        sections: ['info-grid'], entryId: content._id }, content);
     const previous = buildRelease(input);
     input.entries = input.entries.filter((entry) => entry._id !== content._id);
     input.site.pages.find((page) => page.key === 'content')!.enabled = false;

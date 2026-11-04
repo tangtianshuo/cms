@@ -34,7 +34,7 @@ function controlFor(type: unknown): TemplateEditorContract['models'][number]['fi
     return 'text';
 }
 
-export function createLegacyEditorAdapter(manifest: { id: string; version: string; models?: Array<{ key: string; label?: string; fields?: Array<{ key: string; label?: string; type?: unknown; required?: boolean; array?: boolean }> }>; pages?: Array<{ key: string; modelKey?: string; path?: string; layout?: string | string[] }> }): { contract: TemplateEditorContract; source: 'legacy-model-fields' } {
+export function createLegacyEditorAdapter(manifest: { id: string; version: string; models?: Array<{ key: string; label?: string; fields?: Array<{ key: string; label?: string; type?: unknown; required?: boolean; array?: boolean }> }>; pages?: Array<{ key: string; modelKey?: string; path?: string; layout?: string | string[]; sections?: string[] }> }): { contract: TemplateEditorContract; source: 'legacy-model-fields' } {
     const models = (manifest.models || []).map((model) => ({
         modelKey: model.key,
         fields: (model.fields || []).map((field) => ({ key: field.key, label: field.label || field.key, control: controlFor(field.type), required: Boolean(field.required), ...(field.array ? { group: 'array' } : {}) })),
@@ -44,7 +44,9 @@ export function createLegacyEditorAdapter(manifest: { id: string; version: strin
         modelKey: page.modelKey || page.key,
         pathRule: { type: 'fixed' as const, value: page.path || '/' },
         allowNavigation: true,
-        sections: Array.isArray(page.layout) ? page.layout : page.layout ? [page.layout] : [],
+        // A legacy layout name describes the renderer, not an editable section.
+        // Only an explicit sections declaration may drive the section editor.
+        sections: Array.isArray(page.sections) ? [...page.sections] : [],
     }));
     const sectionNames = [...new Set(pages.flatMap((page) => page.sections))];
     const sections = sectionNames.map((type) => ({ type, label: type, allowedPages: pages.filter((page) => page.sections.includes(type)).map((page) => page.pageKey), singleton: false, required: false, props: {} }));
