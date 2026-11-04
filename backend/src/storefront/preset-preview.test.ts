@@ -50,7 +50,7 @@ test('unsaved homepage values and CMS media are rendered in the installed theme'
     assert.equal(result.preset.demo.brand, 'My Store');
     assert.equal(result.preset.demo.hero.title, 'Changed before save');
     assert.equal(result.preset.demo.hero.image, 'http://cms.local/api/v4/media/image-1/bin/image');
-    assert.deepEqual(result.sections, ['hero-carousel', 'info-grid', 'faq']);
+    assert.deepEqual(result.sections, ['hero', 'feature']);
 });
 
 test('collection and product previews map their own Entry fields without catalog demo content', () => {
@@ -114,4 +114,20 @@ test('configured carousel, gallery and SEO media resolve to CMS URLs and preview
     ];
     const product = previewPresetPage({ site, pageKey: 'product', language: 'en', entry: entry('product', { title: ['Product'], slug: ['product'], price: [10] }), ...options, media });
     assert.deepEqual(product.sectionConfigs![0].data.images, [expected]);
+});
+
+test('legacy renderers receive their established section names from canonical editor configs', () => {
+    const site = installation();
+    const home = site.pages.find(page => page.key === 'home')!;
+    home.sectionConfigs = [
+        { type: 'hero-carousel', enabled: true, data: { slides: [{ image: { _id: 'image-1' }, title: 'Banner', order: 0 }] } },
+        { type: 'info-grid', enabled: true, data: { items: [] } },
+    ];
+    const media = [{ _id: 'image-1', siteId: 'site', mimetype: 'image/png' }] as Media[];
+    const result = previewPresetPage({
+        site, pageKey: 'home', language: 'en',
+        entry: entry('home', { title: ['Home'], slug: ['home'], headline: ['Hello'] }),
+        ...options, media,
+    });
+    assert.deepEqual(result.sections, ['hero', 'feature']);
 });
