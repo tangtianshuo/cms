@@ -4,8 +4,8 @@ import { useI18n } from 'vue-i18n';
 import type { EntryLite } from '@bcms/selfhosted-backend/entry/models/main';
 import type { SiteInstallation, SitePage } from '@bcms/selfhosted-backend/presets/site-model';
 import { Button } from '@bcms/selfhosted-ui/components/button';
+import type { PageSectionOptions } from '@bcms/selfhosted-backend/presets/pages';
 
-interface PageOptions { allowed: string[]; required: string }
 interface PageForm {
     title: string;
     path: string;
@@ -20,7 +20,7 @@ interface PageForm {
 export const PageDraftEditor = defineComponent({
     props: {
         site: { type: Object as PropType<SiteInstallation>, required: true },
-        pageOptions: { type: Object as PropType<Record<string, PageOptions>>, required: true },
+        pageOptions: { type: Object as PropType<Record<string, PageSectionOptions>>, required: true },
         onSaved: { type: Function as PropType<() => Promise<void>>, required: true },
     },
     setup(props) {
@@ -166,9 +166,9 @@ export const PageDraftEditor = defineComponent({
                         <div class="mt-2 flex flex-wrap gap-x-6 gap-y-3">
                             {(options.value?.allowed || []).map((section) => <label class="flex items-center gap-2 text-sm">
                                 <input type="checkbox" checked={form.value.sections.includes(section)}
-                                    disabled={section === options.value?.required}
+                                    disabled={Boolean(options.value?.requiredSections?.includes(section))}
                                     onChange={(event) => toggleSection(section, (event.target as HTMLInputElement).checked)} />
-                                {t(`presets.sections.${section}`)}
+                                {options.value?.labels?.[section] || t(`presets.sections.${section}`)}
                             </label>)}
                         </div>
                     </fieldset>

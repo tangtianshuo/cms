@@ -10,10 +10,27 @@ test('renderer selection requires the explicitly supported identity/version and 
   assert.equal(typeof preview.resolvePreviewTarget, 'function');
   assert.equal(preview.resolvePreviewTarget(snapshot(), config).mode, 'template');
   assert.equal(preview.resolvePreviewTarget(content(), config).origin, 'https://template.example.com');
-  for (const templateOrigin of ['', 'https://template.example.com/path', 'javascript:alert(1)']) assert.equal(preview.resolvePreviewTarget(content(), { ...config, templateOrigin }).mode, 'unsupported');
+  assert.equal(preview.resolvePreviewTarget(content(), { ...config, templateOrigin: '' }).mode, 'unsupported');
+  for (const templateOrigin of ['https://template.example.com/path', 'javascript:alert(1)']) assert.equal(preview.resolvePreviewTarget(content(), { ...config, templateOrigin }).mode, 'config-error');
   for (const value of [content('1.0.1'), content('1.0.2'), content('1.0.3', 'other')]) assert.equal(preview.resolvePreviewTarget(value, config).mode, 'unsupported');
   const mixed = snapshot(); mixed.pages.push({ ...mixed.pages[0], content: content('1.0.2') });
   assert.equal(preview.resolvePreviewTarget(mixed, config).mode, 'unsupported');
+});
+
+test('exact renderer map supports FireGuard and invalid mappings fail closed', () => {
+  const fireguard = { kind: 'preset-page', preset: { id: 'fireguard', version: '1.0.0' }, view: 'home', sections: [], seo: { title: '', description: '' } };
+  const renderers = JSON.stringify({
+    'fireguard@1.0.0': 'https://fireguard-preview.example.com',
+    'aeroframe@1.0.3': 'https://aeroframe-preview.example.com',
+  });
+  const target = preview.resolvePreviewTarget(fireguard, { renderers });
+  assert.equal(target.mode, 'template');
+  assert.equal(target.origin, 'https://fireguard-preview.example.com');
+  assert.equal(target.templateId, 'fireguard');
+  assert.equal(target.templateVersion, '1.0.0');
+  assert.equal(preview.resolvePreviewTarget(fireguard, { renderers: '{' }).mode, 'config-error');
+  assert.equal(preview.resolvePreviewTarget(fireguard, { renderers: JSON.stringify({ 'fireguard@1.0.0': 'https://preview.example.com/path' }) }).mode, 'config-error');
+  assert.equal(preview.resolvePreviewTarget(fireguard, { renderers: JSON.stringify({ 'fireguard': 'https://preview.example.com' }) }).mode, 'config-error');
 });
 
 test('legacy built-in templates retain their existing display preview with honest capability notice', () => {
@@ -50,9 +67,10 @@ test('unsaved single page overlays the saved snapshot without losing cards or mu
 test('template handshake verifies the renderer version instead of trusting any ready message', () => {
   const child = {}; const frame = { contentWindow: child };
   const event = { origin: config.templateOrigin, source: child, data: { type: 'storefront:preview-ready' } };
-  assert.equal(preview.isPreviewReady(event, frame, config.templateOrigin, true), false);
-  assert.equal(preview.isPreviewReady({ ...event, data: { ...event.data, templateId: 'aeroframe', templateVersion: '1.0.2' } }, frame, config.templateOrigin, true), false);
-  assert.equal(preview.isPreviewReady({ ...event, data: { ...event.data, templateId: 'aeroframe', templateVersion: '1.0.3' } }, frame, config.templateOrigin, true), true);
+  assert.equal(preview.isPreviewReady(event, frame, config.templateOrigin, { id: 'aeroframe', version: '1.0.3' }), false);
+  assert.equal(preview.isPreviewReady({ ...event, data: { ...event.data, templateId: 'aeroframe', templateVersion: '1.0.2' } }, frame, config.templateOrigin, { id: 'aeroframe', version: '1.0.3' }), false);
+  assert.equal(preview.isPreviewReady({ ...event, data: { ...event.data, templateId: 'aeroframe', templateVersion: '1.0.3' } }, frame, config.templateOrigin, { id: 'aeroframe', version: '1.0.3' }), true);
+  assert.equal(preview.isPreviewReady({ ...event, data: { ...event.data, templateId: 'fireguard', templateVersion: '1.0.0' } }, frame, config.templateOrigin, { id: 'aeroframe', version: '1.0.3' }), false);
 });
 
 test('delivery sends selected snapshot path to exact origin without retaining Vue proxies', () => {

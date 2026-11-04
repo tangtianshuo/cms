@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 import { createRenderer, nextTick, ssrContextKey, ref, h } from 'vue';
+import { readFileSync } from 'node:fs';
 const node = (type, text = '') => ({ type, text, props: {}, children: [], parent: null });
 const renderer = createRenderer({
  createElement: type => node(type), createText: text => node('#text', text), createComment: text => node('#comment', text),
@@ -78,4 +79,15 @@ test('site image choices exclude legacy unbound and other-site media',async()=>{
  const media=[{_id:'own',siteId:'a',mimetype:'image/png'},{_id:'legacy',mimetype:'image/png'},{_id:'foreign',siteId:'b',mimetype:'image/png'},{_id:'document',siteId:'a',mimetype:'application/pdf'}];
  assert.deepEqual(siteImageOptions(media,'a').map(m=>m._id),['own']);
  assert.deepEqual(siteImageOptions(media,undefined),[]);
+});
+
+test('page editor selection uses labels and only one editor for legacy or visual mode',async()=>{
+ const {canUseSectionEditor}=await server.ssrLoadModule('/src/components/studio/page-options.ts');
+ assert.equal(canUseSectionEditor({allowed:['hero-carousel','info-grid','faq'],required:'hero-carousel',visual:false}),true);
+ assert.equal(canUseSectionEditor({allowed:['hero-carousel'],required:'',visual:true}),false);
+ assert.equal(canUseSectionEditor({allowed:['custom-block'],required:'',visual:false}),false);
+ const studio=readFileSync(new URL('../src/views/dashboard/studio.tsx',import.meta.url),'utf8');
+ assert.equal((studio.match(/<PageCreateWizard/g)||[]).length,1);
+ assert.ok(studio.includes('sectionLabels={effectiveOptions.labels}'));
+ assert.ok(!studio.includes('>上移 {name}</button>'));
 });

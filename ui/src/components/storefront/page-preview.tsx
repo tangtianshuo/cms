@@ -22,6 +22,7 @@ export const PagePreview = defineComponent({
         const config = {
             templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
             legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
+            renderers: import.meta.env.VITE_TEMPLATE_PREVIEW_RENDERERS,
         };
         const pages = computed(() => availablePreviewPages(props.site, props.entry.templateId));
         const selectedPage = ref('');
@@ -52,7 +53,10 @@ export const PagePreview = defineComponent({
         }
 
         function onReady(event: MessageEvent) {
-            if (!isPreviewReady(event, frame.value, target.value.origin, target.value.mode === 'template')) return;
+            const expected = target.value.mode === 'template' && target.value.templateId && target.value.templateVersion
+                ? { id: target.value.templateId, version: target.value.templateVersion }
+                : undefined;
+            if (!isPreviewReady(event, frame.value, target.value.origin, expected)) return;
             frameReady.value = true;
             connectionError.value = '';
             clearTimeout(connectionTimer);
@@ -67,7 +71,8 @@ export const PagePreview = defineComponent({
         }
         function installPayload(value: unknown, path?: string) {
             const next = resolvePreviewTarget(value, config);
-            if (next.origin !== target.value.origin || next.mode !== target.value.mode) {
+            if (next.origin !== target.value.origin || next.mode !== target.value.mode ||
+                next.templateId !== target.value.templateId || next.templateVersion !== target.value.templateVersion) {
                 frameReady.value = false;
                 connectionError.value = '';
                 clearTimeout(connectionTimer);
@@ -178,11 +183,11 @@ export const PagePreview = defineComponent({
                         </button>
                     </div>
                     {error.value && <p class="m-0 border-l-4 border-red bg-error px-4 py-2 text-sm leading-relaxed text-dark" role="alert">{error.value}</p>}
-                    {payload.value && <p role="status" class="m-0 border-b border-white/20 px-4 py-3 text-sm leading-relaxed">{target.value.mode === 'template' && !frameReady.value ? 'AeroFrame 1.0.3 · 正在核对预览服务，草稿尚未发送。' : target.value.notice}{target.value.mode === 'template' && frameReady.value && ' 当前页包含未保存的编辑；路径和关联卡片使用已保存的站点草稿。'}{target.value.mode === 'unsupported' && <a href="/d/presets" class="ml-3 underline">前往模板管理</a>}</p>}
+                    {payload.value && <p role="status" class="m-0 border-b border-white/20 px-4 py-3 text-sm leading-relaxed">{target.value.mode === 'template' && !frameReady.value ? `${target.value.templateId} ${target.value.templateVersion} · 正在核对预览服务，草稿尚未发送。` : target.value.notice}{target.value.mode === 'template' && frameReady.value && ' 当前页包含未保存的编辑；路径和关联卡片使用已保存的站点草稿。'}{['unsupported', 'config-error'].includes(target.value.mode) && <a href="/d/presets" class="ml-3 underline">前往模板管理</a>}</p>}
                     {connectionError.value && <p role="alert" class="m-0 border-b border-red bg-error px-4 py-3 text-sm text-dark">{connectionError.value}</p>}
                     <div class="relative flex min-h-0 flex-1 justify-center overflow-auto bg-gray/30 p-3 sm:p-6">
                         {target.value.origin && !frameReady.value && !connectionError.value && <p role="status" class="absolute left-0 right-0 top-0 z-10 bg-dark/90 p-3 text-center text-sm">正在连接并核对预览服务版本…</p>}
-                        {target.value.origin && payload.value && <iframe ref={frame} title={t('storefrontPreview.title')} src={`${target.value.origin}/preview`}
+                        {target.value.origin && payload.value && <iframe key={`${target.value.templateId || target.value.mode}@${target.value.templateVersion || ''}:${target.value.origin}`} ref={frame} title={t('storefrontPreview.title')} src={`${target.value.origin}/preview`}
                             class="h-full min-h-[480px] max-w-full border-0 bg-white shadow-lg"
                             style={{ width: viewport.value === 'mobile' ? '390px' : '1100px' }}
                             onLoad={onFrameLoad} />}

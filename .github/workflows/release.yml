@@ -79,6 +79,9 @@ jobs:
       - name: Run UI test leads.
         working-directory: ui
         run: node --test test/leads.test.mjs
+      - name: Run UI test analytics
+        working-directory: ui
+        run: node --test test/analytics-state.test.mjs
       - name: Run UI test local-preview-policy
         working-directory: ui
         run: node --test test/local-preview-policy.test.mjs
@@ -190,6 +193,7 @@ jobs:
             RELEASE_VERSION=${{ needs.verify.outputs.version }}
             VITE_STOREFRONT_ORIGIN=${{ vars.VITE_STOREFRONT_ORIGIN }}
             VITE_TEMPLATE_PREVIEW_ORIGIN=${{ vars.VITE_TEMPLATE_PREVIEW_ORIGIN }}
+            VITE_TEMPLATE_PREVIEW_RENDERERS=${{ vars.VITE_TEMPLATE_PREVIEW_RENDERERS }}
       - name: Attest image provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

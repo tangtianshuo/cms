@@ -206,6 +206,12 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
     }
     if (issues.length) throw new ReleaseValidationError(issues);
     const pages: ReleasePage[] = [];
+    const concreteRoutes = new Map<string, Set<string>>();
+    for (const concrete of site.pages.filter(item => item.blueprintKey && !item.path.includes(':') && item.entryId)) {
+        const paths = concreteRoutes.get(concrete.entryId!) || new Set<string>();
+        paths.add(concrete.path);
+        concreteRoutes.set(concrete.entryId!, paths);
+    }
     for (const sourcePage of site.pages) {
         const page = pageDraft(site, sourcePage.key)!;
         const model = site.models.find((item) => item.key === page.modelKey);
@@ -227,6 +233,9 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
                 throw new Error(`Invalid slug: ${entry._id}`);
             }
             const path = page.path.replace(':slug', slug);
+            // A concrete page owns its exact route. Do not also emit the same
+            // Entry through the blueprint's parameterized route.
+            if (page.path.includes(':slug') && concreteRoutes.get(entry._id)?.has(path)) continue;
             if (pages.some((item) => item.path === path)) throw new Error(`Duplicate page path: ${path}`);
             const content: PublishedContent = previewPresetPage({
                 ...input, site, pageKey: page.key, entry, availableLanguages: [language], relatedEntries: entries,

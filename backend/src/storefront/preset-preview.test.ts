@@ -50,7 +50,7 @@ test('unsaved homepage values and CMS media are rendered in the installed theme'
     assert.equal(result.preset.demo.brand, 'My Store');
     assert.equal(result.preset.demo.hero.title, 'Changed before save');
     assert.equal(result.preset.demo.hero.image, 'http://cms.local/api/v4/media/image-1/bin/image');
-    assert.deepEqual(result.sections, ['hero', 'feature']);
+    assert.deepEqual(result.sections, ['hero-carousel', 'info-grid', 'faq']);
 });
 
 test('collection and product previews map their own Entry fields without catalog demo content', () => {

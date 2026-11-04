@@ -3,7 +3,7 @@ import { defineComponent, onBeforeUnmount, onMounted, ref, type PropType } from 
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Button } from '@bcms/selfhosted-ui/components/button';
-import { createPublicationAction, normalizePublishStatus, type PublishStatus } from './gateway-publication';
+import { createPublicationAction, normalizePublishStatus, publicationSuccessMessageKey, type PublishStatus } from './gateway-publication';
 import { publishedSiteUrl } from './published-site-url';
 
 interface Publication { requestKey?: string; operationId: string; releaseId: string; status: PublishStatus; failureCode?: string; reason?: string; activeRevision?: number; operation?: 'publish' | 'rollback' }
@@ -57,7 +57,7 @@ export const ReleaseManager = defineComponent({
                 preflight.value = null;
                 await refreshHistory();
                 await props.onSaved();
-                window.bcms.notification.success(t(value.status === 'rolled-back' ? 'presets.releaseRestored' : 'presets.releasePublished'));
+                window.bcms.notification.success(t(value.status === 'rolled-back' ? 'presets.releaseRestored' : publicationSuccessMessageKey(Boolean(gateway.value?.bound), value.status)));
             }
         }
         function schedulePoll() {
@@ -126,12 +126,13 @@ export const ReleaseManager = defineComponent({
                     preflight.value = null;
                     return;
                 }
-                await sdk.send({ url: '/api/v4/presets/releases/publish', method: 'POST', data: { expectedReleaseId, snapshotHash } });
+                const result = await sdk.send<{ releaseId: string }>({ url: '/api/v4/presets/releases/publish', method: 'POST', data: { expectedReleaseId, snapshotHash } });
                 preflight.value = null;
                 await refresh();
                 await props.onSaved();
-                phase.value = 'ready';
-                window.bcms.notification.success(t('presets.releasePublished'));
+                phase.value = 'snapshot-created';
+                publication.value = { operationId: '', releaseId: result.releaseId, status: 'snapshot-created' };
+                window.bcms.notification.success(t('presets.releaseSnapshotCreated'));
             });
         }
         async function rollback(releaseId: string) {
@@ -155,6 +156,12 @@ export const ReleaseManager = defineComponent({
         return () => <section id="releases" class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">
             <h2 class="text-lg font-semibold">{t('presets.releasesTitle')}</h2>
             <p class="mt-2 max-w-3xl text-sm opacity-70">{t(gateway.value?.bound ? 'presets.gatewayReleaseHint' : 'presets.releaseHint')}</p>
+            {gateway.value && !gateway.value.bound && <div role="status" class={`mt-3 border-l-4 px-3 py-2 text-sm ${publication.value?.status === 'snapshot-created' ? 'border-yellow bg-yellow/10' : 'border-gray bg-gray/10'}`}>
+                <strong>{publication.value?.status === 'snapshot-created' ? '发布快照已生成，但独立站尚未上线。' : '当前站点仅编辑 CMS 草稿。'}</strong>
+                <p>{gateway.value.configured
+                    ? 'Gateway 控制面已配置，但当前站点尚未绑定到对应 Gateway 站点。请管理员完成站点映射后再发布。'
+                    : 'Gateway 发布服务尚未完成配置。完成站点绑定、域名入口和 HTTPS 路由前，不会显示“独立站已发布”。联系管理员并提供当前 siteId 以便绑定。'}</p>
+            </div>}
             {gateway.value?.bound && <p role="status" class="mt-3 text-sm">
                 {t(`presets.gatewayStatus.${publication.value?.status || phase.value}`)}
                 {publication.value?.failureCode && <span class="ml-2">{userErrorMessage(publication.value.failureCode)}</span>}
@@ -171,8 +178,8 @@ export const ReleaseManager = defineComponent({
             }
             <div class="mt-4 flex flex-wrap items-center gap-4">
                 <Button disabled={busy.value || publication.value?.status === 'publishing'} kind="secondary" onClick={check}>{t(gateway.value?.bound ? 'presets.checkGatewayRelease' : 'presets.checkRelease')}</Button>
-                <Button disabled={busy.value || !gateway.value || !preflight.value?.valid || publication.value?.status === 'publishing'} onClick={publish}>{t('presets.publishRelease')}</Button>
-                {history.value.currentReleaseId && siteUrl() && <a href={siteUrl()} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
+                <Button disabled={busy.value || !gateway.value || !preflight.value?.valid || publication.value?.status === 'publishing'} onClick={publish}>{t(gateway.value?.bound ? 'presets.publishRelease' : 'presets.createSnapshot')}</Button>
+                {gateway.value?.bound && history.value.currentReleaseId && siteUrl() && <a href={siteUrl()} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
             </div>
             {busy.value && <p role="status" class="mt-3 text-sm">{t('common.loading')}</p>}
             {error.value && <p role="alert" class="mt-3 border-l-4 border-red bg-error px-3 py-2 text-sm leading-relaxed text-dark">{error.value}</p>}

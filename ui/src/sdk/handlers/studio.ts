@@ -1,6 +1,7 @@
 import type { Sdk } from '../main';
 import type { StudioField, StudioValue } from '@bcms/selfhosted-backend/studio/business';
 import type { PageDraft } from '@bcms/selfhosted-backend/presets/pages';
+import type { PageSectionOptions } from '@bcms/selfhosted-backend/presets/pages';
 export interface NavigationNode { id: string; label: string; href?: string; children: NavigationNode[]; enabled: boolean }
 export interface SiteOperations { seoTitle: string; seoDescription: string; socialImage?: { _id: string }; favicon?: { _id: string }; analyticsId?: string; contactFormEnabled: boolean }
 export interface StudioEntry { id: string; updatedAt: number; fields: Record<string, unknown>; hasLanguage: boolean }
@@ -14,7 +15,7 @@ export interface StudioState {
         navigation?: NavigationNode[];
         operations: SiteOperations;
         contactDeliveryConfigured?: boolean;
-        pageOptions: Record<string, { allowed: string[]; required: string } | null>; blueprints: Array<{ key: string; title: string; modelKey: string }> };
+        pageOptions: Record<string, PageSectionOptions | null>; blueprints: Array<{ key: string; title: string; modelKey: string }> };
     models: StudioModel[];
 }
 export class StudioHandler {

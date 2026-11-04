@@ -1,5 +1,5 @@
 /** Keep a publish action stable across a lost response or a page reload. */
-export type PublishStatus = 'draft' | 'checking' | 'publishing' | 'ready' | 'failed' | 'rolled-back' | 'unknown';
+export type PublishStatus = 'draft' | 'checking' | 'publishing' | 'snapshot-created' | 'ready' | 'failed' | 'rolled-back' | 'unknown';
 
 export function normalizePublishStatus(status: unknown, operation: 'publish' | 'rollback' = 'publish'): PublishStatus {
     if (operation === 'rollback' && status === 'ready') return 'rolled-back';
@@ -8,6 +8,12 @@ export function normalizePublishStatus(status: unknown, operation: 'publish' | '
     if (status === 'failed') return 'failed';
     if (status === 'unknown') return 'unknown';
     return 'draft';
+}
+
+export function publicationSuccessMessageKey(bound: boolean, status: string): string {
+    return bound && status === 'ready'
+        ? 'presets.releasePublished'
+        : 'presets.releaseSnapshotCreated';
 }
 
 export function createPublicationAction(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>, scope: string, makeId: () => string) {
