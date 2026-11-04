@@ -243,18 +243,20 @@ export function updatePageDraft(
         layoutDocument = incomingLayout || normalizeLayoutDocument(layoutFromSectionConfigs(input.sectionConfigs || (input.sections || []).map(legacySectionConfig)), layoutSchema);
         sectionConfigs = sectionConfigsFromLayout(layoutDocument, layoutSchema) as SectionConfig[];
     } else if (hasExplicitLayout || hasStoredLayout) {
-        const incomingLayout = input.layoutDocument !== undefined
-            ? normalizeLayoutDocument(structuredClone(input.layoutDocument) as LayoutDocument)
-            : page.layoutDocument
-                ? normalizeLayoutDocument(structuredClone(page.layoutDocument))
-                : undefined;
-        if (incomingLayout) {
-            layoutDocument = incomingLayout;
-            sectionConfigs = normalizeSectionConfigs(page.layout, sectionConfigsFromLayout(incomingLayout) as SectionConfig[], { publishedPaths });
-        } else if (input.sectionConfigs) {
+        if (input.sectionConfigs) {
             sectionConfigs = normalizeSectionConfigs(page.layout, input.sectionConfigs as SectionConfig[], { publishedPaths });
-        } else if (page.sectionConfigs) {
-            sectionConfigs = normalizeSectionConfigs(page.layout, page.sectionConfigs, { publishedPaths });
+        } else {
+            const incomingLayout = input.layoutDocument !== undefined
+                ? normalizeLayoutDocument(structuredClone(input.layoutDocument) as LayoutDocument)
+                : page.layoutDocument
+                    ? normalizeLayoutDocument(structuredClone(page.layoutDocument))
+                    : undefined;
+            if (incomingLayout) {
+                layoutDocument = incomingLayout;
+                sectionConfigs = normalizeSectionConfigs(page.layout, sectionConfigsFromLayout(incomingLayout) as SectionConfig[], { publishedPaths });
+            } else if (page.sectionConfigs) {
+                sectionConfigs = normalizeSectionConfigs(page.layout, page.sectionConfigs, { publishedPaths });
+            }
         }
     }
     const updated: PageDraft = {
