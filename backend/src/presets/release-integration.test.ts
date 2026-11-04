@@ -95,13 +95,13 @@ test('MongoDB and HTTP publication lifecycle preserves public content until acti
     const contentEntry = (await Repo.entry.methods.findAllByTemplateId(content.templateId))[0];
     const newPage = await admin('/api/v4/presets/pages', { blueprintKey: 'content', title: 'Delivery',
         path: '/delivery', seoTitle: 'Delivery info', seoDescription: 'Shipping details',
-        sections: ['story'], entryId: contentEntry._id, navigation: true, enabled: true });
+        sections: ['info-grid'], entryId: contentEntry._id, navigation: true, enabled: true });
     assert.equal((await publicPage('/delivery')).statusCode, 404);
     const second = await admin('/api/v4/presets/releases/publish', { expectedReleaseId: first.releaseId });
     assert.equal((await publicPage('/')).json().content.preset.demo.hero.title, 'Saved after first release');
     assert.equal((await publicPage('/delivery')).statusCode, 200);
     await admin(`/api/v4/presets/pages/${newPage.key}`, { title: 'Delivery', path: '/shipping',
-        seoTitle: 'Delivery info', seoDescription: 'Shipping details', sections: ['story'],
+        seoTitle: 'Delivery info', seoDescription: 'Shipping details', sections: ['info-grid'],
         entryId: contentEntry._id, navigation: true, enabled: true });
     const third = await admin('/api/v4/presets/releases/publish', { expectedReleaseId: second.releaseId });
     assert.equal((await publicPage('/delivery')).json().redirect, '/shipping');
