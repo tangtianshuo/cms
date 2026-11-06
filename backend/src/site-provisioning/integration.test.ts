@@ -113,10 +113,26 @@ test('authenticated creation and durable Mongo recovery fence workers and preser
         assert.equal(failed?.provisioning?.attempts, attempt); assert.equal(failed?.provisioning?.status, attempt === 8 ? 'failed' : 'pending'); assert.equal(failed?.provisioning?.lastError, 'gateway_unavailable');
     }
     assert.equal(await store.claim(now + 999999), null); // Legacy rows never auto-provision.
-    // A crash on the final leased attempt also becomes manually recoverable.
+    // An expired final worker must become retryable even when another due site is claimed.
+    const busy = await authenticatedRequest('/api/v4/workspaces/current/sites', { body: { name: 'Busy queue work', requestKey: 'busy-queue-original-key' } });
     await sites.updateOne({ _id: c._id }, { $set: { 'provisioning.status': 'running', 'provisioning.attempts': 8, 'provisioning.leaseToken': 'dead-worker', 'provisioning.leaseUntil': now - 1 } });
-    assert.equal(await store.claim(now), null);
+    const busyInputs: string[] = [];
+    await runProvisioningTick(store, async input => {
+        busyInputs.push(input.requestKey);
+        assert.equal(input.cmsSiteId, busy._id);
+        return { ...binding, cmsSiteId: busy._id, siteId: randomUUID() };
+    }, now);
+    assert.deepEqual(busyInputs, ['busy-queue-original-key']);
+    assert.equal((await sites.findOne({ _id: busy._id }))?.provisioning?.status, 'ready');
     assert.equal((await sites.findOne({ _id: c._id }))?.provisioning?.status, 'failed');
+    const exhaustedStatus = await request(`/api/v4/workspaces/current/sites/${c._id}/provisioning`);
+    assert.equal(exhaustedStatus.json().status, 'failed');
+    await authenticatedRequest(`/api/v4/workspaces/current/sites/${c._id}/provisioning/retry`, { body: {} });
+    const restarted = (await sites.findOne({ _id: c._id }))?.provisioning;
+    assert.equal(restarted?.status, 'pending'); assert.equal(restarted?.attempts, 0); assert.equal(restarted?.requestKey, 'failure-key');
+    assert.equal(await store.complete(c._id, 'dead-worker', { ...binding, cmsSiteId: c._id, siteId: randomUUID() }), false);
+    assert.equal(await store.defer(c._id, 'dead-worker', now, 'gateway_unavailable'), false);
+    assert.equal((await sites.findOne({ _id: c._id }))?.provisioning?.status, 'pending');
     await runWithWorkspace({ workspaceId: 'c3-workspace', siteId: a._id, actorId: '__test', admin: true, instanceAdmin: true, role: 'admin' }, async () => { assert.equal((await Repo.siteGatewayBinding.methods.find('c3-workspace', a._id))?.siteId, binding.siteId); });
     const parameterRace = await Promise.all(['First name', 'Second name'].map(name => request('/api/v4/workspaces/current/sites', { name, requestKey: 'different-parameters-race' })));
     assert.deepEqual(parameterRace.map(item => item.statusCode).sort(), [200, 409]);

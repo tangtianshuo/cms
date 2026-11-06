@@ -71,6 +71,12 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                 return result;
             },
             async claimProvisioning(now) {
+                // Reclaim exhausted workers independently of other due work so a busy
+                // queue cannot prevent an administrator from retrying their site.
+                await identityCollection.updateMany({ 'provisioning.status': 'running', 'provisioning.attempts': { $gte: 8 }, 'provisioning.leaseUntil': { $lte: now } }, {
+                    $set: { 'provisioning.status': 'failed', 'provisioning.lastError': 'gateway_unavailable' },
+                    $unset: { 'provisioning.leaseToken': '', 'provisioning.leaseUntil': '' },
+                });
                 const site = await identityCollection.findOneAndUpdate({
                     'provisioning.attempts': { $lt: 8 },
                     $or: [
@@ -79,14 +85,7 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                     ],
                 }, { $set: { 'provisioning.status': 'running', 'provisioning.leaseToken': randomUUID(), 'provisioning.leaseUntil': now + 60000 },
                     $inc: { 'provisioning.attempts': 1 } }, { returnDocument: 'after', sort: { 'provisioning.nextAttemptAt': 1, _id: 1 } });
-                // The eighth worker may die too: terminalize its expired lease rather than strand it forever.
-                if (!site) {
-                    await identityCollection.updateMany({ 'provisioning.status': 'running', 'provisioning.attempts': { $gte: 8 }, 'provisioning.leaseUntil': { $lte: now } }, {
-                        $set: { 'provisioning.status': 'failed', 'provisioning.lastError': 'gateway_unavailable' },
-                        $unset: { 'provisioning.leaseToken': '', 'provisioning.leaseUntil': '' },
-                    });
-                    return null;
-                }
+                if (!site) return null;
                 cache.remove(site._id);
                 if (!site.provisioning) throw new Error('Claimed site has no preparation state');
                 return { cmsWorkspaceId: ownerWorkspace(site), cmsSiteId: site._id, name: site.creationName || site.name, state: site.provisioning };
