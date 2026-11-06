@@ -85,6 +85,19 @@ services:
         volumes:
             - "${E2E_SNAPSHOT_HOST_DIR:?}:/var/lib/gateway/snapshots"
             - "${E2E_PUBLIC_REGISTRY_FILE:?}:/var/lib/gateway/registry/public-registry.json:ro"
+    gateway-ingest:
+        image: local/gateway-e2e:20261028
+        command: [node, apps/ingest/dist/server.js]
+        depends_on:
+            postgres: { condition: service_healthy }
+        environment:
+            DATABASE_URL: postgresql://e2e:${E2E_DB_PASSWORD:?}@postgres:5432/gateway_e2e
+            HOST: 0.0.0.0
+            PORT: '18184'
+            # HTTP exceptions are explicit and restricted to loopback test origins.
+            INGEST_LOCAL_ORIGINS: ${E2E_INGEST_LOCAL_ORIGINS:-}
+            INGEST_TRUSTED_PROXY_IPS: ${E2E_INGEST_TRUSTED_PROXY_IPS:-}
+        ports: ['127.0.0.1:18184:18184']
     admin:
         image: nginx:latest
         depends_on:
