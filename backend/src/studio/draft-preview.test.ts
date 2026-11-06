@@ -79,7 +79,7 @@ test('incremental translation saves only explicit missing-language cases and pre
  const result=validateStudioDraft(input,overlay);
  assert.ok(result.missingTranslations.some(issue=>issue.code==='missing-translation' && issue.modelKey==='home' && issue.entryId==='home-entry' && issue.language==='fr'));
  assert.ok(result.missingTranslations.some(issue=>issue.modelKey==='site-settings'));
- assert.equal('pages' in result,false); assert.equal(JSON.stringify(input),before);
+ assert.deepEqual(Object.keys(result),['missingTranslations']); assert.equal(JSON.stringify(input),before);
  assert.throws(()=>buildStudioDraftPreview(input,overlay),(cause:any)=>cause.issues?.every((issue:any)=>issue.code==='missing-translation'));
  const rich=(href:string):any=>({...overlay,entry:{...overlay.entry,entry:{...overlay.entry.entry,content:[{lng:'fr',plainText:'Lien',nodes:[{type:'paragraph',content:[{type:'text',text:'Lien',marks:[{type:'link',attrs:{href}}]}]}]}]}}});
  assert.doesNotThrow(()=>validateStudioDraft(input,rich('/')));
