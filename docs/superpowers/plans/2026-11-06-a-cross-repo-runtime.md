@@ -101,10 +101,10 @@ git commit -m "feat: integrate artifact runtime and independent traffic"
 - Consumes: A1 ContractSnapshotV1；现有 TemplateEditorContract、TemplateRendererContract。
 - Produces: 新版本 manifest 的 `editor` / `renderer` 字段与真实模板 renderer；公开请求读取同版只读 artifact，预览仅通过消息协议接收草稿。
 
-- [ ] **Step 1：冻结旧版本。** 记录现有 registry 的版本和 digest；比较两个 Templates 工作树的同名文件 diff。旧版本已登记的 manifest/image/bundle 不覆盖。若规划新版本已存在，先更新计划的具体目录和版本，再执行本步骤。
-- [ ] **Step 2：用来源测试验证红灯。** 将 `contracts/` 和 `test/contract*` 测试移入目标，加入原来源的 `test:contract` script，执行 Templates `npm run test:contract`。预期未合并契约/renderer 时失败，保留具体失败。
-- [ ] **Step 3：创建新版本目录，合并两套行为。** 公开 `published.mjs` 采用架构来源的 artifact 读取，`preview.vue`/消息握手采用统一预览来源；逐个更新 manifest ID/version、renderer 身份、Nuxt base URL 和测试 fixture，不能做全库版本替换。旧公开目录保持可回滚；旧版测试单独归类，不用新架构预期强套旧版本。
-- [ ] **Step 4：执行新版本和 CMS 回归。** Templates：
+- [x] **Step 1：冻结旧版本。** 记录现有 registry 的版本和 digest；比较两个 Templates 工作树的同名文件 diff。旧版本已登记的 manifest/image/bundle 不覆盖。若规划新版本已存在，先更新计划的具体目录和版本，再执行本步骤。
+- [x] **Step 2：用来源测试验证红灯。** 将 `contracts/` 和 `test/contract*` 测试移入目标，加入原来源的 `test:contract` script，执行 Templates `npm run test:contract`。预期未合并契约/renderer 时失败，保留具体失败。
+- [x] **Step 3：创建新版本目录，合并两套行为。** 公开 `published.mjs` 采用架构来源的 artifact 读取，`preview.vue`/消息握手采用统一预览来源；逐个更新 manifest ID/version、renderer 身份、Nuxt base URL 和测试 fixture，不能做全库版本替换。旧公开目录保持可回滚；旧版测试单独归类，不用新架构预期强套旧版本。
+- [x] **Step 4：执行新版本和 CMS 回归。** Templates：
 
 ```sh
 node scripts/validate.mjs templates/aeroframe/1.0.4/template.json
@@ -122,7 +122,7 @@ node --test ui/test/publish-status.test.mjs ui/test/section-editor.test.mjs
 ```
 
 预期未知区块不落入商品字段；未绑定站点不能显示公网发布成功；预览及公开渲染的页面路径与区块一致。
-- [ ] **Step 5：提交模板契约和新版本目录。** 提交信息 `feat: deliver contract-based immutable template versions`。CMS 如需适配仅提交本任务实际更改的文件，保留其他统一预览修改供 B1 验收。
+- [x] **Step 5：提交模板契约和新版本目录。** 提交信息 `feat: deliver contract-based immutable template versions`。CMS 如需适配仅提交本任务实际更改的文件，保留其他统一预览修改供 B1 验收。
 
 执行提交前先核对 staging 只包含本任务；下面命令在各自目标工作树根执行。若列出的规划文件没有生成，先核对任务实现，不用 `git add -A` 绕过。跨仓提交分别记录 SHA。
 

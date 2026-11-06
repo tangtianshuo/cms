@@ -136,7 +136,7 @@ interface AcceptanceEvidence {
 ## 任务状态与边界
 
 - [x] A1 Gateway 架构成果整合（Gateway `a3a169e`、`c3d6ee9`；真实 SQL 195 项通过，修复定向 123 项通过、零跳过；独立复审通过。完整目标组合契约由 A2/A4 继续验收）。
-- [ ] A2 Templates/CMS 整合及新不可变版本。
+- [x] A2 Templates/CMS 整合及新不可变版本（Templates `c0e2e17`、`e1cb6c6`；CMS `0d29068`；实际跨仓与 HTTP 契约 16 项通过、零跳过；独立复审通过。外部产物发布留待 B2）。
 - [ ] A3 独立询盘/事件服务与授权收口。
 - [ ] A4 干净构建、运行隔离及组合锁定。
 - [ ] B1 精确版本 CMS 预览接入。
