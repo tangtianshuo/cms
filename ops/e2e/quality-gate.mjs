@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -11,6 +10,12 @@ import {
     readEnv,
     workerEnv,
 } from './runtime.mjs';
+
+import {
+    validateMatrixEvidence,
+    validateLocalPublicationEvidence,
+} from './runtime-evidence.mjs';
+export { validateMatrixEvidence, validateLocalPublicationEvidence };
 
 export function classifyGateFailure({
     name,
@@ -36,6 +41,19 @@ export function classifyGateFailure({
 }
 
 export function buildGateSummary({ checks, metadata }) {
+    if (
+        metadata?.scope === 'formal-lock' &&
+        metadata.formalLockAccepted !== true
+    )
+        checks = [
+            ...checks,
+            {
+                name: 'public-chain-acceptance',
+                passed: false,
+                status: 'blocked',
+                failureCode: 'public_chain_unverified',
+            },
+        ];
     const failureCodes = [
         ...new Set(
             checks
@@ -60,40 +78,6 @@ export function assertActiveStateUnchanged(before, after) {
     );
 }
 
-function checksum(bytes) {
-    return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-}
-
-export function validateMatrixEvidence(matrix, repositories, templates) {
-    assert.equal(matrix.passed, true, 'fault matrix must have passed');
-    assert.deepEqual(
-        matrix.sourceIdentities,
-        repositories,
-        'fault matrix source identities are stale',
-    );
-    assert.deepEqual(
-        matrix.cleanup,
-        { childProcessesRemaining: [], servicesStopped: [], errors: [] },
-        'fault matrix cleanup incomplete',
-    );
-    for (const template of templates)
-        for (const service of [
-            'cms',
-            'gateway-control',
-            'worker',
-            'gateway-ingest',
-        ]) {
-            assert.ok(
-                matrix.cases.some(
-                    (c) =>
-                        c.id ===
-                            `${template.id}@${template.version}:${service}-stopped` &&
-                        c.status === 'passed',
-                ),
-                'required template/service fault evidence missing',
-            );
-        }
-}
 async function readActiveState() {
     const { Pool } = createRequire(path.join(gatewayRoot, 'package.json'))(
         'pg',
@@ -146,6 +130,20 @@ function runCheck(name, command, env) {
 export async function runQualityGate({
     outputPath = path.join(runtimeDir, 'quality-gate.json'),
 } = {}) {
+    if (process.env.E2E_LOCAL_CANDIDATES !== '1') {
+        const summary = buildGateSummary({
+            checks: [],
+            metadata: {
+                scope: 'formal-lock',
+                formalLockAccepted: false,
+                pending:
+                    'B2 matching public-chain evidence and verified PlatformLock identities',
+            },
+        });
+        await mkdir(path.dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, `${JSON.stringify(summary, null, 2)}\n`);
+        return summary;
+    }
     const templatesRoot =
         process.env.E2E_TEMPLATES_ROOT ||
         path.resolve(cmsRoot, '../Independent-Website-Templates');
@@ -195,24 +193,24 @@ export async function runQualityGate({
                 'utf8',
             ),
         );
-        validateMatrixEvidence(matrix, build.repositories, templates);
+        validateMatrixEvidence(
+            matrix,
+            build.repositories,
+            templates,
+            build.images,
+        );
         const publication = JSON.parse(
             await readFile(
                 path.join(runtimeDir, 'local-publication.json'),
                 'utf8',
             ),
         );
-        assert.equal(publication.passed, true);
-        assert.deepEqual(publication.sourceIdentities, build.repositories);
-        for (const template of templates)
-            assert.ok(
-                publication.cases.some(
-                    (c) =>
-                        c.id ===
-                            `${template.id}@${template.version}:artifact-integrity-failure` &&
-                        c.status === 'passed',
-                ),
-            );
+        validateLocalPublicationEvidence(
+            publication,
+            build.repositories,
+            templates,
+            build.images,
+        );
         checks.push({
             name: 'real-docker-fault-evidence',
             passed: true,
@@ -228,20 +226,6 @@ export async function runQualityGate({
             outputTail: error.message,
         });
     }
-    if (process.env.E2E_LOCAL_CANDIDATES !== '1')
-        checks.push(
-            runCheck(
-                'formal-platform-lock',
-                [
-                    process.execPath,
-                    'ops/release/platform-lock.mjs',
-                    'verify',
-                    process.env.E2E_PLATFORM_LOCK ||
-                        'docs/releases/platform-lock.json',
-                ],
-                env,
-            ),
-        );
     const after = await readActiveState();
     const unchanged = JSON.stringify(before) === JSON.stringify(after);
     checks.push({
@@ -256,10 +240,7 @@ export async function runQualityGate({
         metadata: {
             repositories: build.repositories,
             images: build.images,
-            scope:
-                process.env.E2E_LOCAL_CANDIDATES === '1'
-                    ? 'local-candidates-only'
-                    : 'formal-lock',
+            scope: 'local-candidates-only',
             formalLockAccepted: false,
             pending: 'B2 public registry and preview digests',
         },

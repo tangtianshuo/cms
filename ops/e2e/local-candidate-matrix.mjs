@@ -1,5 +1,9 @@
 // Explicit disposable local-image proof; this is never public registry acceptance.
 import assert from 'node:assert/strict';
+import {
+    assertCleanupComplete,
+    finalizeRuntimeEvidence,
+} from './runtime-evidence.mjs';
 import { execFileSync, spawn } from 'node:child_process';
 import { readFile, writeFile, open, chmod, stat, rm } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -89,6 +93,7 @@ export async function runLocalCandidateMatrix({ faults = true } = {}) {
     const sites = [];
     const children = new Set();
     const stopped = new Set();
+    let checksPassed = false;
     let worker;
     let networkOwned = false;
     let routeStateOwned = false;
@@ -695,8 +700,7 @@ export async function runLocalCandidateMatrix({ faults = true } = {}) {
             await processStop(worker);
             worker = undefined;
         }
-        report.completedAt = new Date().toISOString();
-        report.passed = true;
+        checksPassed = true;
     } catch (error) {
         report.passed = false;
         report.error = error.message;
@@ -759,11 +763,19 @@ export async function runLocalCandidateMatrix({ faults = true } = {}) {
                 cleanupErrors.push(`site cleanup: ${error.message}`);
             }
         }
-        await pool.end();
+        try {
+            await pool.end();
+        } catch (error) {
+            cleanupErrors.push(`database disconnect: ${error.message}`);
+        }
         if (routeStateOwned)
-            await rm(path.join(runtimeDir, 'gateway-routes.json'), {
-                force: true,
-            });
+            try {
+                await rm(path.join(runtimeDir, 'gateway-routes.json'), {
+                    force: true,
+                });
+            } catch (error) {
+                cleanupErrors.push(`route cleanup: ${error.message}`);
+            }
         report.cleanup = {
             childProcessesRemaining: [...children]
                 .filter((c) => !c.result)
@@ -771,12 +783,12 @@ export async function runLocalCandidateMatrix({ faults = true } = {}) {
             servicesStopped: [...stopped],
             errors: cleanupErrors,
         };
-        await writeFile(file, `${JSON.stringify(report, null, 2)}\n`);
-        assert.deepEqual(
-            cleanupErrors,
-            [],
-            'owned test resources cleanup failed',
+        Object.assign(
+            report,
+            finalizeRuntimeEvidence(report, checksPassed, report.cleanup),
         );
+        await writeFile(file, `${JSON.stringify(report, null, 2)}\n`);
+        assertCleanupComplete(report.cleanup);
     }
     console.log(
         `${faults ? 'runtime-isolation' : 'local-publication'}: PASS (explicit local candidates; public registry acceptance awaiting B2)`,

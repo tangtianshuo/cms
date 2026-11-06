@@ -3,11 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { snapshotCommit } from './build.mjs';
 test('build context contains committed bytes only, with exact source identity', async () => {
-    const dir = await mkdtemp(
-        path.join(process.cwd(), '.superpowers/build-test-'),
-    );
+    const dir = await mkdtemp(path.join(tmpdir(), 'a4-build-test-'));
     const git = (args) =>
         execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
     try {

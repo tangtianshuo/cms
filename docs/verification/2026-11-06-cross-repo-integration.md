@@ -80,6 +80,8 @@ node ops/e2e/test.mjs analytics-isolation
 E2E_LOCAL_CANDIDATES=1 node ops/e2e/test.mjs quality-gate
 ```
 
+Retained runtime initialization validates the disposable certificate dates, key and host. If it is expired or missing, init exits with instructions to select a new unused `E2E_RUNTIME_DIR` and initialize/build/start there; it does not change global trust or overwrite retained credentials.
+
 `runtime-isolation` and local publication each start/stop their own independent worker and traffic processes. To run them manually for a public-registry flow, `runtime.mjs worker` and `runtime.mjs traffic` are separate commands. Do not start competing copies for the owned local matrix. The harness uses fixed loopback ports, so they must be free; it never kills an unrelated port owner. `E2E_TEMPLATE_MATRIX=id@version,...` at init selects candidate versions; the two new versions are the default.
 
 - Lock, clean source extraction and gate unit tests: **11 passed, 0 failed/skipped**.
@@ -95,6 +97,8 @@ E2E_LOCAL_CANDIDATES=1 node ops/e2e/test.mjs quality-gate
 
 ## Required later boundary
 
+The formal quality gate is explicitly blocked (`public_chain_unverified`, exit 1) until matching public-chain evidence and verified PlatformLock identities are implemented after B2. A shape-valid lock and successful local evidence cannot make the formal gate pass. The original formal publication commands remain available.
+
 Without the explicit local mode, `node ops/e2e/test.mjs publication-control-plane` currently exits 1 and writes `public-registry-publication.json` with `status=blocked`. `node ops/release/platform-lock.mjs verify docs/releases/platform-lock.json` exits 1 because no complete real lock exists. Neither is a pass or a skipped success.
 
 CMS/public control currently permit only the canonical GHCR template repository; worker pulls that approved exact repository/digest. B2 must provide actual published candidate image and preview artifact/bundle digests after remaining new-template edits. Then record four exact source identities, generate the complete PlatformLock, verify Git/registry authenticity separately from shape validation, and rerun the original full public CMS→control→worker publication tests for both template bindings. The formal recovery test has been corrected to keep traffic independent and inject candidate-only artifact corruption; its public-registry execution remains blocked until B2. No registry allowlist was broadened for local convenience.
@@ -103,3 +107,9 @@ CMS/public control currently permit only the canonical GHCR template repository;
 
 1. New template runtimes had no sitemap route: real built HTTP returned 404 for both. New artifact-only sitemap routes reuse validated local snapshot loading, escape XML, accept only a valid canonical Host, exclude private/parameter blueprint paths, and fail closed for missing/corrupt artifacts. Built HTTP tests confirm zero control requests. Templates commit `ed63e4e814d028f1ca64af98b2a1da37138a649c`.
 2. A3 adapter added trusted ingest Env but the strict Docker client still accepted only the old six/seven-item layout. Actual Docker publication failed before create with `Invalid Docker request`. The validator now accepts exactly the trusted origin and optional snapshot positions, preserving all field/prototype/allowlist restrictions and rejecting unknown, duplicate and injected Env. A real adapter→client→Unix-socket regression covers enabled/disabled ingest and optional artifact. Gateway commit `58e615f10cc42cbffb711de65130d9ab9879de7a`.
+
+## A4 review fix1 — local evidence validation
+
+Both local evidence consumers now bind recorded CMS/control/ingest/template image IDs to the exact `build.images` identities, including template configured/authoritative/active image fields. Missing or mismatched records fail validation. Publication evidence additionally requires all publication/rollback, idempotency/stale-revision, integrity-failure and restart scenarios and complete successful cleanup. The producer finalizes `passed` only after cleanup.
+
+Focused review regressions: `node --test ops/e2e/runtime.test.mjs ops/e2e/quality-gate.test.mjs ops/e2e/build-source.test.mjs` — **10 passed, 0 failed/skipped**. The unchanged historical matrix/publication JSON both passed the stronger validators against the original build evidence. Clean-source extraction also passed from an empty OS temporary cwd without `.superpowers`. No Docker matrix or application build was repeated for these tooling fixes; the source/image identities above remain historical.

@@ -1,5 +1,10 @@
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
-import { randomBytes, randomUUID } from 'node:crypto';
+import {
+    randomBytes,
+    randomUUID,
+    X509Certificate,
+    createPrivateKey,
+} from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { spawnSync, spawn, execFileSync } from 'node:child_process';
@@ -22,6 +27,32 @@ export async function readEnv() {
                 return [line.slice(0, at), line.slice(at + 1)];
             }),
     );
+}
+export async function assertRuntimeCertificateValid(
+    directory,
+    now = Date.now(),
+) {
+    try {
+        const certificate = new X509Certificate(
+            await readFile(path.join(directory, 'tls/cert.pem')),
+        );
+        if (now >= Date.parse(certificate.validTo))
+            throw new Error('certificate expired');
+        if (now < Date.parse(certificate.validFrom))
+            throw new Error('certificate not yet valid');
+        const key = createPrivateKey(
+            await readFile(path.join(directory, 'tls/key.pem')),
+        );
+        if (!certificate.checkPrivateKey(key))
+            throw new Error('certificate key mismatch');
+        if (!certificate.checkHost('gateway-tls'))
+            throw new Error('certificate host mismatch');
+    } catch (error) {
+        throw new Error(
+            `Disposable runtime TLS certificate unavailable or invalid (${error.message}). Set E2E_RUNTIME_DIR to a new unused directory and run node ops/e2e/runtime.mjs init, then build and start that runtime. Existing runtime retained.`,
+            { cause: error },
+        );
+    }
 }
 export async function saveEnv(values) {
     await writeFile(
@@ -76,6 +107,7 @@ if (
         await chmod(runtimeDir, 0o700);
         try {
             await readEnv();
+            await assertRuntimeCertificateValid(runtimeDir);
             console.log('Existing disposable runtime retained');
         } catch (error) {
             if (error.code !== 'ENOENT') throw error;
