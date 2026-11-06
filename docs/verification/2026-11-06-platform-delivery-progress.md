@@ -195,3 +195,11 @@ Controller inspected review/report, source binding, matrix/media and cleanup pro
 ## Next task
 
 C1 Gateway idempotent provisioning and source identity authorization, followed by C2–C4. A4 final public-chain acceptance remains dependent on authentic external artifacts. D1 retains settings/translation regressions and defines mandatory cases before F1 finalization.
+
+## C1 — Idempotent provisioning and management identity accepted
+
+Gateway `815b1e397464011262b4c86d63578bd090f3020b` adds transactional source workspace/site bindings, server-generated pending default domains, and source-scoped authorization across all eleven management resources. Dynamic requests use the trusted backend instance and both source headers; partial or foreign identities never fall back. Legacy mode requires both headers absent and actual site ownership.
+
+Eight-way concurrent provisioning and cross-source key races run against real PostgreSQL. Original source/key replays the same identity; key/tuple mismatch returns 409 without mutations or orphan mappings. The exact reserved default Domain is persisted with a same-site foreign key and deletion restriction, preserving its URL across primary/config changes. C3 must keep the original requestKey for every retry; C4 must preserve this default identity. These additive decisions avoid silently changing identity on retry; clients must retain the original key and explicit future destruction must account for the reserved-domain reference.
+
+Final C1 SQL/actual-handler suite: 15 passed, zero skips. Full repository: 243 passed, zero failures, one existing Linux/root-only artifact case skipped on macOS. Build, typecheck and Prisma schema validation passed. Random task databases were removed. Independent spec/quality review approved with no Critical, Important or Minor findings. Actual CMS transport, onboarding, DNS/TLS and broader version/runtime acceptance remain C2/C3/C4/D tasks; provisioning alone does not mean online.
