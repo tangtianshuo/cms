@@ -235,6 +235,8 @@ git commit -m "test: verify unified preview against published templates"
 
 ### Task B4：模板声明驱动区块属性表单
 
+> 执行记录：本地实现与两轮独立复审已通过（CMS `67c1a5e`、Templates `e24ce083`）。正式发布后公开比对及实际图片加载待 B2/最终 B3，整项不提前勾选。旧 JSON 面板的历史浏览器基线未留存，已如实记录。详细证据见 `docs/verification/2026-11-06-platform-delivery-progress.md`。
+
 **Files:**
 - Create: `CMS/ui/src/components/studio/section-property-fields.tsx`、`CMS/ui/src/components/studio/section-property-state.ts`、`CMS/ui/src/components/studio/section-property-state.test.ts`。
 - Modify: `CMS/ui/src/components/studio/visual-page-editor.tsx`、`CMS/ui/src/components/studio/fields.tsx`、`CMS/ui/src/components/studio/studio.css`、`CMS/ui/src/views/dashboard/studio.tsx`。

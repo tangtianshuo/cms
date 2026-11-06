@@ -118,6 +118,18 @@ Real desktop/mobile login and unavailable-renderer baseline: 4/4. Live security/
 
 The baseline uses the actual built-in AeroFrame 1.0.0 and an empty local Preview registry. It does not count toward new-version/two-template acceptance. Explicit foundation mode labels its output local-only and incomplete; the default acceptance path exits nonzero. Credentials stay outside retained evidence; safe screenshots replace tracing in this early stage, and credential-safe trace remains deferred. The helper supports documented POSIX command chains, not arbitrary detached daemons. Source fingerprints remain 154 unchanged.
 
+## B4 — Local controls accepted; public comparison pending
+
+CMS commits `86e88a63ef2c0bef4644539f763ddf939e6c61f6`, `fa6b332e8fe439d08476bd228267ade357a7b156` and `67c1a5ed739b45d3618da1740c8968631d983ba0`; Templates commits `4e9d2299ff6fe203ca8887bd83273f01a1c12705`, `4a6eb28c7a2af993dd39dad17b44e3bddb7265f8` and `e24ce0833e39aa6423ecc471140d486f3d4e1c4b`.
+
+Declared controls replace section JSON editing, preserve structured/unknown values and use existing media selection. Authoritative normalized-layout validation rejects unauthorized media/references and invalid declared values before persistence. Actual Vue reactive layouts can be edited without clone errors; the draft overlay updates the renderer's authoritative page layout. Both new templates implement guarded canvas selection and preview-build root routing while retaining public routes.
+
+Independent review found numeric UI/server/renderer disagreement, valid numeric input marked invalid, and a missing rendered heading marker. The first fix carries optional minimum/integer declarations through all boundaries while preserving unconstrained zero/negative/fraction values. A second review found native numeric validation could bypass the linked error summary; the second fix orders section summary before native metadata validation. Both scoped re-reviews are recorded, and the local stage is approved with no remaining Critical/Important finding.
+
+Initial AeroFrame browser matrix passed 8/8. FireGuard's first run remains 7/8, followed by a passing focused 4/4 after fixture navigation synchronization. Fix-one focused results: UI 8/8, backend 14/14, actual manifest/UI/server/two-renderer boundary 2/2, Templates 34/34; collection browser cases 2/2 per template. Final submission-order regressions passed AeroFrame 12/12 and FireGuard 6/6, covering desktop/390px, visible/hidden invalid fields, summary links, retained input, repair/save/refresh and native metadata checks. Counts cover different scopes and are not summed. Normal UI hooks passed; prior backend lint retains 238 warnings/zero errors. Earlier test skips and harness noise remain explicit, not acceptance passes.
+
+The actual new-version bundles were built from Templates `e24ce0833e39aa6423ecc471140d486f3d4e1c4b`; local archive identities are not OCI manifests. Canonical publication/deployed comparison and actual selected-image pixels remain B2/final B3 obligations: the local HTTP image URL is blocked by existing HTTPS-only image CSP. No production policy was relaxed. The requested historical pre-change JSON browser capture was missed and remains an evidence gap. Complex editing remains B6; safe retained tracing remains final B3. B4 stays unchecked overall until its remaining public comparison is completed. Protected original-source fingerprints remain 154 unchanged.
+
 ## Next task
 
-B4 replaces JSON property editing with declared controls and real browser interaction checks, then B5 → B6 → B7. Full B3 and formal A4 acceptance retain their real B2/B7 dependencies.
+B5 consolidates routes and content editing, followed by B6 → B7. Final B2 artifacts must include the amended Templates source; full B3, B4 public comparison and formal A4 acceptance retain those dependencies.
