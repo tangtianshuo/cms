@@ -128,6 +128,8 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
             if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid new page');
             try {
                 const site = await selectedSite();
+                const context = workspaceContext();
+                if (!context) throw new Error('Selected workspace is required');
                 const blueprint = site.pages.find(page => page.key === parsed.data.blueprintKey && !page.blueprintKey && page.layout === 'content-page');
                 if (!blueprint) throw new Error('Content page blueprint is unavailable');
                 const template = await installedModel(site, blueprint.modelKey);
@@ -144,10 +146,12 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                     const body = parsed.data.entry as EntryCreateBody;
                     const [languages, statuses, widgets, groups, medias, templates] = await Promise.all([Repo.language.findAll(), Repo.entryStatus.findAll(), Repo.widget.findAll(), Repo.group.findAll(), Repo.media.findAll(), Repo.template.findAll()]);
                     const prepared = prepareEntryCreate(body, template.props, languages.map(item => item.code), statuses.map(item => item._id), widgets, groups, templates, medias);
-                    entry = { ...EntryFactory.create({ templateId: template._id, workspaceId: workspaceContext()!.workspaceId, siteId: site._id, userId: workspaceContext()!.actorId, groupId: body.groupId || site.contentGroupId || site._id, ...prepared }), _id: ids.entryId };
+                    entry = { ...EntryFactory.create({ templateId: template._id, workspaceId: context.workspaceId, siteId: site._id, userId: context.actorId, groupId: body.groupId || site.contentGroupId || site._id, ...prepared }), _id: ids.entryId };
                 } else {
-                    await validateSelectedMedia(site, blueprint.modelKey, parsed.data.fields!);
-                    entry = patchEntry(site, template, blueprint.modelKey, null, parsed.data.fields!, workspaceContext()!.actorId, ids.entryId);
+                    const fields = parsed.data.fields;
+                    if (!fields) throw new Error('Invalid page content');
+                    await validateSelectedMedia(site, blueprint.modelKey, fields);
+                    entry = patchEntry(site, template, blueprint.modelKey, null, fields, context.actorId, ids.entryId);
                 }
                 await validateEntrySiteReferences(entry, template, Repo);
                 return await createStudioPage(site, parsed.data.operationId, entry, parsed.data, {

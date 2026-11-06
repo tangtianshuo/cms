@@ -144,15 +144,22 @@ test('an unchanged parameterized blueprint remains valid beside its concrete chi
         blueprintKey: 'content', title: 'Delivery', path: '/pages/delivery', seoTitle: 'Delivery',
         seoDescription: '', sections: ['info-grid'], entryId: bound._id,
     }, bound);
-    const blueprint = pageDraft(created, 'content')!;
+    const blueprint = pageDraft(created, 'content');
+    assert.ok(blueprint);
     assert.doesNotThrow(() => updatePageDraft(created, 'content', blueprint));
     assert.throws(() => updatePageDraft(created, 'content', { ...blueprint, path: '/changed/:slug' }), /fixed|invalid/i);
     const wrongModel = structuredClone(created);
-    wrongModel.pages.find(page => page.key === 'delivery-page')!.modelKey = 'product';
-    assert.throws(() => updatePageDraft(wrongModel, 'content', pageDraft(wrongModel, 'content')!), /conflict/i);
+    const wrongChild = wrongModel.pages.find(page => page.key === 'delivery-page');
+    const wrongBlueprint = pageDraft(wrongModel, 'content');
+    assert.ok(wrongChild && wrongBlueprint);
+    wrongChild.modelKey = 'product';
+    assert.throws(() => updatePageDraft(wrongModel, 'content', wrongBlueprint), /conflict/i);
     const unrelated = structuredClone(created);
-    unrelated.pages.find(page => page.key === 'delivery-page')!.blueprintKey = 'collections';
-    assert.throws(() => updatePageDraft(unrelated, 'content', pageDraft(unrelated, 'content')!), /conflict/i);
+    const unrelatedChild = unrelated.pages.find(page => page.key === 'delivery-page');
+    const unrelatedBlueprint = pageDraft(unrelated, 'content');
+    assert.ok(unrelatedChild && unrelatedBlueprint);
+    unrelatedChild.blueprintKey = 'collections';
+    assert.throws(() => updatePageDraft(unrelated, 'content', unrelatedBlueprint), /conflict/i);
     assert.throws(() => createPageDraft(created, 'duplicate-page', {
         blueprintKey: 'content', title: 'Duplicate', path: '/pages/delivery', seoTitle: 'Duplicate',
         seoDescription: '', sections: ['info-grid'], entryId: bound._id,

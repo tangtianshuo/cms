@@ -49,7 +49,7 @@ export const DashboardLayoutAsideContent = defineComponent({
             <SitePicker onSelected={() => ctx.emit('closeNav')} />
             <div class="cms-sidebar-scroll">
                 <nav aria-label="主导航">{primaryNavigation.map(item => navLink(item.label, item.href, item.icon))}</nav>
-                {templates.value.length > 0 && <details class="cms-nav-group"><summary>网站内容分类<StudioIcon name="chevron" size={13} /></summary><nav aria-label="网站内容模型">{templates.value.map(item => navLink(item.label, `/d/studio?section=content&modelKey=${encodeURIComponent(item._id)}`))}</nav></details>}
+                {templates.value.length > 0 && <details class="cms-nav-group"><summary>网站内容分类<StudioIcon name="chevron" size={13} /></summary><nav aria-label="网站内容模型">{templates.value.map(item => navLink(item.label, `/d/studio?section=content&${item.singleEntry ? 'templateId' : 'modelKey'}=${encodeURIComponent(item._id)}`))}</nav></details>}
                 <div class="cms-nav-divider" />
                 <details class="cms-nav-group" open={advancedOpen.value || ['EntriesView', 'EntryView', 'PluginView'].includes(String(route.name))} key={String(route.name)}><summary>高级工具<StudioIcon name="chevron" size={13} /></summary>
                     <nav aria-label="高级工具">{advanced.value.map(item => navLink(item.title, item.href))}</nav>

@@ -46,8 +46,9 @@ export async function validateEntrySiteReferences(
         for (const node of nodes || []) {
             if (node.type === 'widget') {
                 const data = (node.attrs as { data?: { _id: string; props: PropValue[] } })?.data;
-                const widget = authorized(data?._id ? await source.widget.findById(data._id) : null, 'Widget');
-                await values(widget.props, data!.props);
+                if (!data?._id) throw denied('Widget');
+                const widget = authorized(await source.widget.findById(data._id), 'Widget');
+                await values(widget.props, data.props);
             }
             await content(node.content || []);
         }

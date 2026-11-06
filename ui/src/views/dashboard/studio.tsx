@@ -1,84 +1,397 @@
-import { computed, defineComponent, onMounted, ref, watch } from 'vue';
-import { RouterLink, useRoute, useRouter } from 'vue-router';
-import type { StudioEntry, StudioModel, StudioState } from '../../sdk/handlers/studio';
+import {
+    computed,
+    defineComponent,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
+import {
+    onBeforeRouteLeave,
+    onBeforeRouteUpdate,
+    RouterLink,
+    useRoute,
+    useRouter,
+} from 'vue-router';
+import type {
+    StudioEntry,
+    StudioModel,
+    StudioState,
+} from '../../sdk/handlers/studio';
 import type { PageDraft } from '@bcms/selfhosted-backend/presets/pages';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 import { ContentWorkspace } from '../../components/studio/content-workspace';
-import { contentEditorLocation, resolveEditorTarget, type EditorTarget } from '../../components/studio/editor-target';
+import {
+    contentEditorLocation,
+    resolveEditorTarget,
+    type EditorTarget,
+} from '../../components/studio/editor-target';
 import { ReleaseManager } from '../../components/storefront/release-manager';
 import { userErrorMessage } from '../../util/user-message';
 import '../../components/studio/studio.css';
 import { StudioIcon } from '../../components/studio/icon';
-import { studioSection, studioSections, studioModelLabel, siteSetupHref } from '../../layouts/dashboard/navigation';
+import {
+    studioSection,
+    studioSections,
+    studioModelLabel,
+    siteSetupHref,
+} from '../../layouts/dashboard/navigation';
 import { MediaView } from './media';
 import { settingsRequest } from '../../components/studio/settings-request';
 import { siteImageOptions } from '../../components/studio/media-options';
 import { SiteOperations } from '../../components/studio/site-operations';
-import { PageCreateWizard, type PageBlueprintOption } from '../../components/studio/page-create-wizard';
-function entryTitle(entry: StudioEntry) { return String((entry.fields.title as string[] | undefined)?.[0] || '未命名内容'); }
+import {
+    PageCreateWizard,
+    type PageBlueprintOption,
+} from '../../components/studio/page-create-wizard';
+function entryTitle(entry: StudioEntry) {
+    return String(
+        (entry.fields.title as string[] | undefined)?.[0] || '未命名内容',
+    );
+}
 export const StudioView = defineComponent({
     setup() {
-        const sdk = window.bcms.sdk; const route = useRoute(); const router = useRouter();
-        const state = ref<StudioState>({ site: null, models: [] }); const media = ref<Media[]>([]);
-        const loading = ref(true); const busy = ref(false); const error = ref(''); const notice = ref('');
-        const editorTarget = ref<EditorTarget>(); const pageWizardOpen = ref(false); const modelKey = ref('product');
+        const sdk = window.bcms.sdk;
+        const route = useRoute();
+        const router = useRouter();
+        const state = ref<StudioState>({ site: null, models: [] });
+        const media = ref<Media[]>([]);
+        const loading = ref(true);
+        const busy = ref(false);
+        const error = ref('');
+        const notice = ref('');
+        const editorTarget = ref<EditorTarget>();
+        const pageWizardOpen = ref(false);
+        const modelKey = ref('product');
         const [language] = window.bcms.useLanguage();
-        const settings = ref<any>({ name: '', background: '', foreground: '', accent: '', muted: '', navigation: [], operations: {} }); const settingsOriginal = ref('');
-        const dirty = computed(() => JSON.stringify(settings.value) !== settingsOriginal.value);
-        const currentSection = computed(() => studioSection(route.query.category === 'pages' && route.query.section === 'content' ? 'pages' : route.query.section));
-        const sectionInfo = computed(() => studioSections.find(item => item.key === currentSection.value)!);
-        const site = computed(() => state.value.site); const selectedModel = computed(() => state.value.models.find(item => item.key === modelKey.value));
-        const contentSearch = ref(''); const pageSearch = ref('');
-        const siteImages = computed(() => siteImageOptions(media.value, site.value?.id));
-        const filteredEntries = computed(() => (selectedModel.value?.entries || []).filter(entry => `${entryTitle(entry)} ${String(entry.fields.slug || '')}`.toLowerCase().includes(contentSearch.value.trim().toLowerCase())));
-        const filteredPages = computed(() => (site.value?.pages || []).filter(page => `${page.title} ${page.path}`.toLowerCase().includes(pageSearch.value.trim().toLowerCase())));
-        function resetSettings() { const current = site.value; if (current) settings.value = { name: current.name, ...current.theme, navigation: JSON.parse(JSON.stringify(current.navigation || [])), operations: JSON.parse(JSON.stringify(current.operations)) }; settingsOriginal.value = JSON.stringify(settings.value); }
+        const settings = ref<any>({
+            name: '',
+            background: '',
+            foreground: '',
+            accent: '',
+            muted: '',
+            navigation: [],
+            operations: {},
+        });
+        const settingsOriginal = ref('');
+        const dirty = computed(
+            () => JSON.stringify(settings.value) !== settingsOriginal.value,
+        );
+        let alive = true;
+        const ownsSettings = () =>
+            !editorTarget.value && currentSection.value === 'settings';
+        function canLeaveSettings() {
+            return (
+                !ownsSettings() ||
+                (loading.value && !busy.value) ||
+                (!busy.value &&
+                    (!dirty.value ||
+                        window.confirm(
+                            '有尚未保存的修改。确定放弃这些修改吗？',
+                        )))
+            );
+        }
+        function beforeUnload(event: BeforeUnloadEvent) {
+            if (ownsSettings() && (busy.value || (!loading.value && dirty.value))) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        }
+        onBeforeRouteLeave(canLeaveSettings);
+        onBeforeRouteUpdate(canLeaveSettings);
+        onBeforeUnmount(() => {
+            alive = false;
+            sequence++;
+            window.removeEventListener('beforeunload', beforeUnload);
+        });
+        const currentSection = computed(() =>
+            studioSection(
+                route.query.category === 'pages' &&
+                    route.query.section === 'content'
+                    ? 'pages'
+                    : route.query.section,
+            ),
+        );
+        const sectionInfo = computed(
+            () =>
+                studioSections.find(
+                    (item) => item.key === currentSection.value,
+                )!,
+        );
+        const site = computed(() => state.value.site);
+        const selectedModel = computed(() =>
+            state.value.models.find((item) => item.key === modelKey.value),
+        );
+        const contentSearch = ref('');
+        const pageSearch = ref('');
+        const siteImages = computed(() =>
+            siteImageOptions(media.value, site.value?.id),
+        );
+        const filteredEntries = computed(() =>
+            (selectedModel.value?.entries || []).filter((entry) =>
+                `${entryTitle(entry)} ${String(entry.fields.slug || '')}`
+                    .toLowerCase()
+                    .includes(contentSearch.value.trim().toLowerCase()),
+            ),
+        );
+        const filteredPages = computed(() =>
+            (site.value?.pages || []).filter((page) =>
+                `${page.title} ${page.path}`
+                    .toLowerCase()
+                    .includes(pageSearch.value.trim().toLowerCase()),
+            ),
+        );
+        function resetSettings() {
+            const current = site.value;
+            if (current)
+                settings.value = {
+                    name: current.name,
+                    ...current.theme,
+                    navigation: JSON.parse(
+                        JSON.stringify(current.navigation || []),
+                    ),
+                    operations: JSON.parse(JSON.stringify(current.operations)),
+                };
+            settingsOriginal.value = JSON.stringify(settings.value);
+        }
         let sequence = 0;
         async function refresh() {
-            const generation = ++sequence; editorTarget.value = undefined; error.value = ''; loading.value = true;
+            const generation = ++sequence;
+            const ownerPath = route.fullPath;
+            const query = { ...route.query };
+            let ownerContext = sdk.context;
+            const current = () =>
+                (!ownerContext || sdk.context === ownerContext) &&
+                alive &&
+                generation === sequence &&
+                route.fullPath === ownerPath &&
+                window.bcms.sdk === sdk;
+            editorTarget.value = undefined;
+            error.value = '';
+            loading.value = true;
             try {
                 const context = await sdk.ensureContext();
+                if (!current() || sdk.context !== context) return;
+                ownerContext = context;
                 // Do not apply any query selector to the SDK. Existing selected context is authoritative.
-                if ((route.query.workspaceId && route.query.workspaceId !== context.context.workspaceId) || (route.query.siteId && route.query.siteId !== context.context.siteId)) throw new Error('目标不属于当前网站，请先选择对应网站。');
+                if (
+                    (query.workspaceId &&
+                        query.workspaceId !== context.context.workspaceId) ||
+                    (query.siteId && query.siteId !== context.context.siteId)
+                )
+                    throw new Error('目标不属于当前网站，请先选择对应网站。');
                 const loaded = await sdk.studio.getSite();
-                const templates = await sdk.template.getAll(); const languages = await sdk.language.getAll();
-                if (generation !== sequence) return;
+                const templates = await sdk.template.getAll();
+                const languages = await sdk.language.getAll();
+                if (!current() || sdk.context !== context) return;
                 state.value = loaded;
-                for (const template of templates.filter(item => !item.siteId && !loaded.models.some(model => model.templateId === item._id))) {
-                    const permissions = context.context.templatePermissions?.find(grant => grant._id === template._id);
-                    loaded.models.push({ key: template._id, label: template.label, templateId: template._id, singleEntry: template.singleEntry, canCreate: context.context.instanceAdmin || Boolean(permissions?.post), canEdit: context.context.instanceAdmin || Boolean(permissions?.put), fields: [], entries: [] });
+                for (const template of templates.filter(
+                    (item) =>
+                        !item.siteId &&
+                        !loaded.models.some(
+                            (model) => model.templateId === item._id,
+                        ),
+                )) {
+                    const permissions =
+                        context.context.templatePermissions?.find(
+                            (grant) => grant._id === template._id,
+                        );
+                    loaded.models.push({
+                        key: template._id,
+                        label: template.label,
+                        templateId: template._id,
+                        singleEntry: template.singleEntry,
+                        canCreate:
+                            context.context.instanceAdmin ||
+                            Boolean(permissions?.post),
+                        canEdit:
+                            context.context.instanceAdmin ||
+                            Boolean(permissions?.put),
+                        fields: [],
+                        entries: [],
+                    });
                 }
-                modelKey.value = typeof route.query.modelKey === 'string' ? route.query.modelKey : loaded.models[0]?.key || '';
-                const requestedModel = route.query.templateId ? loaded.models.find(model => model.templateId === route.query.templateId) : loaded.models.find(model => model.key === modelKey.value || model.templateId === modelKey.value);
+                modelKey.value =
+                    typeof query.modelKey === 'string'
+                        ? query.modelKey
+                        : loaded.models[0]?.key || '';
+                const requestedModel = query.templateId
+                    ? loaded.models.find(
+                          (model) => model.templateId === query.templateId,
+                      )
+                    : loaded.models.find(
+                          (model) =>
+                              model.key === modelKey.value ||
+                              model.templateId === modelKey.value,
+                      );
                 if (requestedModel) modelKey.value = requestedModel.key;
-                const isTarget = Boolean(route.query.entryId || route.query.pageKey || route.query.intent || route.query.templateId || requestedModel?.singleEntry && route.query.modelKey);
-                if (requestedModel && !loaded.site?.pages.some(page => page.modelKey === requestedModel.key) && !loaded.models.find(model => model.key === requestedModel.key)?.entries.length && !requestedModel.fields.length) {
-                    const entries = await sdk.entry.getAllLiteByTemplateId({ templateId: requestedModel.templateId, skipCache: true });
-                    requestedModel.entries = entries.map(entry => ({ id: entry._id, updatedAt: entry.updatedAt, hasLanguage: entry.info.some(info => info.lng === language.value), fields: { title: [entry.info.find(info => info.lng === language.value)?.title || '未命名内容'] } }));
+                const isTarget = Boolean(
+                    query.entryId ||
+                        query.pageKey ||
+                        query.intent ||
+                        query.templateId ||
+                        (requestedModel?.singleEntry && query.modelKey),
+                );
+                if (
+                    requestedModel &&
+                    !loaded.site?.pages.some(
+                        (page) => page.modelKey === requestedModel.key,
+                    ) &&
+                    !loaded.models.find(
+                        (model) => model.key === requestedModel.key,
+                    )?.entries.length &&
+                    !requestedModel.fields.length
+                ) {
+                    const entries = await sdk.entry.getAllLiteByTemplateId({
+                        templateId: requestedModel.templateId,
+                        skipCache: true,
+                    });
+                    if (!current() || sdk.context !== context) return;
+                    requestedModel.entries = entries.map((entry) => ({
+                        id: entry._id,
+                        updatedAt: entry.updatedAt,
+                        hasLanguage: entry.info.some(
+                            (info) => info.lng === language.value,
+                        ),
+                        fields: {
+                            title: [
+                                entry.info.find(
+                                    (info) => info.lng === language.value,
+                                )?.title || '未命名内容',
+                            ],
+                        },
+                    }));
                 }
                 if (isTarget) {
-                    const query = { ...route.query };
-                    if (!query.modelKey && !query.pageKey && requestedModel) query.modelKey = requestedModel.key;
-                    const resolved = resolveEditorTarget(query, { workspaceId: context.context.workspaceId, siteId: context.context.siteId, language: loaded.site?.language || language.value, languages: languages.map(item => item.code), models: loaded.models, pages: loaded.site?.pages || [] });
+                    const targetQuery = { ...query };
+                    if (
+                        !targetQuery.modelKey &&
+                        !targetQuery.pageKey &&
+                        requestedModel
+                    )
+                        targetQuery.modelKey = requestedModel.key;
+                    const resolved = resolveEditorTarget(targetQuery, {
+                        workspaceId: context.context.workspaceId,
+                        siteId: context.context.siteId,
+                        language: loaded.site?.language || language.value,
+                        languages: languages.map((item) => item.code),
+                        models: loaded.models,
+                        pages: loaded.site?.pages || [],
+                    });
                     if (resolved.entryId) {
-                        const entry = await sdk.entry.get({ templateId: resolved.templateId, entryId: resolved.entryId, skipCache: true });
-                        if (entry.siteId && entry.siteId !== context.context.siteId) throw new Error('目标内容不属于当前网站。');
+                        const entry = await sdk.entry.get({
+                            templateId: resolved.templateId,
+                            entryId: resolved.entryId,
+                            skipCache: true,
+                        });
+                        if (
+                            entry.siteId &&
+                            entry.siteId !== context.context.siteId
+                        )
+                            throw new Error('目标内容不属于当前网站。');
                     }
-                    if (generation !== sequence) return;
+                    if (!current() || sdk.context !== context) return;
                     editorTarget.value = resolved;
                 }
+                const loadedMedia = await sdk.media.getAll();
+                if (!current() || sdk.context !== context) return;
                 resetSettings();
-                media.value = (await sdk.media.getAll()).filter(item => ['IMG','SVG','GIF'].includes(item.type));
-            } catch (cause) { if (generation === sequence) error.value = userErrorMessage(cause); }
-            finally { if (generation === sequence) loading.value = false; }
+                media.value = loadedMedia.filter((item) =>
+                    ['IMG', 'SVG', 'GIF'].includes(item.type),
+                );
+            } catch (cause) {
+                if (current()) error.value = userErrorMessage(cause);
+            } finally {
+                if (current()) loading.value = false;
+            }
         }
-        function manageModel(key: string) { void router.push({ path: '/d/studio', query: { section: 'content', modelKey: key } }); }
-        function openEntry(model: StudioModel, entry: StudioEntry | null, blueprint?: string) { const context = sdk.context?.context; if (!context) return; void router.push({ ...contentEditorLocation({ intent: entry ? 'edit' : 'create', workspaceId: context.workspaceId, siteId: context.siteId, templateId: model.templateId, modelKey: model.key, entryId: entry?.id || null, language: site.value?.language || language.value }), ...(blueprint ? { query: { ...contentEditorLocation({ intent: 'create', workspaceId: context.workspaceId, siteId: context.siteId, templateId: model.templateId, modelKey: model.key, entryId: null, language: site.value?.language || language.value }).query, blueprint } } : {}) }); }
-        function openPage(page: PageDraft, panel?: 'page') { const model = state.value.models.find(model => model.key === page.modelKey); const bound = model?.entries.find(entry => entry.id === page.entryId) || (model?.singleEntry ? model.entries[0] : undefined); const context = sdk.context?.context; if (!context) return; const location = contentEditorLocation({ intent: bound ? 'edit' : 'page', workspaceId: context.workspaceId, siteId: context.siteId, templateId: model?.templateId || '', modelKey: model?.key, entryId: bound?.id || null, pageKey: page.key, language: site.value?.language || language.value }); if (panel) location.query.panel = panel; void router.push(location); }
-        function createPage() { pageWizardOpen.value = true; }
-        function createPageFromBlueprint(blueprint: PageBlueprintOption) { pageWizardOpen.value = false; const model = state.value.models.find(model => model.key === blueprint.modelKey); if (model) openEntry(model, null, blueprint.key); }
-        async function saveSettings(event: Event) { event.preventDefault(); if (!site.value || busy.value) return; busy.value = true; error.value = ''; try { await sdk.studio.saveSettings(settingsRequest(site.value.updatedAt, settings.value)); await refresh(); notice.value = '网站设置已保存为草稿。'; } catch (cause) { error.value = userErrorMessage(cause); } finally { busy.value = false; } }
-        watch(() => route.fullPath, refresh); onMounted(refresh);
+        function manageModel(key: string) {
+            void router.push({
+                path: '/d/studio',
+                query: { section: 'content', modelKey: key },
+            });
+        }
+        function openEntry(
+            model: StudioModel,
+            entry: StudioEntry | null,
+            blueprint?: string,
+        ) {
+            const context = sdk.context?.context;
+            if (!context) return;
+            const location = contentEditorLocation({
+                intent: entry ? 'edit' : 'create',
+                workspaceId: context.workspaceId,
+                siteId: context.siteId,
+                templateId: model.templateId,
+                modelKey: model.key,
+                entryId: entry?.id || null,
+                language: site.value?.language || language.value,
+            });
+            if (blueprint) location.query.blueprint = blueprint;
+            void router.push(location);
+        }
+        function openPage(page: PageDraft, panel?: 'page') {
+            const model = state.value.models.find(
+                (model) => model.key === page.modelKey,
+            );
+            const bound =
+                model?.entries.find((entry) => entry.id === page.entryId) ||
+                (model?.singleEntry ? model.entries[0] : undefined);
+            const context = sdk.context?.context;
+            if (!context) return;
+            const location = contentEditorLocation({
+                intent: bound ? 'edit' : 'page',
+                workspaceId: context.workspaceId,
+                siteId: context.siteId,
+                templateId: model?.templateId || '',
+                modelKey: model?.key,
+                entryId: bound?.id || null,
+                pageKey: page.key,
+                language: site.value?.language || language.value,
+            });
+            if (panel) location.query.panel = panel;
+            void router.push(location);
+        }
+        function createPage() {
+            pageWizardOpen.value = true;
+        }
+        function createPageFromBlueprint(blueprint: PageBlueprintOption) {
+            pageWizardOpen.value = false;
+            const model = state.value.models.find(
+                (model) => model.key === blueprint.modelKey,
+            );
+            if (model) openEntry(model, null, blueprint.key);
+        }
+        async function saveSettings(event: Event) {
+            event.preventDefault();
+            if (!site.value || busy.value) return;
+            const ownerPath = route.fullPath;
+            const ownerContext = sdk.context;
+            const current = () =>
+                alive &&
+                route.fullPath === ownerPath &&
+                window.bcms.sdk === sdk &&
+                sdk.context === ownerContext;
+            busy.value = true;
+            error.value = '';
+            try {
+                await sdk.studio.saveSettings(
+                    settingsRequest(site.value.updatedAt, settings.value),
+                );
+                if (!current()) return;
+                await refresh();
+                if (current()) notice.value = '网站设置已保存为草稿。';
+            } catch (cause) {
+                if (current()) error.value = userErrorMessage(cause);
+            } finally {
+                if (current()) busy.value = false;
+            }
+        }
+        watch(() => route.fullPath, refresh);
+        onMounted(() => {
+            window.addEventListener('beforeunload', beforeUnload);
+            void refresh();
+        });
         const emptyState = (title: string, detail: string) => <div class="studio-empty"><span class="studio-empty-icon"><StudioIcon name="pages" size={26} /></span><h3>{title}</h3><p>{detail}</p></div>;
         const listView = () => <>
             <div class="studio-list-toolbar"><label class="studio-search"><StudioIcon name="search" /><input type="search" aria-label="搜索商品与内容" placeholder="搜索名称或路径…" value={contentSearch.value} onInput={event => { contentSearch.value = (event.target as HTMLInputElement).value; }} /></label><span class="studio-help">共 {filteredEntries.value.length} 项</span></div>
