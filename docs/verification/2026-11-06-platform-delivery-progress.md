@@ -110,6 +110,14 @@ Final focused checks: backend 20/20, UI 20/20, Templates protocol and actual CMS
 
 The Vue host-renderer tests are executable component tests, not real browser evidence. Final bundle/registry identity, embedding policy, browser acceptance and canvas selection remain B2/B3/B4/B7 work.
 
+## B3 — Early browser foundation accepted; full acceptance pending
+
+CMS `5177ed1b9adc290c5e2ddb6842c3481c3f3a7c7c` adds pinned Playwright, real login fixtures and isolated current-source CMS/Preview setup. `76a7ecd28d589dc51b80dfe86e2123b2ec8df2d6` fixes process descendant cleanup and startup cancellation found by independent review.
+
+Real desktop/mobile login and unavailable-renderer baseline: 4/4. Live security/failure checks: 6/6. Lifecycle fix checks: 6/6, including exited wrappers, active build/run cancellation, the startup signal race and the actual Node/npx/Playwright/Chromium chain; all 11 observed owned processes exited and an unrelated control survived. A fresh normal browser replay passed 4/4 after the fix. Cleanup confirmed no disposable databases, credential/auth/build residue or occupied test ports; A1 services remain healthy. Scoped re-review approved, with the inherited color warning deferred.
+
+The baseline uses the actual built-in AeroFrame 1.0.0 and an empty local Preview registry. It does not count toward new-version/two-template acceptance. Explicit foundation mode labels its output local-only and incomplete; the default acceptance path exits nonzero. Credentials stay outside retained evidence; safe screenshots replace tracing in this early stage, and credential-safe trace remains deferred. The helper supports documented POSIX command chains, not arbitrary detached daemons. Source fingerprints remain 154 unchanged.
+
 ## Next task
 
-Build the explicitly early B3 browser fixture foundation, then continue B4 → B5 → B6 → B7. Keep full B3 and formal A4 acceptance pending their real B2/B7 dependencies.
+B4 replaces JSON property editing with declared controls and real browser interaction checks, then B5 → B6 → B7. Full B3 and formal A4 acceptance retain their real B2/B7 dependencies.

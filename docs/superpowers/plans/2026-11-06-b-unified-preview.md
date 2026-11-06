@@ -183,6 +183,8 @@ git commit -m "fix: publish preview bundles and registry atomically"
 
 ### Task B3：部署预览并验收草稿与公开内容一致性
 
+提前建设状态：浏览器 fixture、隔离运行脚本及不可用基线已通过独立复审（CMS `5177ed1`、`76a7ecd`）。此为早期基础，不代表下列完整两模板/实时草稿/发布验收完成；安全追踪方案亦保留到最终阶段。
+
 **Files:**
 - Modify: `Preview/.github/workflows/release.yml`、`Preview/README.md`。
 - Create: `Preview/ops/preview.compose.yml`、`Preview/ops/preview.nginx.conf`。
