@@ -12,7 +12,7 @@ import { pageDraft, updatePageDraft } from './pages';
 import type { SiteInstallation } from './site-model';
 import { normalizeNavigation, type NavigationNode } from './navigation';
 import { validateSectionConfigs, validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
-import type { SiteOperations } from './operations';
+import { normalizeSiteOperations, type SiteOperations } from './operations';
 import type { LayoutDocument } from '../storefront/layout-document';
 
 export interface ReleaseLink { label: string; path: string }
@@ -114,6 +114,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
     if (!options.preserveMediaCapabilities) {
         input = { ...input, media: input.media.map(({ accessToken: _accessToken, accessTokenExpiresAt: _expiresAt, ...media }) => media) };
     }
+    input = { ...input, site: { ...input.site, operations: normalizeSiteOperations(input.site.operations, undefined, { contactDeliveryConfigured: true }) } };
     const { site, language } = input;
     if (site.status !== 'ready') throw new Error('Site import is not ready');
     const preset = resolveInstalledPreset(site);
@@ -276,6 +277,20 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
             return result;
         });
     }
+    const resolveEntryLinks = (value: unknown): void => {
+        if (Array.isArray(value)) { value.forEach(resolveEntryLinks); return; }
+        if (!value || typeof value !== 'object') return;
+        const object = value as Record<string, unknown>;
+        if (typeof object.href === 'string' && object.href.startsWith('entry:')) {
+            const match = /^entry:([^:]+)@\*_([^:]+):entry$/.exec(object.href);
+            const linked = match && entries.find(entry => entry._id === match[1] && entry.templateId === match[2]);
+            const target = linked && pageForEntry(linked._id);
+            if (!target) throw new ReleaseValidationError([{ code: 'internal-link', message: 'Linked content has no website page', field: 'content' }]);
+            object.href = target.path;
+        }
+        Object.values(object).forEach(resolveEntryLinks);
+    };
+    for (const page of pages) { resolveEntryLinks(page.content.layoutDocument); resolveEntryLinks(page.content.sectionConfigs); resolveEntryLinks(page.layoutDocument); }
     const legacyNavigation: ReleaseLink[] = pages.filter((page) => {
         const draft = pageDraft(site, page.pageKey)!;
         return draft.navigation && !draft.path.includes(':');
@@ -320,17 +335,28 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         ...(node.href ? { path: node.href } : {}), children: node.children.map(legacyNode),
     });
     const releaseNavigation = navigation.map(legacyNode);
-    const validateLinks = (value: unknown): void => {
-        if (Array.isArray(value)) { value.forEach(validateLinks); return; }
+    const linkIssues: ReleaseIssue[] = [];
+    const validateLinks = (value: unknown, location: Omit<ReleaseIssue, 'code' | 'message'>): void => {
+        if (Array.isArray(value)) { value.forEach(child => validateLinks(child, location)); return; }
         if (!value || typeof value !== 'object') return;
         const object = value as Record<string, unknown>;
         if (typeof object.href === 'string' && object.href.startsWith('/') && !object.href.startsWith('//')) {
             const path = object.href.split(/[?#]/)[0];
-            if (!pages.some((page) => page.path === path) && !redirects.has(path)) throw new Error(`Broken internal link: ${path}`);
+            if (!publishedPaths.has(path)) linkIssues.push({ ...location, code: 'internal-link', message: `Broken internal link: ${path}` });
         }
-        Object.values(object).forEach(validateLinks);
+        Object.values(object).forEach(child => validateLinks(child, location));
     };
-    entries.forEach((entry) => validateLinks(entry.meta.find((meta) => meta.lng === language)?.props));
+    for (const entry of entries) {
+        const model = site.models.find(model => model.templateId === entry.templateId);
+        for (const prop of entry.meta.find(meta => meta.lng === language)?.props || []) {
+            validateLinks(prop.data, { modelKey: model?.key, entryId: entry._id, field: model?.fields.find(field => field.propId === prop.id)?.key || prop.id });
+        }
+        validateLinks(entry.content?.find(content => content.lng === language)?.nodes, { modelKey: model?.key, entryId: entry._id, field: 'content' });
+    }
+    for (const page of pages) {
+        for (const node of page.content.layoutDocument?.root || []) for (const [key, value] of Object.entries(node.props)) validateLinks(value, { entryId: page.entryId, pageKey: page.pageKey, field: `section.${node.id}.${key}` });
+    }
+    if (linkIssues.length) throw new ReleaseValidationError(linkIssues);
     return structuredClone({ schemaVersion: 1 as const, workspaceId: ownerWorkspace(site), siteId: site._id, language,
         templateVersion: site.presetVersion, mediaIds: input.media.map((media) => media._id).sort(), pages, navigation: releaseNavigation,
         redirects: [...redirects].map(([from, to]) => ({ from, to })), operations: site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false } });

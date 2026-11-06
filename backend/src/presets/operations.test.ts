@@ -16,3 +16,12 @@ test('contact forms stay disabled until a delivery contract is configured', () =
     assert.throws(() => normalizeSiteOperations({ contactFormEnabled: true }), /delivery is not configured/);
     assert.equal(normalizeSiteOperations({ contactFormEnabled: true }, undefined, { contactDeliveryConfigured: true }).contactFormEnabled, true);
 });
+
+test('absent optional media never serializes undefined into persisted null; old optional nulls roundtrip', () => {
+    const first = normalizeSiteOperations({ seoTitle:'First',contactFormEnabled:false });
+    assert.equal(Object.hasOwn(first,'socialImage'),false);
+    assert.equal(Object.hasOwn(first,'favicon'),false);
+    const legacy=normalizeSiteOperations({ ...first,socialImage:null,favicon:null } as any);
+    assert.deepEqual(legacy,first);
+    assert.throws(()=>normalizeSiteOperations({...first,socialImage:{bogus:true}} as any),/Invalid/);
+});

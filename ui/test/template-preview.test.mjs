@@ -150,7 +150,14 @@ test('switching the whole-site view clears its descriptor and rejects the previo
   const { createMemoryHistory, createRouter, RouterView } = await import('vue-router');
   const { createI18n } = await import('vue-i18n');
   const server = await createServer({ configFile: false, root: new URL('..', import.meta.url).pathname,
-    plugins: [vueJsx()], server: { middlewareMode: true },
+    // This renderer test exercises iframe lifetime, not the rich property editor's
+    // browser-only modal, shader and icon dependency graph.
+    plugins: [{ name: 'preview-handshake-property-boundary', enforce: 'pre',
+      resolveId(source, importer) {
+        if (source === './section-property-fields' && importer?.endsWith('/studio/visual-page-editor.tsx')) return '\0preview-property-fields';
+      },
+      load(id) { if (id === '\0preview-property-fields' || id.endsWith('/studio/section-property-fields.tsx')) return 'export const SectionPropertyFields = { render: () => null };'; },
+    }, vueJsx()], server: { middlewareMode: true },
     resolve: { alias: { '@bcms/selfhosted-ui': new URL('../src', import.meta.url).pathname } } });
   const originalWindow = globalThis.window;
   const listeners = new Map();

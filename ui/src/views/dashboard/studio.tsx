@@ -226,7 +226,7 @@ export const StudioView = defineComponent({
                       );
                 if (requestedModel) modelKey.value = requestedModel.key;
                 const isTarget = Boolean(
-                    query.entryId ||
+                    (query.section === 'settings' && loaded.site) || query.entryId ||
                         query.pageKey ||
                         query.intent ||
                         query.templateId ||
@@ -264,6 +264,7 @@ export const StudioView = defineComponent({
                 }
                 if (isTarget) {
                     const targetQuery = { ...query };
+                    if (query.section === 'settings' && !query.entryId && !query.pageKey) targetQuery.pageKey = loaded.site?.pages.find(page => page.layout === 'home')?.key || null;
                     if (
                         !targetQuery.modelKey &&
                         !targetQuery.pageKey &&

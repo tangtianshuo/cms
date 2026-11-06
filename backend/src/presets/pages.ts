@@ -101,7 +101,7 @@ function layoutContract(contract: PageSectionContract | null, includeProps = tru
     return contract ? { sections: contract.allowed.map(type => ({ type, singleton: contract.singleton.includes(type), required: contract.required.includes(type), props: includeProps ? contract.props[type] || {} : {} })) } : undefined;
 }
 
-export type PageDraft = SitePage & {
+export type PageDraft = Omit<SitePage, 'creationReceipt'> & {
     seoTitle: string;
     seoDescription: string;
     sections: string[];
@@ -145,8 +145,9 @@ export function pageDraft(site: SiteInstallation, key: string): PageDraft | null
         : pageContract
             ? normalizeLayoutDocument(layoutFromSectionConfigs(sectionConfigs!), contract)
             : undefined;
+    const { creationReceipt: _receipt, ...editable } = page;
     return {
-        ...page,
+        ...editable,
         seoTitle: page.seoTitle ?? page.title,
         seoDescription: page.seoDescription ?? '',
         sections: [...declaredSections],
@@ -279,7 +280,7 @@ export function updatePageDraft(
     return {
         ...site,
         updatedAt: Date.now(),
-        pages: site.pages.map((item) => item.key === key ? updated : item),
+        pages: site.pages.map((item) => item.key === key ? { ...updated, ...(item.creationReceipt ? { creationReceipt: item.creationReceipt } : {}) } : item),
     };
 }
 

@@ -1,3 +1,4 @@
+import type { EntryContentNode } from '../entry/models/content';
 import type { Entry } from '../entry/models/main';
 import type { Media } from '../media/models/main';
 import { type PresetManifest } from '../presets/catalog';
@@ -92,12 +93,44 @@ function resolvedSections(sections: SectionConfig[] | undefined, media: Media[],
 
 // Contract media controls use the same site authorization boundary as legacy
 // section media. Only declared controls are interpreted as media references.
+function projectedRichNodes(value: unknown, input: PresetPagePreviewInput): EntryContentNode[] {
+    if (typeof value === 'string') return value ? [{ type: 'paragraph', content: [{ type: 'text', text: value }] }] as EntryContentNode[] : [];
+    const nodes = Array.isArray(value) ? value : value && typeof value === 'object' && 'nodes' in value ? value.nodes : [];
+    if (!Array.isArray(nodes)) throw new Error('Invalid rich content');
+    // Follow only validated rich-node and widget/group property envelopes.
+    // Ordinary strings, media values, pointers and unknown stored values stay data.
+    const widgetValues = <T>(widgetData: T): T => {
+        if (!widgetData || typeof widgetData !== 'object' || Array.isArray(widgetData)) return structuredClone(widgetData);
+        const data = structuredClone(widgetData) as Record<string, any>;
+        if (Array.isArray(data.props)) data.props = data.props.map((prop: { id: string; data: unknown }) => ({ ...prop, data: propertyData(prop.data) }));
+        if (Array.isArray(data.items)) data.items = data.items.map(widgetValues);
+        return data as T;
+    };
+    const propertyData = (propertyValue: unknown): unknown => Array.isArray(propertyValue)
+        ? propertyValue.map(item => item && typeof item === 'object' && Array.isArray(item.nodes)
+            ? { ...structuredClone(item), nodes: projectedRichNodes(item.nodes, input) } : structuredClone(item))
+        : widgetValues(propertyValue);
+    return structuredClone(nodes).map((node: EntryContentNode) => {
+        if (node.marks) node.marks = node.marks.map(mark => {
+            if (mark.type !== 'link' || !mark.attrs?.href.startsWith('media:')) return mark;
+            const match = /^media:([^:]+)@\*_@\*_:media$/.exec(mark.attrs.href);
+            const media = match && input.media.find(item => item._id === match[1] && mediaAuthorizedForSite(item, input.site));
+            if (!media) throw new Error('Rich content media not available');
+            return { ...mark, attrs: { ...mark.attrs, href: mediaUrl(media._id, input.media, input.mediaOrigin) } };
+        });
+        if (node.type === 'widget' && node.attrs && 'data' in node.attrs) node.attrs = { ...node.attrs, data: widgetValues(node.attrs.data) };
+        if (node.content) node.content = projectedRichNodes(node.content, input);
+        return node;
+    });
+}
 function resolvedContractProps(type: string, props: Record<string, unknown>, enabled: boolean,
     manifest: PresetManifest, input: PresetPagePreviewInput): Record<string, unknown> {
     const result = structuredClone(props);
     const declared = manifest.editor?.sections.find(section => section.type === type)?.props || {};
     for (const [key, schema] of Object.entries(declared)) {
-        if ((schema as { control?: string }).control !== 'media' || !(key in result)) continue;
+        if (!(key in result)) continue;
+        if (schema.control === 'rich-text') { result[key] = { nodes: projectedRichNodes(result[key], input) }; continue; }
+        if (schema.control !== 'media') continue;
         const value = result[key];
         if (typeof value === 'string') {
             if (value && !/^(?:https?:\/\/|\/(?!\/))/.test(value)) throw new Error('Invalid contract media URL');
@@ -238,15 +271,30 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
     const operations = site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false };
     const seoDescription = page.seoDescription || operations.seoDescription || (view === 'page'
         ? text(site, 'content-page', pageEntry, language, 'seoDescription') : '');
+    // A declared body override owns the primary content. The ordinary Entry body follows it.
+    // This is a projection only; the independent stored sources remain unchanged.
+    const bodyNodes = pageEntry?.content?.find(content => content.lng === language)?.nodes || [];
+    const mappedBody = view === 'page' ? fieldData(site, 'content-page', pageEntry, language, 'body')[0] || demo.page.body : demo.product.description;
+    const richBodyType = view === 'page' ? 'story' : view === 'product' ? 'description' : '';
+    const fillBody = (type: string, props: Record<string, unknown>) => {
+        const declared = manifest.editor?.sections.find(section => section.type === type)?.props.body;
+        if (type !== richBodyType || declared?.control !== 'rich-text') return props;
+        const primary = Object.prototype.hasOwnProperty.call(props, 'body') ? props.body : mappedBody;
+        const primaryNodes = projectedRichNodes(primary, input);
+        const extra = projectedRichNodes(bodyNodes, input);
+        // An empty editor paragraph is not an additional visible body.
+        const hasBody = extra.some(node => node.type !== 'paragraph' || Boolean(node.content?.length));
+        return { ...props, body: { nodes: [...primaryNodes, ...(hasBody ? extra : [])] } };
+    };
     const layoutDocument = page.layoutDocument ? structuredClone(page.layoutDocument) as LayoutDocument : undefined;
     if (contractPage && layoutDocument) {
         layoutDocument.root = layoutDocument.root.map(node => ({ ...node,
-            props: resolvedContractProps(node.type, node.props, node.enabled, manifest, input) }));
+            props: resolvedContractProps(node.type, fillBody(node.type, node.props), node.enabled, manifest, input) }));
     }
     const sectionConfigs = contractPage
         ? layoutDocument ? sectionConfigsFromLayout(layoutDocument) as SectionConfig[]
             : page.sectionConfigs?.map(section => ({ ...section,
-                data: resolvedContractProps(section.type, section.data, section.enabled, manifest, input) }))
+                data: resolvedContractProps(section.type, fillBody(section.type, section.data), section.enabled, manifest, input) }))
         : resolvedSections(page.sectionConfigs, input.media, input.mediaOrigin);
     return {
         kind: 'preset-page', view,

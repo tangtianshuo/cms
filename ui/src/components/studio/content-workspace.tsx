@@ -6,6 +6,9 @@ import {
     onMounted,
     provide,
     ref,
+    reactive,
+    toRef,
+    watch,
     type PropType,
 } from 'vue';
 import {
@@ -20,6 +23,11 @@ import type { StudioState } from '../../sdk/handlers/studio';
 import type { PageDraft } from '@bcms/selfhosted-backend/presets/pages';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 import { EntryEditor } from '../entry/editor';
+import { createEditorSession, sessionDirty, acknowledgeSession } from './editor-session';
+import { createDraftPreview, draftValidation } from './draft-preview';
+import { saveSession, type SavePart } from './save-session';
+import { settingsRequest } from './settings-request';
+import type { StudioDraftOverlay } from '@bcms/selfhosted-backend/studio/draft-preview';
 import { StructuredField } from './structured-field';
 import { structuredValue } from './structured-value';
 import { EntryStatusSelect } from '../inputs/select/entry-status';
@@ -81,8 +89,9 @@ export const ContentWorkspace = defineComponent({
         const error = ref('');
         const notice = ref('');
         const mediaError = ref('');
-        const entry = ref<Entry>();
-        const entryOriginal = ref('');
+        const session = reactive(createEditorSession(target, { settings: {} }));
+        const entry = toRef(session.draft, 'entry');
+        const entryOriginal = toRef(session.baseline, 'content');
         const missingLanguage = ref(false);
         const slugLocked = ref(false);
         const groups = ref<EntryGroupOption[]>([]);
@@ -141,9 +150,10 @@ export const ContentWorkspace = defineComponent({
         >([]);
         const sectionErrorSummary = ref<HTMLElement>();
         const selectedSection = ref('');
-        const pageEditor = ref<PageDraft>();
-        const original = ref('');
+        const pageEditor = toRef(session.draft, 'page');
+        const original = toRef(session.baseline, 'page');
         const editorTab = ref<'content' | 'sections' | 'page'>(
+            initialQuery.section === 'settings' ? 'page' :
             initialQuery.panel === 'page' ||
                 initialQuery.panel === 'content' ||
                 initialQuery.panel === 'sections'
@@ -158,57 +168,110 @@ export const ContentWorkspace = defineComponent({
             typeof initialQuery.blueprint === 'string'
                 ? initialQuery.blueprint
                 : '';
-        const operationId = crypto.randomUUID();
+        const operationId = session.operationId;
         let internalNavigation: string | undefined;
-        const settings = ref<{
-            name: string;
-            background: string;
-            foreground: string;
-            accent: string;
-            muted: string;
-            navigation: NavigationNode[];
-            operations: any;
-        }>({
-            name: '',
-            background: '',
-            foreground: '',
-            accent: '',
-            muted: '',
-            navigation: [],
-            operations: {},
+        const settings = toRef(session.draft, 'settings');
+        const settingsOriginal = toRef(session.baseline, 'settings');
+        const entryDirty = computed(() => sessionDirty(session).content);
+        const pageDirty = computed(() => sessionDirty(session).page);
+        const settingsDirty = computed(() => sessionDirty(session).settings);
+        const dirty = computed(() => entryDirty.value || pageDirty.value || settingsDirty.value || Object.keys(sectionInputErrors.value).length > 0);
+        const saveFailure = ref<'content' | 'page' | 'settings'>();
+        const conflictState = ref(false);
+        const unknownSaveResult = ref(false);
+        const checkedServer = ref<{ state: StudioState; entry?: Entry }>();
+        const previewLocation = ref<ReturnType<typeof draftValidation>>();
+        function validationError(cause: unknown) {
+            const result = draftValidation(cause);
+            previewLocation.value = result;
+            return userErrorMessage(result.cause);
+        }
+        function displayValue(value: unknown): string {
+            if (value == null) return '（空）';
+            if (typeof value === 'boolean') return value ? '开启' : '关闭';
+            if (typeof value !== 'object') return String(value);
+            if (Array.isArray(value)) return value.map(displayValue).join(' / ') || '（空）';
+            const object = value as Record<string, unknown>;
+            if (typeof object.text === 'string') return object.text;
+            if (object._id) return media.value.find(item => item._id === object._id)?.name || '已选择的资源';
+            return Object.entries(object).filter(([key]) => !['id','type','lng','plainText','templateId'].includes(key)).map(([, item]) => displayValue(item)).join(' / ') || '内容或格式设置';
+        }
+        const serverChanges = computed(() => {
+            const checked = checkedServer.value;
+            if (!checked) return [];
+            const rows: Array<{ label: string; local: string; server: string }> = [];
+            const add = (label: string, local: unknown, server: unknown) => { if (JSON.stringify(local) !== JSON.stringify(server)) rows.push({ label, local: displayValue(local), server: displayValue(server) }); };
+            if (saveFailure.value === 'content' && checked.entry && entry.value) {
+                const local = entry.value.meta.find(item => item.lng === target.language);
+                const remote = checked.entry.meta.find(item => item.lng === target.language);
+                for (const prop of local?.props || []) add(template.value?.props.find(item => item.id === prop.id)?.label || '其他内容字段', prop.data, remote?.props.find(item => item.id === prop.id)?.data);
+                add('正文（含格式）', entry.value.content.find(item => item.lng === target.language)?.nodes, checked.entry.content.find(item => item.lng === target.language)?.nodes);
+                add('内容分组', groups.value.find(item => item._id === entry.value?.groupId)?.name || entry.value.groupId, groups.value.find(item => item._id === checked.entry?.groupId)?.name || checked.entry.groupId);
+                add('内容状态', entry.value.statuses.find(item => item.lng === target.language)?.id, checked.entry.statuses.find(item => item.lng === target.language)?.id);
+            }
+            const remotePage = checked.state.site?.pages.find(item => item.key === pageEditor.value?.key);
+            if (pageDirty.value && pageEditor.value && remotePage) {
+                for (const [key, label] of Object.entries({ title: '页面名称', path: '页面路径', seoTitle: '搜索标题', seoDescription: '搜索描述', enabled: '显示页面', navigation: '加入导航', layoutDocument: '页面区块（含格式）' })) add(label, pageEditor.value[key as keyof PageDraft], remotePage[key as keyof PageDraft]);
+            }
+            if (settingsDirty.value && checked.state.site) {
+                const localSettings = settingsRequest(checked.state.site.updatedAt, settings.value);
+                for (const [key, label] of Object.entries({ name: '网站名称', theme: '网站颜色', navigation: '网站导航', operations: '搜索与联系设置' })) add(label, localSettings[key as keyof typeof localSettings], checked.state.site[key as keyof NonNullable<StudioState['site']>]);
+            }
+            return rows;
         });
-        const settingsOriginal = ref('');
-        const entryDirty = computed(
-            () =>
-                Boolean(entry.value) &&
-                JSON.stringify(entry.value) !== entryOriginal.value,
-        );
-        const pageDirty = computed(
-            () =>
-                Boolean(pageEditor.value) &&
-                JSON.stringify(pageEditor.value) !==
-                    (original.value
-                        ? JSON.stringify(JSON.parse(original.value).page)
-                        : undefined),
-        );
-        const settingsDirty = computed(
-            () => JSON.stringify(settings.value) !== settingsOriginal.value,
-        );
-        const dirty = computed(
-            () =>
-                entryDirty.value ||
-                pageDirty.value ||
-                settingsDirty.value ||
-                Object.keys(sectionInputErrors.value).length > 0 ||
-                target.intent === 'create',
-        );
+        async function checkServerVersion() {
+            await run(async () => {
+                const currentState = await sdk.studio.getSite();
+                const currentEntry = saveFailure.value === 'content' && session.created && entry.value ? await sdk.entry.get({ templateId: target.templateId, entryId: entry.value._id, skipCache: true }) : undefined;
+                if (!isCurrent()) return;
+                if (target.siteId && currentState.site?.id !== target.siteId) throw new Error('目标不属于当前网站。');
+                checkedServer.value = { state: currentState, entry: currentEntry };
+            });
+        }
+        function keepLocalWithCheckedVersion() {
+            const checked = checkedServer.value;
+            if (!isCurrent() || busy.value || !checked) return;
+            // Explicit user resolution only changes the checked CAS versions, never the local draft/baselines.
+            if (saveFailure.value === 'content' && checked.entry && entry.value) entry.value.updatedAt = checked.entry.updatedAt;
+            if (site.value && checked.state.site && !(unknownSaveResult.value && newPage && !session.created)) site.value.updatedAt = checked.state.site.updatedAt;
+            checkedServer.value = undefined;
+            conflictState.value = false;
+            unknownSaveResult.value = false;
+            error.value = '';
+            notice.value = '已采用核对过的服务器版本，本地修改仍待保存。';
+        }
+        async function locateValidation() {
+            const location = previewLocation.value;
+            if (!location || !isCurrent()) return;
+            if (location.entryId && location.entryId !== entry.value?._id) {
+                const model = state.value.models.find(item => item.key === location.modelKey || item.entries.some(value => value.id === location.entryId));
+                if (model?.entries.some(item => item.id === location.entryId)) await router.push({ ...contentEditorLocation({ ...target, intent: 'edit', templateId: model.templateId, modelKey: model.key, entryId: location.entryId, pageKey: location.pageKey }), query: { ...contentEditorLocation({ ...target, intent: 'edit', templateId: model.templateId, modelKey: model.key, entryId: location.entryId, pageKey: location.pageKey }).query, field: location.field } });
+                return;
+            }
+            visualEditor.value?.showProperties();
+            let id: string | undefined;
+            if (location.field?.startsWith('section.')) {
+                const [, nodeId, key] = location.field.split('.');
+                selectedSection.value = nodeId; editorTab.value = 'sections'; id = `section-${nodeId}-${key || 'body'}`;
+            } else {
+                editorTab.value = 'content';
+                const index = template.value?.props.findIndex(prop => prop.name === location.field || prop.id === location.field) ?? -1;
+                id = index >= 0 ? `entry.meta.${lngIdx.value}.props.${index}` : undefined;
+            }
+            await nextTick();
+            const wrapper = id ? document.getElementById(id) || document.getElementById(`${id}.data.0`) : document.getElementById(`entry.content.${lngIdx.value}.nodes`);
+            const control = wrapper?.matches('input, textarea, [contenteditable="true"]') ? wrapper as HTMLElement : wrapper?.querySelector<HTMLElement>('input, textarea, [contenteditable="true"], button');
+            control?.scrollIntoView({ block: 'center' }); control?.focus();
+        }
+        const previewStale = ref(false);
+        const visualEditor = ref<{ showProperties: () => void }>();
+        let composing = false;
         const previewPayload = ref<unknown>();
         const previewRuntime = ref<PreviewRuntime | null>(null);
         const previewLoading = ref(false);
         const previewError = ref('');
-        let previewSequence = 0;
         function clearPreview() {
-            previewSequence++;
+            draftPreview.cancel();
             previewPayload.value = undefined;
             previewRuntime.value = null;
             previewLoading.value = false;
@@ -285,6 +348,7 @@ export const ContentWorkspace = defineComponent({
             alive = false;
             loadGeneration++;
             clearPreview();
+            draftPreview.dispose();
             window.removeEventListener('beforeunload', beforeUnload);
         });
         function resetSettings() {
@@ -340,91 +404,44 @@ export const ContentWorkspace = defineComponent({
                 if (isCurrent()) mediaError.value = userErrorMessage(cause);
             }
         }
-        async function loadPreview() {
-            if (!isCurrent()) return;
-            clearPreview();
-            const sequence = previewSequence;
-            previewLoading.value = true;
-            try {
-                const payload = await sdk.send({
-                    url: '/api/v4/storefront/site-preview',
-                    method: 'GET',
-                });
-                if (!isCurrent()) return;
-                const runtime = await loadPreviewRuntime(payload, (url) =>
-                    sdk.send({ url, method: 'GET' }),
-                );
-                if (!isCurrent() || sequence !== previewSequence) return;
-                previewRuntime.value = runtime;
-                previewPayload.value = payload;
-            } catch (cause) {
-                if (isCurrent() && sequence === previewSequence)
-                    previewError.value = userErrorMessage(cause);
-            } finally {
-                if (isCurrent() && sequence === previewSequence)
-                    previewLoading.value = false;
-            }
+        const previewKey = () => ({ sessionId: session.sessionId, revision: session.revision, workspaceId: target.workspaceId, siteId: target.siteId || '', language: target.language });
+        function pageOverlay(page: PageDraft): PageDraft {
+            const { key, blueprintKey, title, path, seoTitle, seoDescription, sections, sectionConfigs, layoutDocument, entryId, enabled, navigation } = page;
+            return { key, ...(blueprintKey ? { blueprintKey } : {}), title, path, seoTitle, seoDescription, sections, sectionConfigs, layoutDocument, entryId, enabled: enabled !== false, navigation: navigation !== false } as PageDraft;
         }
-        function overlayPagePreview(page: PageDraft) {
-            if (
-                !previewPayload.value ||
-                typeof previewPayload.value !== 'object' ||
-                !Array.isArray((previewPayload.value as any).pages)
-            )
-                return;
-            const payload = JSON.parse(
-                JSON.stringify(previewPayload.value),
-            ) as any;
-            const previewPage = payload.pages.find(
-                (item: any) => item.pageKey === page.key,
-            );
-            if (!previewPage?.content) return;
-            const previewLayout = page.layoutDocument
-                ? JSON.parse(JSON.stringify(page.layoutDocument))
-                : undefined;
-            for (const node of previewLayout?.root || []) {
-                const declared =
-                    site.value?.editorContract?.sections.find(
-                        (section) => section.type === node.type,
-                    )?.props || {};
-                for (const [key, field] of Object.entries(declared))
-                    if (
-                        field.control === 'media' &&
-                        node.props[key] &&
-                        typeof node.props[key] === 'object' &&
-                        '_id' in node.props[key]
-                    ) {
-                        const image = siteImages.value.find(
-                            (item) => item._id === node.props[key]._id,
-                        );
-                        if (!image) {
-                            previewError.value = '所选图片不可用于当前网站。';
-                            return;
-                        }
-                        node.props[key] =
-                            `${sdk.config.apiOrigin}${sdk.media.toUri({ media: image })}`;
-                    }
-            }
-            // The renderer intentionally gives the page-level layout precedence.
-            previewPage.layoutDocument = previewLayout;
-            previewPage.content.layoutDocument = previewLayout;
-            previewPage.content.sectionConfigs =
-                previewLayout?.root.map((node: any) => ({
-                    type: node.type,
-                    enabled: node.enabled,
-                    data: node.props,
-                })) || page.sectionConfigs;
-            previewPage.content.sections = page.sections;
-            previewPage.content.seo = {
-                ...(previewPage.content.seo || {}),
-                title: page.seoTitle,
-                description: page.seoDescription,
+        function draftOverlay(): StudioDraftOverlay {
+            return {
+                ...(entry.value && entryDirty.value && target.modelKey ? { entry: { modelKey: target.modelKey, entryId: session.created ? entry.value._id : undefined, operationId, entry: { ...buildEntryCreateBody(entry.value), groupId: entry.value.groupId } } } : {}),
+                ...(pageEditor.value && (pageDirty.value || newPage && !session.created) ? { page: pageOverlay(pageEditor.value) } : {}),
+                ...(settingsDirty.value && site.value?.canManage ? { settings: settingsRequest(site.value.updatedAt, settings.value) } : {}),
             };
-            payload.navigation = JSON.parse(
-                JSON.stringify(settings.value.navigation),
-            );
-            previewPayload.value = payload;
         }
+        const draftPreview = createDraftPreview({ key: previewKey, request: (body, signal) => sdk.studio.preview(body, signal),
+            accept: async payload => {
+                if (!isCurrent()) return;
+                const key = previewKey();
+                try {
+                    const runtime = previewRuntime.value || await loadPreviewRuntime(payload, url => sdk.send({ url, method: 'GET' }));
+                    if (!isCurrent() || key.revision !== session.revision) return;
+                    previewRuntime.value = runtime; previewPayload.value = payload; previewError.value = ''; previewStale.value = false;
+                } catch (cause) { if (isCurrent() && key.revision === session.revision) { previewError.value = validationError(cause); previewStale.value = true; } }
+                finally { if (isCurrent() && key.revision === session.revision) previewLoading.value = false; }
+            }, fail: cause => { if (isCurrent()) { previewError.value = validationError(cause); previewStale.value = true; previewLoading.value = false; } },
+        });
+        function requestPreview() {
+            if (!isCurrent() || loading.value || !target.siteId || !pageEditor.value) return;
+            previewLoading.value = true;
+            try { draftPreview.update(draftOverlay(), composing); }
+            catch (cause) { previewError.value = validationError(cause); previewStale.value = true; previewLoading.value = false; }
+        }
+        async function loadPreview() { requestPreview(); }
+        function overlayPagePreview(_page: PageDraft) { /* The single deep draft watcher schedules the authorized full-site projection. */ }
+        watch(() => session.draft, () => {
+            if (loading.value || busy.value || !isCurrent()) return;
+            session.revision++; notice.value = ''; requestPreview();
+        }, { deep: true, flush: 'sync' });
+        function compositionStart() { composing = true; draftPreview.cancel(); }
+        function compositionEnd() { composing = false; requestPreview(); }
         async function refresh() {
             const loaded = await sdk.studio.getSite();
             if (!isCurrent()) return;
@@ -445,7 +462,7 @@ export const ContentWorkspace = defineComponent({
             try {
                 await action();
             } catch (cause) {
-                if (isCurrent()) error.value = userErrorMessage(cause);
+                if (isCurrent()) error.value = validationError(cause);
             } finally {
                 if (isCurrent()) {
                     busy.value = false;
@@ -476,7 +493,7 @@ export const ContentWorkspace = defineComponent({
             )
                 return;
             pageEditor.value = JSON.parse(JSON.stringify(page));
-            original.value = JSON.stringify({ page: pageEditor.value });
+            original.value = JSON.stringify(pageEditor.value);
             sectionInputErrors.value = {};
             sectionErrors.value = [];
             selectedSection.value = '';
@@ -509,105 +526,18 @@ export const ContentWorkspace = defineComponent({
             const location = pendingLocation.value;
             if (location) await run(() => openSavedTarget(location));
         }
-        async function saveEntry(form?: HTMLFormElement) {
-            const draft = entry.value;
-            if (!isCurrent()) return;
-            if (
-                !draft ||
-                !template.value ||
-                !canEdit.value ||
-                !validator.validate()
-            ) {
-                error.value = '请检查内容字段后保存。';
-                return;
-            }
-            if (newPage && !form?.checkValidity()) {
-                editorTab.value = 'page';
-                await nextTick();
-                if (!isCurrent()) return;
-                form?.reportValidity();
-                return;
-            }
-            await run(async () => {
-                if (target.intent === 'create') {
-                    if (newPage) {
-                        if (!site.value || !pageEditor.value)
-                            throw new Error('页面蓝图不可用。');
-                        const page = await sdk.studio.createPage({
-                            operationId,
-                            expectedUpdatedAt: site.value.updatedAt,
-                            blueprintKey: newPage,
-                            title: pageEditor.value.title,
-                            path: pageEditor.value.path,
-                            entry: {
-                                ...buildEntryCreateBody(draft),
-                                groupId: draft.groupId,
-                            },
-                        });
-                        if (!isCurrent()) return;
-                        await openSavedTarget(
-                            contentEditorLocation({
-                                ...target,
-                                intent: 'edit',
-                                entryId: page.entryId,
-                                pageKey: page.key,
-                            }),
-                        );
-                        return;
-                    }
-                    const saved = await sdk.entry.create({
-                        templateId: draft.templateId,
-                        data: {
-                            ...buildEntryCreateBody(draft),
-                            groupId: draft.groupId,
-                        },
-                    });
-                    if (!isCurrent()) return;
-                    entryOriginal.value = JSON.stringify(draft);
-                    await openSavedTarget(
-                        contentEditorLocation({
-                            ...target,
-                            intent: 'edit',
-                            entryId: saved._id,
-                        }),
-                    );
-                } else {
-                    const saved = await sdk.entry.update({
-                        _id: draft._id,
-                        templateId: draft.templateId,
-                        expectedUpdatedAt: draft.updatedAt,
-                        groupId: draft.groupId,
-                        lng: target.language,
-                        status: draft.statuses.find(
-                            (item) => item.lng === target.language,
-                        )?.id,
-                        meta: { props: draft.meta[lngIdx.value].props },
-                        content: {
-                            nodes:
-                                buildEntryCreateBody(draft).content.find(
-                                    (item) => item.lng === target.language,
-                                )?.nodes || [],
-                        },
-                    });
-                    if (!isCurrent()) return;
-                    draft.updatedAt = saved.updatedAt;
-                    entryOriginal.value = JSON.stringify(draft);
-                    notice.value = '内容草稿已保存。发布更新后才会同步到网站。';
-                }
-            });
-        }
-        async function savePage(event: Event) {
+        async function saveDraft(event: Event) {
             event.preventDefault();
             const form = event.currentTarget;
-            if (!(form instanceof HTMLFormElement)) return;
+            if (!(form instanceof HTMLFormElement) || !isCurrent() || busy.value || conflictState.value) return;
             const page = pageEditor.value;
             const installed = site.value;
-            if (!isCurrent() || !page || !installed) return;
-            const nodes = (page.layoutDocument as any)?.root || [];
+            if (entryDirty.value && (!entry.value || !template.value || !canEdit.value || !validator.validate())) { error.value = '请检查内容字段后保存。'; editorTab.value = 'content'; return; }
+            const nodes = (page?.layoutDocument as any)?.root || [];
             sectionErrors.value = nodes.flatMap((node: any) =>
                 node.enabled
                     ? sectionPropertyFields(
-                          installed.editorContract?.sections.find(
+                          installed?.editorContract?.sections.find(
                               (section) => section.type === node.type,
                           )?.props || {},
                       )
@@ -616,7 +546,7 @@ export const ContentWorkspace = defineComponent({
                                   sectionFieldVisible(field, {
                                       ...Object.fromEntries(
                                           sectionPropertyFields(
-                                              installed.editorContract?.sections.find(
+                                              installed?.editorContract?.sections.find(
                                                   (section) =>
                                                       section.type ===
                                                       node.type,
@@ -668,83 +598,80 @@ export const ContentWorkspace = defineComponent({
                 form.reportValidity();
                 return;
             }
-            const bindingChanged =
-                page.entryId !== JSON.parse(original.value).page?.entryId;
-            if (bindingChanged && entryDirty.value) {
-                error.value = '请先保存页面内容，再修改绑定内容。';
-                return;
-            }
-            const settingsDraft = JSON.parse(JSON.stringify(settings.value));
-            const settingsChanged = settingsDirty.value;
+            const bindingChanged = Boolean(page && original.value && page.entryId !== JSON.parse(original.value).entryId);
+            if (bindingChanged && entryDirty.value) { error.value = '请先保存页面内容，再修改绑定内容。'; return; }
+            const overlay = JSON.parse(JSON.stringify(draftOverlay())) as StudioDraftOverlay;
+            const full = entry.value ? JSON.parse(JSON.stringify(entry.value)) as Entry : undefined;
+            const savedPage = page ? JSON.parse(JSON.stringify(page)) as PageDraft : undefined;
+            const savedSettings = JSON.parse(JSON.stringify(settings.value));
+            const changed = sessionDirty(session);
             await run(async () => {
-                await sdk.studio.savePage(page.key, {
-                    expectedUpdatedAt: installed.updatedAt,
-                    title: page.title,
-                    path: page.path,
-                    seoTitle: page.seoTitle,
-                    seoDescription: page.seoDescription,
-                    sections: page.sections,
-                    sectionConfigs: page.sectionConfigs,
-                    layoutDocument: page.layoutDocument,
-                    entryId: page.entryId,
-                    enabled: page.enabled !== false,
-                    navigation: page.navigation !== false,
-                });
-                if (!isCurrent()) return;
-                if (settingsChanged) {
-                    await refresh();
-                    if (!isCurrent()) return;
-                    if (!state.value.site)
-                        throw new Error('网站状态刷新失败，请重试。');
-                    await sdk.studio.saveSettings({
-                        expectedUpdatedAt: state.value.site.updatedAt,
-                        name: settingsDraft.name,
-                        theme: {
-                            background: settingsDraft.background,
-                            foreground: settingsDraft.foreground,
-                            accent: settingsDraft.accent,
-                            muted: settingsDraft.muted,
-                        },
-                        navigation: settingsDraft.navigation,
-                        operations: settingsDraft.operations,
-                    });
+                saveFailure.value = undefined;
+                draftPreview.cancel();
+                // Validate the complete fixed snapshot before the first write; later writes carry the remaining overlay.
+                if (target.siteId && activeModel.value && savedPage) await sdk.studio.preview({ sessionId: session.sessionId, revision: session.revision, language: target.language, overlay });
+                const parts: SavePart[] = [];
+                if (newPage && !session.created && full && savedPage && installed) {
+                    parts.push({ key: 'page', confirms: ['content','page'], run: async context => {
+                        const receipt = await sdk.studio.createPage({ operationId, expectedUpdatedAt: context.siteUpdatedAt, blueprintKey: newPage, title: savedPage.title, path: savedPage.path, page: { seoTitle: savedPage.seoTitle, seoDescription: savedPage.seoDescription, sections: savedPage.sections, sectionConfigs: savedPage.sectionConfigs, layoutDocument: savedPage.layoutDocument, enabled: savedPage.enabled !== false, navigation: savedPage.navigation !== false }, entry: { ...buildEntryCreateBody(full), groupId: full.groupId } });
+                        if (!isCurrent()) throw new Error('编辑会话已结束。');
+                        entry.value!._id = receipt.entryId; pageEditor.value = receipt;
+                        return { ...context, entryId: receipt.entryId, siteUpdatedAt: receipt.siteUpdatedAt };
+                    } });
+                } else {
+                    if (changed.content && full && canEdit.value) parts.push({ key: 'content', confirms: ['content'], run: async context => {
+                        let id: string; let updatedAt: number;
+                        if (installed && activeModel.value && target.modelKey) {
+                            const receipt = await sdk.studio.saveEntry(target.modelKey, { entryId: session.created ? context.entryId : undefined, expectedUpdatedAt: context.entryUpdatedAt, operationId, language: target.language, entry: { ...buildEntryCreateBody(full), groupId: full.groupId }, overlay: { ...(overlay.page ? { page: overlay.page } : {}), ...(overlay.settings ? { settings: overlay.settings } : {}) } });
+                            id = receipt.id; updatedAt = receipt.updatedAt;
+                        } else if (!session.created) {
+                            const receipt = await sdk.entry.create({ templateId: full.templateId, data: { ...buildEntryCreateBody(full), groupId: full.groupId } }); id = receipt._id; updatedAt = receipt.updatedAt;
+                        } else {
+                            const receipt = await sdk.entry.update({ _id: full._id, templateId: full.templateId, expectedUpdatedAt: context.entryUpdatedAt, groupId: full.groupId, lng: target.language, status: full.statuses.find(item => item.lng === target.language)?.id, meta: { props: full.meta.find(item => item.lng === target.language)!.props }, content: { nodes: buildEntryCreateBody(full).content.find(item => item.lng === target.language)?.nodes || [] } }); id = receipt._id; updatedAt = receipt.updatedAt;
+                        }
+                        if (!isCurrent()) throw new Error('编辑会话已结束。');
+                        entry.value!._id = id; entry.value!.updatedAt = updatedAt;
+                        return { ...context, entryId: id, entryUpdatedAt: updatedAt };
+                    } });
+                    if (changed.page && savedPage && installed?.canManage) parts.push({ key: 'page', confirms: ['page'], run: async context => {
+                        const { key, ...fields } = pageOverlay(savedPage);
+                        delete fields.blueprintKey;
+                        const receipt = await sdk.studio.savePage(key, { ...fields, expectedUpdatedAt: context.siteUpdatedAt, enabled: savedPage.enabled !== false, navigation: savedPage.navigation !== false, overlay: overlay.settings ? { settings: overlay.settings } : undefined });
+                        return { ...context, siteUpdatedAt: receipt.siteUpdatedAt };
+                    } });
                 }
+                if (changed.settings && installed?.canManage) parts.push({ key: 'settings', confirms: ['settings'], run: async context => {
+                    const receipt = await sdk.studio.saveSettings(settingsRequest(context.siteUpdatedAt, savedSettings));
+                    return { ...context, siteUpdatedAt: receipt.updatedAt };
+                } });
+                // Confirm each part as soon as its receipt arrives, preserving earlier successes on failure.
+                const result = await saveSession(parts.map(part => ({ ...part, run: async context => {
+                    const receipt = await part.run(context);
+                    if (!isCurrent()) throw new Error('编辑会话已结束。');
+                    acknowledgeSession(session, part.confirms);
+                    if (site.value) site.value.updatedAt = receipt.siteUpdatedAt;
+                    return receipt;
+                } })), { entryId: full?._id, entryUpdatedAt: full?.updatedAt, siteUpdatedAt: installed?.updatedAt || 0 });
                 if (!isCurrent()) return;
-                const baseline = JSON.parse(original.value);
-                baseline.page = JSON.parse(JSON.stringify(page));
-                original.value = JSON.stringify(baseline);
-                await refresh();
-                if (!isCurrent()) return;
-                settingsOriginal.value = JSON.stringify(settings.value);
-                await loadPreview();
-                if (!isCurrent()) return;
-                notice.value =
-                    '页面设置已保存。内容标签中未保存的修改仍然保留。';
-                if (bindingChanged) {
-                    const targetModel = state.value.models.find(
-                        (model) => model.key === page.modelKey,
-                    );
-                    const bound =
-                        targetModel?.entries.find(
-                            (item) => item.id === page.entryId,
-                        ) ||
-                        (targetModel?.singleEntry
-                            ? targetModel.entries[0]
-                            : undefined);
-                    // Rebind the editor only when no unsaved content can be displaced.
-                    entryOriginal.value = JSON.stringify(entry.value);
-                    await openSavedTarget(
-                        contentEditorLocation({
-                            ...target,
-                            intent: bound ? 'edit' : 'page',
-                            entryId: bound?.id || null,
-                            modelKey: targetModel?.key,
-                            templateId: targetModel?.templateId || '',
-                            pageKey: page.key,
-                        }),
-                    );
+                if (result.failed) {
+                    saveFailure.value = result.failed.key;
+                    const status = (result.failed.error as { status?: number })?.status;
+                    unknownSaveResult.value = status === -1 || Boolean(status && status >= 500);
+                    conflictState.value = status === 409 || unknownSaveResult.value;
+                    checkedServer.value = undefined;
+                    const labels = { content: '内容', page: '页面设置', settings: '网站设置' };
+                    const confirmed = result.completed.map(key => labels[key]).join('、');
+                    error.value = `${confirmed ? `${confirmed}已保存，` : ''}${labels[result.failed.key]}未保存：${validationError(result.failed.error)}`;
+                    return;
+                }
+                notice.value = '草稿已保存。发布更新后才会同步到网站。';
+                if ((target.intent === 'create' && session.created) || bindingChanged) {
+                    const model = state.value.models.find(model => model.key === savedPage?.modelKey);
+                    const bound = bindingChanged ? model?.entries.find(item => item.id === savedPage?.entryId) || (model?.singleEntry && !savedPage?.entryId ? model.entries[0] : undefined) : undefined;
+                    await openSavedTarget(contentEditorLocation({ ...target, intent: bindingChanged ? bound ? 'edit' : 'page' : 'edit', entryId: bindingChanged ? bound?.id || null : result.context.entryId || null, modelKey: bindingChanged ? model?.key : target.modelKey, templateId: bindingChanged ? model?.templateId || '' : target.templateId, pageKey: pageEditor.value?.key || target.pageKey }));
                 }
             });
+            requestPreview();
         }
         onMounted(async () => {
             const generation = ++loadGeneration;
@@ -820,8 +747,8 @@ export const ContentWorkspace = defineComponent({
                 const boundPages =
                     site.value?.pages.filter(
                         (page) =>
-                            page.modelKey === target.modelKey &&
-                            (page.entryId === target.entryId ||
+                            (target.modelKey === 'site-settings' ? page.layout === 'home' : page.modelKey === target.modelKey) &&
+                            (target.modelKey === 'site-settings' || page.entryId === target.entryId ||
                                 (!page.entryId &&
                                     activeModel.value?.singleEntry) ||
                                 page.path.includes(':')),
@@ -839,6 +766,8 @@ export const ContentWorkspace = defineComponent({
                 if (key) await selectPage(key);
                 if (!current()) return;
                 if (newPage && pageEditor.value) {
+                    pageEditor.value.key = 'new-page';
+                    pageEditor.value.blueprintKey = newPage;
                     pageEditor.value.title = '';
                     pageEditor.value.path = pageEditor.value.path.replace(
                         /:[a-zA-Z0-9_]+/g,
@@ -846,6 +775,7 @@ export const ContentWorkspace = defineComponent({
                     );
                 }
                 loading.value = false;
+                requestPreview();
                 await nextTick();
                 if (!current()) return;
                 const field = initialQuery.field;
@@ -889,16 +819,8 @@ export const ContentWorkspace = defineComponent({
             const submitter = (event as SubmitEvent).submitter;
             return !submitter || submitter.getAttribute('type') === 'submit';
         }
-        function submitContent(event: Event) {
-            if (explicitSubmit(event))
-                void saveEntry(event.currentTarget as HTMLFormElement);
-        }
-        function submitPage(event: Event) {
-            if (!explicitSubmit(event)) return;
-            if (editorTab.value === 'content' || newPage)
-                void saveEntry(event.currentTarget as HTMLFormElement);
-            else void savePage(event);
-        }
+        function submitContent(event: Event) { if (explicitSubmit(event)) void saveDraft(event); }
+        function submitPage(event: Event) { if (explicitSubmit(event)) void saveDraft(event); }
         const contentPanel = () => (
             <div class="studio-workspace-content">
                 {entry.value && lngIdx.value !== -1 ? (
@@ -1036,7 +958,7 @@ export const ContentWorkspace = defineComponent({
         const pageForm = () => {
             const page = pageEditor.value;
             if (!page) return null;
-            const options = site.value?.pageOptions[page.key];
+            const options = site.value?.pageOptions[newPage || page.key];
             const canBind =
                 page.layout === 'home' || Boolean(page.blueprintKey);
             const fallbackAllowed =
@@ -1148,13 +1070,14 @@ export const ContentWorkspace = defineComponent({
                         <h2>页面资料</h2>
                         {newPage && (
                             <p class="studio-help">
-                                填写页面名称、路径和内容。首次保存后可调整区块和导航。
+                                填写页面名称、路径、内容和区块，首次保存会一起创建。
                             </p>
                         )}
                         <span class="studio-badge muted">页面草稿</span>
                     </div>
                     <fieldset disabled={busy.value}>
                         <VisualPageEditor
+                            ref={visualEditor}
                             modelValue={visualLayout as any}
                             pageTitle={page.title}
                             pagePath={page.path}
@@ -1188,16 +1111,16 @@ export const ContentWorkspace = defineComponent({
                             onValidation={({
                                 nodeId,
                                 key,
-                                error: validationError,
+                                error: sectionValidationError,
                             }: {
                                 nodeId: string;
                                 key: string;
                                 error: string | null;
                             }) => {
                                 const id = `section-${nodeId}-${key}`;
-                                if (validationError)
+                                if (sectionValidationError)
                                     sectionInputErrors.value[id] =
-                                        validationError;
+                                        sectionValidationError;
                                 else delete sectionInputErrors.value[id];
                                 sectionErrors.value =
                                     sectionErrors.value.filter(
@@ -1211,8 +1134,7 @@ export const ContentWorkspace = defineComponent({
                             }
                             disabled={
                                 busy.value ||
-                                !site.value?.canManage ||
-                                Boolean(newPage)
+                                !site.value?.canManage
                             }
                             onUpdate:modelValue={(value: any) => {
                                 page.layoutDocument = value;
@@ -1272,8 +1194,7 @@ export const ContentWorkspace = defineComponent({
                                                   }
                                                   disabled={
                                                       busy.value ||
-                                                      !site.value?.canManage ||
-                                                      Boolean(newPage)
+                                                      !site.value?.canManage
                                                   }
                                                   onUpdate:modelValue={(
                                                       value: any,
@@ -1292,6 +1213,16 @@ export const ContentWorkspace = defineComponent({
                                     : {}),
                                 page: () => (
                                     <div class="studio-fields">
+                                        <h3>网站资料与外观</h3>
+                                        <button type="button" disabled={busy.value} onClick={() => { const model = state.value.models.find(item => item.key === 'site-settings'); const item = model?.entries[0]; if (model && item) void router.push(contentEditorLocation({ ...target, intent: 'edit', templateId: model.templateId, modelKey: model.key, entryId: item.id, pageKey: undefined })); }}>编辑品牌与联系资料 →</button>
+                                        <button type="button" disabled={busy.value} onClick={async () => { await nextTick(); document.querySelector<HTMLElement>('.studio-navigation-editor input')?.focus(); }}>编辑网站导航 →</button>
+                                        <label>网站名称<input required maxlength={80} disabled={busy.value || !site.value?.canManage} v-model={settings.value.name} /></label>
+                                        {(['background','foreground','accent','muted'] as const).map(key => <label>{({ background:'背景颜色',foreground:'文字颜色',accent:'强调颜色',muted:'弱化颜色' })[key]}<input aria-label={`${key} 十六进制颜色`} required pattern="#[a-fA-F0-9]{6}" disabled={busy.value || !site.value?.canManage} v-model={settings.value[key]} /></label>)}
+                                        <label>搜索引擎标题<input maxlength={120} disabled={busy.value || !site.value?.canManage} v-model={settings.value.operations.seoTitle} /></label>
+                                        <label>搜索引擎描述<textarea maxlength={320} disabled={busy.value || !site.value?.canManage} v-model={settings.value.operations.seoDescription} /></label>
+                                        {(['socialImage','favicon'] as const).map(key => <label>{key === 'socialImage' ? '社交分享图片' : '网站图标'}<select aria-label={key === 'socialImage' ? '社交分享图片' : '网站图标'} disabled={busy.value || !site.value?.canManage} value={settings.value.operations[key]?._id || ''} onChange={event => { const id = (event.target as HTMLSelectElement).value; settings.value.operations[key] = id ? { _id:id } : undefined; }}><option value="">未设置</option>{siteImages.value.map(item => <option value={item._id}>{item.name}</option>)}</select></label>)}
+                                        <label>统计工具 ID<input disabled={busy.value || !site.value?.canManage} v-model={settings.value.operations.analyticsId} /></label>
+                                        <label class="studio-check"><input type="checkbox" disabled={busy.value || !site.value?.canManage || !site.value?.contactDeliveryConfigured} checked={settings.value.operations.contactFormEnabled} onChange={event => { settings.value.operations.contactFormEnabled = (event.target as HTMLInputElement).checked; }} />启用联系表单</label>
                                         <NavigationEditor
                                             modelValue={
                                                 settings.value.navigation
@@ -1299,8 +1230,7 @@ export const ContentWorkspace = defineComponent({
                                             pages={site.value?.pages || []}
                                             disabled={
                                                 busy.value ||
-                                                !site.value?.canManage ||
-                                                Boolean(newPage)
+                                                !site.value?.canManage
                                             }
                                             onUpdate:modelValue={(
                                                 value: NavigationNode[],
@@ -1314,7 +1244,7 @@ export const ContentWorkspace = defineComponent({
                                             页面名称
                                             <input
                                                 disabled={
-                                                    !site.value?.canManage
+                                                    busy.value || !site.value?.canManage
                                                 }
                                                 required
                                                 maxlength={120}
@@ -1325,7 +1255,7 @@ export const ContentWorkspace = defineComponent({
                                             访问路径
                                             <input
                                                 disabled={
-                                                    !site.value?.canManage
+                                                    busy.value || !site.value?.canManage
                                                 }
                                                 required
                                                 v-model={page.path}
@@ -1348,8 +1278,7 @@ export const ContentWorkspace = defineComponent({
                                             SEO 标题
                                             <input
                                                 disabled={
-                                                    !site.value?.canManage ||
-                                                    Boolean(newPage)
+                                                    !site.value?.canManage
                                                 }
                                                 maxlength={120}
                                                 v-model={page.seoTitle}
@@ -1359,8 +1288,7 @@ export const ContentWorkspace = defineComponent({
                                             SEO 描述
                                             <textarea
                                                 disabled={
-                                                    !site.value?.canManage ||
-                                                    Boolean(newPage)
+                                                    !site.value?.canManage
                                                 }
                                                 maxlength={320}
                                                 rows={3}
@@ -1372,8 +1300,8 @@ export const ContentWorkspace = defineComponent({
                                                 绑定内容
                                                 <select
                                                     disabled={
-                                                        entryDirty.value ||
-                                                        !site.value?.canManage
+                                                        busy.value || entryDirty.value ||
+                                                        busy.value || !site.value?.canManage
                                                     }
                                                     v-model={page.entryId}
                                                 >
@@ -1414,8 +1342,7 @@ export const ContentWorkspace = defineComponent({
                                                 type="checkbox"
                                                 disabled={
                                                     page.layout === 'home' ||
-                                                    !site.value?.canManage ||
-                                                    Boolean(newPage)
+                                                    !site.value?.canManage
                                                 }
                                                 checked={page.enabled !== false}
                                                 onChange={(event) => {
@@ -1429,8 +1356,7 @@ export const ContentWorkspace = defineComponent({
                                         <label class="studio-check">
                                             <input
                                                 disabled={
-                                                    !site.value?.canManage ||
-                                                    Boolean(newPage)
+                                                    !site.value?.canManage
                                                 }
                                                 type="checkbox"
                                                 checked={
@@ -1463,6 +1389,8 @@ export const ContentWorkspace = defineComponent({
             <section
                 class="cms-studio studio-content-workspace"
                 aria-label="内容编辑工作区"
+                onCompositionstart={compositionStart}
+                onCompositionend={compositionEnd}
             >
                 <header class="studio-header">
                     <div>
@@ -1497,6 +1425,8 @@ export const ContentWorkspace = defineComponent({
                                 ? '绑定已保存，等待打开内容'
                                 : busy.value
                                   ? '正在保存…'
+                                  : saveFailure.value
+                                    ? '部分内容未保存'
                                   : dirty.value
                                     ? '有未保存的修改'
                                     : '草稿已保存'}
@@ -1513,34 +1443,23 @@ export const ContentWorkspace = defineComponent({
                                 busy.value ||
                                 loading.value ||
                                 Boolean(pendingLocation.value) ||
-                                (newPage
-                                    ? !canEdit.value
-                                    : editorTab.value === 'content'
-                                      ? !canEdit.value ||
-                                        (!entryDirty.value &&
-                                            target.intent !== 'create')
-                                      : !site.value?.canManage ||
-                                        (!pageDirty.value &&
-                                            !settingsDirty.value &&
-                                            !Object.keys(
-                                                sectionInputErrors.value,
-                                            ).length))
+                                conflictState.value || !dirty.value || (!canEdit.value && !site.value?.canManage)
                             }
                         >
-                            保存
-                            {editorTab.value === 'content' || newPage
-                                ? '草稿'
-                                : '页面设置'}
+                            保存草稿
                         </button>
                     </div>
                 </header>
                 {error.value && (
                     <div role="alert" class="studio-error">
                         <strong>操作未完成</strong>
-                        <p>{error.value}</p>
+                        <p>{error.value}</p>{previewLocation.value?.field && <button type="button" onClick={locateValidation}>定位内容</button>}
                         <p>本地修改仍保留，请检查权限或冲突后重试。</p>
                     </div>
                 )}
+                {previewStale.value && <p role="status" class="studio-warning">预览显示上一次有效内容。{previewError.value}<button type="button" onClick={requestPreview}>重试预览</button>{previewLocation.value?.field && <button type="button" onClick={locateValidation}>定位内容</button>}</p>}
+                {conflictState.value && <div role="status" class="studio-warning">{unknownSaveResult.value ? '未能确认本次保存结果，请核对服务器内容后再重试。' : '服务器版本已改变，本地修改已保留。'}<button type="button" disabled={busy.value} onClick={checkServerVersion}>核对服务器版本</button><button type="button" onClick={() => { if (window.confirm('重新读取会放弃尚未保存的本地修改。确定继续吗？')) window.location.reload(); }}>放弃修改并重新读取</button></div>}
+                {checkedServer.value && <section aria-label="服务器版本核对" class="studio-card"><h2>核对服务器内容</h2><p>以下是本地与服务器的差异。保留本地修改后，再次保存会提交这些本地内容；服务器再次变化时仍会停止保存。</p>{serverChanges.value.length ? <table><thead><tr><th>内容</th><th>本地修改</th><th>服务器内容</th></tr></thead><tbody>{serverChanges.value.map(row => <tr><th>{row.label}</th><td>{row.local}</td><td>{row.server}</td></tr>)}</tbody></table> : <p>服务器当前内容与本地相同。核对后可重试，创建操作会沿用原操作记录。</p>}<button type="button" disabled={busy.value} onClick={keepLocalWithCheckedVersion}>保留本地修改并采用此版本</button></section>}
                 {notice.value && (
                     <p role="status" class="studio-success">
                         {notice.value}
@@ -1565,6 +1484,7 @@ export const ContentWorkspace = defineComponent({
                                 <select
                                     aria-label="查看页面"
                                     value={pageEditor.value.key}
+                                    disabled={busy.value}
                                     onChange={(event) =>
                                         selectPage(
                                             (event.target as HTMLSelectElement)
@@ -1605,6 +1525,8 @@ export const ContentWorkspace = defineComponent({
                                 onSubmit={submitContent}
                             >
                                 <VisualPageEditor
+                                    class="studio-unbound"
+                                    ref={visualEditor}
                                     modelValue={{
                                         version: 1,
                                         mode: 'template',

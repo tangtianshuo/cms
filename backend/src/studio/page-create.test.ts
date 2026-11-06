@@ -16,9 +16,9 @@ test('route conflict fails before content write', async () => {
 });
 test('lost response retry returns same page with one Entry', async () => {
     let current = site; let saved: Entry | null = null; let adds = 0;
-    const source = { findEntry: async () => saved, addEntry: async (e: Entry) => { saved = e; adds++; return e; }, saveSite: async (s: SiteInstallation) => { current = s; return true; }, findSite: async () => current };
-    const first = await createStudioPage(current, 'op', entry, input, source);
-    const retry = await createStudioPage(current, 'op', entry, input, source);
+    const source = { findEntry: async () => saved, addEntry: async (e: Entry) => { saved = e; adds++; return e; }, saveSite: async (s: SiteInstallation) => { s.pages.find(candidate => candidate.entryId === entry._id)!.creationReceipt!.siteUpdatedAt = s.updatedAt; current = s; return true; }, findSite: async () => current };
+    const first = await createStudioPage(current, 'op', entry, input, source, 1);
+    const retry = await createStudioPage(current, 'op', entry, input, source, 1);
     assert.equal(retry.key, first.key); assert.equal(adds, 1); assert.equal(current.pages.length, site.pages.length + 1);
 });
 test('CAS failure reports saved Entry and permits retry binding', async () => {
@@ -50,11 +50,37 @@ test('content page instances accept concrete paths from both supported UAT forms
 test('same operation rejects changed full content, status and group after a lost response', async () => {
     let current = site; let saved: Entry | null = null; let adds = 0;
     const full = { ...entry, groupId: 'general', statuses: [{ lng: 'en', id: 'draft' }], content: [{ lng: 'en', nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Original body' }] }], plainText: '<p>Original body</p>' }] } as Entry;
-    const source = { findEntry: async () => saved, addEntry: async (value: Entry) => { adds++; saved = value; return value; }, saveSite: async (value: SiteInstallation) => { current = value; return true; }, findSite: async () => current };
+    const source = { findEntry: async () => saved, addEntry: async (value: Entry) => { adds++; saved = value; return value; }, saveSite: async (value: SiteInstallation) => { value.pages.find(page => page.entryId === entry._id)!.creationReceipt!.siteUpdatedAt = value.updatedAt; current = value; return true; }, findSite: async () => current };
     const created = await createStudioPage(current, 'op', full, input, source);
-    assert.equal((await createStudioPage(current, 'op', structuredClone(full), input, source)).key, created.key);
+    assert.equal((await createStudioPage(current, 'op', structuredClone(full), input, source, 1)).key, created.key);
     for (const patch of [{ groupId: 'changed' }, { statuses: [{ lng: 'en', id: 'other' }] }, { content: [{ lng: 'en', nodes: [], plainText: '' }] }]) {
         await assert.rejects(() => createStudioPage(current, 'op', { ...full, ...patch } as Entry, input, source), /changed/);
     }
     assert.equal(adds, 1);
+});
+
+test('creation returns the exact CAS receipt and rejects replay after another site edit', async () => {
+    let current = structuredClone(site); let saved: Entry | null = null;
+    const source = { findEntry: async () => saved, addEntry: async (e: Entry) => saved = e,
+        saveSite: async (s: SiteInstallation) => { s.updatedAt = 42; const page = s.pages.find(page => page.entryId === entry._id)!; page.creationReceipt = { expectedUpdatedAt: 1, siteUpdatedAt: 42 }; s.pages.find(candidate => candidate.entryId === entry._id)!.creationReceipt!.siteUpdatedAt = s.updatedAt; current = s; return true; }, findSite: async () => current };
+    const first = await createStudioPage(current, 'op', entry, input, source, 1);
+    assert.equal(first.siteUpdatedAt, 42);
+    assert.equal('creationReceipt' in first, false);
+    assert.equal((await createStudioPage(current, 'op', entry, input, source, 1)).siteUpdatedAt, 42);
+    current = { ...current, updatedAt: 43 };
+    await assert.rejects(() => createStudioPage(current, 'op', entry, input, source, 1), (cause:any) => cause.status === 409);
+});
+test('a concurrent CAS loser never adopts another writer site version as its receipt', async () => {
+    let saved: Entry | null = null; let latest=site;
+    const source = { findEntry:async()=>saved, addEntry:async(e:Entry)=>saved=e, saveSite:async(s:SiteInstallation)=>{latest={...s,updatedAt:99};return false;}, findSite:async()=>latest };
+    await assert.rejects(()=>createStudioPage(site,'op',entry,input,source,1),(cause:any)=>cause.status===409);
+});
+test('first creation confirms complete writable page semantics and rejects any changed replay', async () => {
+    let current = structuredClone(site); let saved: Entry | null = null;
+    const source = { findEntry: async () => saved, addEntry: async (value: Entry) => saved = value, saveSite: async (value: SiteInstallation) => { value.pages.find(page => page.entryId === entry._id)!.creationReceipt!.siteUpdatedAt = value.updatedAt; current = value; return true; }, findSite: async () => current };
+    const page = { seoTitle: 'Search policy', seoDescription: 'Policy description', sections: ['info-grid'], sectionConfigs: [{ type: 'info-grid', enabled: true, data: { items: [{ title: 'First section' }] } }], enabled: false, navigation: false };
+    const first = await createStudioPage(current, 'op', entry, { ...input, page }, source, 1);
+    assert.equal(first.seoTitle, page.seoTitle); assert.equal(first.seoDescription, page.seoDescription); assert.equal(first.enabled, false); assert.equal(first.navigation, false);
+    assert.equal((await createStudioPage(current, 'op', entry, { ...input, page }, source, 1)).key, first.key);
+    for (const patch of [{ seoTitle: 'Changed' }, { seoDescription: 'Changed' }, { enabled: true }, { navigation: true }, { sectionConfigs: [{ type: 'info-grid', enabled: true, data: { items: [{ title: 'Changed' }] } }] }]) await assert.rejects(() => createStudioPage(current, 'op', entry, { ...input, page: { ...page, ...patch } }, source, 1), (error: any) => error.status === 409);
 });

@@ -1,5 +1,7 @@
 import { test, expect } from './browser-fixture.mjs';
 async function identity(page) { return page.evaluate(async()=>{ const sdk=window.bcms.sdk; await sdk.ensureContext(); const state=await sdk.studio.getSite(); const model=state.models.find(m=>m.key==='product'); return {workspaceId:sdk.context.context.workspaceId,siteId:state.site.id,templateId:model.templateId,modelKey:model.key,entryId:model.entries[0].id,language:state.site.language}; }); }
+async function showCanvas(page,info){if(info.project.name==='mobile')await page.getByRole('tab',{name:'查看画布',exact:true}).click();}
+async function showProperties(page,info){if(info.project.name==='mobile')await page.getByRole('tab',{name:'编辑内容',exact:true}).click();}
 const workspace=page=>page.getByRole('region',{name:'内容编辑工作区',exact:true});
 test('legacy entry and page bookmarks converge, preserve focus and survive history and refresh',async({page,installation},info)=>{
  const id=await identity(page);
@@ -7,8 +9,8 @@ test('legacy entry and page bookmarks converge, preserve focus and survive histo
  await expect(page).toHaveURL(/\/d\/studio\?/);
  await expect(workspace(page)).toHaveCount(1);
  await expect(page.locator('#studio-field-title')).toBeFocused();
- await page.reload(); await expect(workspace(page)).toHaveCount(1);await expect(page.frameLocator('.studio-visual-preview iframe').locator('[data-section-type]').first()).toBeVisible();
- await page.goto('/d/studio?section=pages&pageKey=home'); await expect(workspace(page)).toHaveCount(1);
+ await page.reload(); await expect(workspace(page)).toHaveCount(1);await showCanvas(page,info);await expect(page.frameLocator('.studio-visual-preview iframe').locator('[data-section-type]').first()).toBeVisible();
+ await showProperties(page,info);await page.goto('/d/studio?section=pages&pageKey=home'); await expect(workspace(page)).toHaveCount(1);
  await expect(page.locator('.studio-visual-preview iframe')).toHaveCount(1);
  await page.getByRole('tab',{name:/页面内容/}).click();
  await expect(page.locator('.studio-visual-preview iframe')).toHaveCount(1);
@@ -75,6 +77,11 @@ test('full new-page payload preserves all content and retries once while rejecti
   const draft=structuredClone(raw); const lang=state.site.language; const statuses=await sdk.entryStatus.getAll(); if (statuses[0]) draft.statuses=[{lng:lang,id:statuses[0]._id}]; const meta=draft.meta.find(m=>m.lng===lang);
   const title=template.props.find(p=>p.name==='title'); const slug=template.props.find(p=>p.name==='slug');
   meta.props.find(p=>p.id===title.id).data=['B5 full page '+crypto.randomUUID().slice(0,6)]; meta.props.find(p=>p.id===slug.id).data=['b5-full-'+crypto.randomUUID().slice(0,6)];
+  // Each created translation needs its own unique title/slug within the original group.
+  for (const localized of draft.meta.filter(meta=>meta.lng!==lang)) {
+    localized.props.find(prop=>prop.id===title.id).data=['B5 full translation '+crypto.randomUUID()];
+    localized.props.find(prop=>prop.id===slug.id).data=['b5-translation-'+crypto.randomUUID()];
+  }
   draft.content.find(c=>c.lng===lang).nodes=[{type:'paragraph',content:[{type:'text',text:'B5 formatted body',marks:[{type:'bold'}]}]}];
   const data={operationId:crypto.randomUUID(),expectedUpdatedAt:state.site.updatedAt,blueprintKey:state.site.blueprints.find(b=>b.modelKey===model.key).key,title:meta.props.find(p=>p.id===title.id).data[0],path:state.site.pages.find(p=>p.key===state.site.blueprints.find(b=>b.modelKey===model.key).key).path.replace(/:[a-zA-Z0-9_]+/g,'b5-'+crypto.randomUUID().slice(0,8)),entry:{meta:draft.meta,content:draft.content,statuses:draft.statuses,groupId:raw.groupId}};
   const status=async fn=>{try{await fn();return 200;}catch(e){return e.response?.status||e.status||0;}};
@@ -86,7 +93,7 @@ test('full new-page payload preserves all content and retries once while rejecti
   const stale=await status(()=>sdk.studio.createPage({...data,operationId:crypto.randomUUID(),path:data.path+'-stale'}));
   const after=await sdk.studio.getSite();
   const preview=await status(()=>sdk.send({url:'/api/v4/storefront/site-preview'}));
-  return {preview,both,same:page.key===retry.key,meta:JSON.stringify(saved.meta)===JSON.stringify(draft.meta),body:JSON.stringify(saved.content.find(c=>c.lng===lang).nodes)===JSON.stringify(draft.content.find(c=>c.lng===lang).nodes),status:JSON.stringify(saved.statuses)===JSON.stringify(draft.statuses),group:saved.groupId===raw.groupId,conflict,stale,otherLanguages:JSON.stringify(saved.meta.filter(m=>m.lng!==lang))===JSON.stringify(raw.meta.filter(m=>m.lng!==lang)),one:after.site.pages.filter(p=>p.path===data.path).length===1};
+  return {preview,both,same:page.key===retry.key,meta:JSON.stringify(saved.meta)===JSON.stringify(draft.meta),body:JSON.stringify(saved.content.find(c=>c.lng===lang).nodes)===JSON.stringify(draft.content.find(c=>c.lng===lang).nodes),status:JSON.stringify(saved.statuses)===JSON.stringify(draft.statuses),group:saved.groupId===raw.groupId,conflict,stale,otherLanguages:JSON.stringify(saved.meta.filter(m=>m.lng!==lang))===JSON.stringify(draft.meta.filter(m=>m.lng!==lang)),one:after.site.pages.filter(p=>p.path===data.path).length===1};
  });
  expect(result).toEqual({preview:200,both:400,same:true,meta:true,body:true,status:true,group:true,conflict:409,stale:409,otherLanguages:true,one:true});
 });
@@ -129,7 +136,7 @@ test('conflicting full-entry save preserves the local field and server winner',a
  const id=await identity(page);await page.goto('/d/studio?'+new URLSearchParams({section:'content',...id,field:'title'}));await expect(page.locator('#studio-field-title')).toBeFocused();
  await page.locator('#studio-field-title').fill('Local conflict draft');
  const winner=await page.evaluate(async id=>{const sdk=window.bcms.sdk;const entry=await sdk.entry.get({templateId:id.templateId,entryId:id.entryId,skipCache:true});entry.meta.find(m=>m.lng===id.language).props[0].data=['Server conflict winner'];const saved=await sdk.entry.update({_id:entry._id,templateId:entry.templateId,expectedUpdatedAt:entry.updatedAt,lng:id.language,meta:entry.meta.find(m=>m.lng===id.language),content:entry.content.find(m=>m.lng===id.language)});return saved.updatedAt;},id);
- const failed=page.waitForResponse(r=>r.request().method()==='PUT'&&new URL(r.url()).pathname.endsWith('/entry/update'));
+ const failed=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.includes('/studio/entries/'));
  await page.getByRole('button',{name:'保存草稿',exact:true}).click(); expect((await failed).status()).toBe(409);
  await expect(page.getByRole('alert')).toBeVisible();await expect(page.locator('#studio-field-title')).toHaveText('Local conflict draft');
  expect(await page.evaluate(async({id,winner})=>{const e=await window.bcms.sdk.entry.get({templateId:id.templateId,entryId:id.entryId,skipCache:true});return e.updatedAt===winner&&e.meta.find(m=>m.lng===id.language).props[0].data[0]==='Server conflict winner';},{id,winner})).toBe(true);
@@ -138,17 +145,16 @@ test('conflicting full-entry save preserves the local field and server winner',a
 test('new-page wizard initializes the same draft, shows its canvas and creates full content once',async({page,installation},info)=>{
  await page.goto('/d/studio?section=pages'); await page.getByRole('button',{name:'新增页面',exact:true}).click();
  await page.locator('.studio-page-blueprints button').first().click(); await expect(workspace(page)).toHaveCount(1);await expect(page).toHaveURL(/entryId=create/);
- await expect(page.locator('.studio-visual-preview iframe')).toHaveCount(1);
  await page.getByRole('tab',{name:'页面信息',exact:true}).click();
  const name=`B5 wizard ${info.project.name}`; await page.getByLabel('页面名称',{exact:true}).fill(name);
  await page.getByLabel(/^访问路径/).fill(`/pages/b5-wizard-${info.project.name}`);
  await page.getByRole('tab',{name:'页面内容',exact:true}).click();
- const title=page.locator('.studio-workspace-content [contenteditable="true"]').first();await title.fill(name);
+ const title=page.locator('.studio-workspace-content [contenteditable="true"]').first();await title.fill(name);await expect(page.locator('.studio-visual-preview iframe')).toHaveCount(1);
  const created=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/api/v4/studio/pages');
  await page.getByRole('button',{name:'保存草稿',exact:true}).focus();await page.keyboard.press('Enter');expect((await created).status()).toBe(200);
  await expect(page).not.toHaveURL(/entryId=create/); await expect(workspace(page)).toHaveCount(1);await expect(page.locator('.studio-visual-preview iframe')).toHaveCount(1);
- await page.reload();await expect(page.getByRole('heading',{name,exact:true})).toBeVisible();await expect(page.frameLocator('.studio-visual-preview iframe').locator('[data-section-type]').first()).toBeVisible();
- await page.getByRole('tab',{name:'页面内容',exact:true}).click();
+ await page.reload();await expect(page.getByRole('heading',{name,exact:true})).toBeVisible();await showCanvas(page,info);await expect(page.frameLocator('.studio-visual-preview iframe').locator('[data-section-type]').first()).toBeVisible();
+ await showProperties(page,info);await page.getByRole('tab',{name:'页面内容',exact:true}).click();
  const draftTitle=page.locator('.studio-workspace-content [contenteditable="true"]').first();await draftTitle.fill(name+' local draft');
  const frame=await page.locator('.studio-visual-preview iframe').elementHandle();
  for(const tab of ['页面信息','区块','页面内容']){await page.getByRole('tab',{name:tab,exact:true}).click();expect(await frame.evaluate(el=>el.isConnected)).toBe(true);await expect(page.locator('.studio-visual-preview iframe')).toHaveCount(1);}
@@ -173,7 +179,7 @@ test('media and Entry pickers keep the same local draft and canvas across tabs',
  await reference.locator('.cms-select-trigger').first().click();await page.getByRole('option').filter({hasText:fixture.productTitle}).click();await expect(reference.locator('.cms-select-trigger').first()).toContainText(fixture.productTitle);
  for(const tab of ['页面信息','区块','页面内容']){await page.getByRole('tab',{name:tab,exact:true}).click();expect(await frame.evaluate(el=>el.isConnected)).toBe(true);await expect(page.locator('.studio-visual-preview iframe')).toHaveCount(1);}
  await expect(title).toHaveText(name);await expect(media).toContainText('B4 own image.png');await expect(reference.locator('.cms-select-trigger').first()).toContainText(fixture.productTitle);expect(writes).toHaveLength(0);
- const saved=page.waitForResponse(r=>r.request().method()==='PUT'&&new URL(r.url()).pathname.endsWith('/entry/update'));await page.getByRole('button',{name:'保存草稿',exact:true}).click();expect((await saved).status()).toBe(200);
+ const saved=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.includes('/studio/entries/'));await page.getByRole('button',{name:'保存草稿',exact:true}).click();expect((await saved).status()).toBe(200);
  expect(await page.evaluate(async({fixture,ownMediaId})=>{const saved=await window.bcms.sdk.entry.get({templateId:fixture.id.templateId,entryId:fixture.id.entryId,skipCache:true});const props=saved.meta.find(m=>m.lng===fixture.id.language).props;return props.find(p=>p.id===fixture.mediaProp).data[0]._id===ownMediaId&&props.find(p=>p.id===fixture.referenceProp).data[0].eid===fixture.productId;},{fixture,ownMediaId:process.env.STOREFRONT_E2E_OWN_MEDIA})).toBe(true);
  await page.reload();await expect(title).toHaveText(name);await expect(media).toContainText('B4 own image.png');await expect(reference.locator('.cms-select-trigger').first()).toContainText(fixture.productTitle);
  await page.goto('/d/studio');await page.getByRole('button',{name:'编辑首页',exact:false}).click();await expect(media).toContainText('B4 own image.png');await media.locator('button').first().click();await expect(dialog.locator('.cms-modal-panel')).toBeVisible();
@@ -195,7 +201,7 @@ test('historical unbound media picker keeps workspace choices with and without a
 test('bound default-workspace media picker accepts an authorized unbound legacy file',async({page,installation},info)=>{
  const fixture=await page.evaluate(async()=>{const sdk=window.bcms.sdk;const selection={workspaceId:'default'};const site=await sdk.send({url:'/api/v4/workspaces/current/sites',method:'POST',data:{name:'B5 legacy media site'},selectorOverride:selection});const chosen={...selection,siteId:site._id};await sdk.send({url:'/api/v4/presets/import',method:'POST',data:{presetId:'aeroframe',siteName:'B5 legacy media site',includeDemo:true},selectorOverride:chosen});const upload=await sdk.send({url:'/api/v4/media/request/upload-token',selectorOverride:selection});const form=new FormData();form.append('file',new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='),c=>c.charCodeAt(0))],{type:'image/png'}),'B5 legacy unbound.png');const response=await fetch(`/api/v4/media/create/file?token=${upload.token}`,{method:'POST',body:form});const media=(await response.json()).item;const state=await sdk.send({url:'/api/v4/studio/site',selectorOverride:chosen});const model=state.models.find(m=>m.key==='content-page');return {selection:chosen,templateId:model.templateId,entryId:model.entries[0].id,language:state.site.language,mediaId:media._id,unbound:!media.siteId};});expect(fixture.unbound).toBe(true);
  const destination='/d/studio?'+new URLSearchParams({section:'content',templateId:fixture.templateId,entryId:fixture.entryId,language:fixture.language,field:'title'});const changed=page.waitForURL(url=>url.pathname==='/d/studio'&&url.searchParams.get('entryId')===fixture.entryId);await page.evaluate(({fixture,destination})=>{void window.bcms.sdk.selectContext(fixture.selection,destination);},{fixture,destination});await changed;
- const title=page.locator('#studio-field-title');await expect(title).toBeFocused();await title.fill(`B5 legacy picker ${info.project.name}`);const media=page.locator('[data-bcms-prop-input-wrapper]').filter({hasText:'Cover'}).first();await media.locator('button').first().click();const dialog=page.getByRole('dialog',{name:'媒体选择器',exact:true});await expect(dialog.locator('.cms-modal-panel')).toBeVisible();await dialog.locator('[bcms-media-data]').filter({has:page.locator('img[alt="B5 legacy unbound.png"]')}).first().locator('..').click();await dialog.getByRole('button',{name:'完成',exact:true}).click();const saved=page.waitForResponse(r=>r.request().method()==='PUT'&&new URL(r.url()).pathname.endsWith('/entry/update'));await page.getByRole('button',{name:'保存草稿',exact:true}).click();expect((await saved).status()).toBe(200);await page.reload();await expect(media).toContainText('B5 legacy unbound.png');
+ const title=page.locator('#studio-field-title');await expect(title).toBeFocused();await title.fill(`B5 legacy picker ${info.project.name}`);const media=page.locator('[data-bcms-prop-input-wrapper]').filter({hasText:'Cover'}).first();await media.locator('button').first().click();const dialog=page.getByRole('dialog',{name:'媒体选择器',exact:true});await expect(dialog.locator('.cms-modal-panel')).toBeVisible();await dialog.locator('[bcms-media-data]').filter({has:page.locator('img[alt="B5 legacy unbound.png"]')}).first().locator('..').click();await dialog.getByRole('button',{name:'完成',exact:true}).click();const saved=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.includes('/studio/entries/'));await page.getByRole('button',{name:'保存草稿',exact:true}).click();expect((await saved).status()).toBe(200);await page.reload();await expect(media).toContainText('B5 legacy unbound.png');
 });
 
 test('sidebar navigation, forward history and legacy create retain the authorized workspace',async({page,installation},info)=>{
@@ -220,10 +226,10 @@ test('an existing entry with no selected translation remains read-only',async({p
  const id=await identity(page);const code=info.project.name==='desktop'?'fr':'de';
  await page.evaluate(async code=>{const sdk=window.bcms.sdk;if(!(await sdk.language.getAll()).some(l=>l.code===code))await sdk.language.create({code,name:code,nativeName:code});},code);
  await page.goto('/d/studio?'+new URLSearchParams({section:'content',...id,language:code,field:'title'}));
- await expect(workspace(page)).toHaveCount(1);await expect(page.getByText('当前内容没有此语言版本，请选择已有的内容语言。',{exact:true})).toBeVisible();
+ await expect(workspace(page)).toHaveCount(1);await expect(page.getByText(/当前内容没有此语言版本/)).toBeVisible();
  await expect(page.getByRole('button',{name:'保存草稿',exact:true})).toBeDisabled();
  expect(await page.locator('#studio-field-title').evaluate(el=>Boolean(el.closest('[inert]')))).toBe(true);
- await page.getByLabel('内容语言',{exact:true}).selectOption(id.language);await expect(page.getByText('当前内容没有此语言版本，请选择已有的内容语言。',{exact:true})).toHaveCount(0);
+ await page.getByLabel('内容语言',{exact:true}).selectOption(id.language);await expect(page.getByText(/当前内容没有此语言版本/)).toHaveCount(0);
 });
 
 test('full page content rejects nested foreign workspace and site resources while current-site references succeed',async({page,installation})=>{

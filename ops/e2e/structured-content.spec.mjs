@@ -196,7 +196,7 @@ test('Studio structured rich field saves empty body and rejects stale versions w
                                             {
                                                 type: 'link',
                                                 attrs: {
-                                                    href: '/contact',
+                                                    href: '/',
                                                     target: '_self',
                                                 },
                                             },
@@ -389,7 +389,7 @@ async function structuredFixture(page) {
                                     {
                                         type: 'link',
                                         attrs: {
-                                            href: '/contact',
+                                            href: '/',
                                             target: '_self',
                                         },
                                     },
@@ -758,6 +758,9 @@ test('one workspace edits rich marks, links, lists, arrays and widget, retains m
             focused: document.activeElement === el,
         })),
     ).toEqual(selectionBefore);
+    await page.getByRole('button', { name: '核对服务器版本', exact: true }).click();
+    await page.getByRole('button', { name: '保留本地修改并采用此版本', exact: true }).click();
+    await page.evaluate(async id => { const sdk=window.bcms.sdk;const e=await sdk.entry.get({templateId:id.templateId,entryId:id.entryId,skipCache:true});await sdk.entry.update({_id:e._id,templateId:e.templateId,expectedUpdatedAt:e.updatedAt,lng:id.language,meta:e.meta.find(m=>m.lng===id.language),content:e.content.find(m=>m.lng===id.language)}); }, id);
     let releaseConflict;
     const heldConflict = new Promise((resolve) => {
         releaseConflict = resolve;
@@ -794,7 +797,7 @@ test('one workspace edits rich marks, links, lists, arrays and widget, retains m
     expect((await delayedResponse).status()).toBe(409);
     await expect(
         page.getByRole('button', { name: '保存草稿', exact: true }),
-    ).toBeEnabled();
+    ).toBeDisabled();
     await expect(shellFocus).toBeFocused();
     await page.screenshot({
         path: info.outputPath('structured-workspace.png'),
@@ -858,7 +861,7 @@ test('declared section rich text edits nodes in place, saves and reloads in the 
             r.url().includes('/studio/pages/'),
     );
     await page
-        .getByRole('button', { name: '保存页面设置', exact: true })
+        .getByRole('button', { name: '保存草稿', exact: true })
         .click();
     expect((await saved).status()).toBe(200);
     await page.reload();

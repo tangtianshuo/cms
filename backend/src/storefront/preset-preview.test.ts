@@ -196,3 +196,29 @@ test('legacy renderers receive established section names from canonical editor c
         entry: entry('home', { title: ['Home'], slug: ['home'], headline: ['Hello'] }), ...options, media });
     assert.deepEqual(result.sections, ['hero', 'feature']);
 });
+
+test('declared body projects mapped content plus default body, respecting explicit and empty overrides', () => {
+    const site = contractInstallation();
+    const preset = JSON.parse(site.presetManifestSnapshot!);
+    preset.editor.pages.push({ pageKey:'content', modelKey:'content-page', pathRule:{ type:'pattern',value:'/pages/:slug' }, sections:['story'], allowNavigation:true });
+    preset.editor.sections.push({ type:'story',label:'Story',allowedPages:['content'],singleton:true,required:true,props:{ body:{control:'rich-text'} } });
+    site.presetManifestSnapshot=JSON.stringify(preset);
+    const page=site.pages.find(page=>page.key==='content')!; page.sections=['story'];page.sectionConfigs=[{type:'story' as any,enabled:true,data:{}}];
+    const nodes=(text:string)=>[{type:'paragraph' as const,content:[{type:'text' as const,text,marks:[{type:'bold' as const}]}]}];
+    const source=entry('content-page',{title:['About'],slug:['about'],body:[{nodes:nodes('Mapped')}]});
+    source.content=[{lng:'en',nodes:nodes('Default body') as any,plainText:''}];
+    const project=()=>previewPresetPage({ site,pageKey:'content',entry:source,language:'en',...options });
+    assert.deepEqual((project().sectionConfigs![0].data.body as any).nodes,[...nodes('Mapped'),...nodes('Default body')]);
+    page.sectionConfigs![0].data.body={nodes:nodes('Override')};
+    assert.deepEqual((project().sectionConfigs![0].data.body as any).nodes,[...nodes('Override'),...nodes('Default body')]);
+    page.sectionConfigs![0].data.body='';
+    assert.deepEqual((project().sectionConfigs![0].data.body as any).nodes,nodes('Default body'));
+    const mediaLink={type:'link',attrs:{href:'media:hero@*_@*_:media',target:'_self'}};
+    source.content=[{lng:'en',nodes:[{type:'widget',attrs:{data:{props:[{id:'nested',data:[{nodes:[{type:'paragraph',content:[{type:'text',text:'Nested media',marks:[mediaLink]}]}]}]}]}}}] as any,plainText:''}];
+    const nested=previewPresetPage({site,pageKey:'content',entry:source,language:'en',...options,media:contractMedia});
+    assert.equal((nested.sectionConfigs![0].data.body as any).nodes[0].attrs.data.props[0].data[0].nodes[0].content[0].marks[0].attrs.href,'http://cms.local/api/v4/media/hero/bin/image?cap=private-capability');
+    assert.equal(mediaLink.attrs.href,'media:hero@*_@*_:media');
+    source.content=[];
+    preset.editor.sections[1].props={};site.presetManifestSnapshot=JSON.stringify(preset);delete page.sectionConfigs![0].data.body;
+    assert.equal(project().sectionConfigs![0].data.body,undefined);
+});

@@ -70,6 +70,7 @@ export class RP {
 
     static createJwtCheck(
         roles?: UserRoleName[],
+        options: { readOnlyPost?: true } = {},
     ): ControllerMethodPreRequestHandler<RPJwtCheckResult> {
         return async (data) => {
             const token = this.jwt.verify(data.errorHandler, data.request.headers.authorization || (data.request.query as any).at, roles);
@@ -77,7 +78,7 @@ export class RP {
             // SUDO is a persisted instance role, never a token-only elevation.
             const allowedRoles = [...(roles || ['USER']), 'ADMIN', 'SUDO'];
             if (!user || !user.roles.some(role => allowedRoles.includes(role.name))) throw data.errorHandler(HttpStatus.Forbidden, 'User access revoked');
-            return { token, ...await verifyRequestWorkspace(data, { userId: user._id, roles: user.roles.map(role => role.name) }, user.customPool.policy) };
+            return { token, ...await verifyRequestWorkspace(data, { userId: user._id, roles: user.roles.map(role => role.name) }, user.customPool.policy, options) };
         };
     }
 
@@ -90,9 +91,9 @@ export class RP {
         };
     }
 
-    static createSiteCapabilityCheck(capability: SiteCapability): ControllerMethodPreRequestHandler<RPJwtCheckResult> {
+    static createSiteCapabilityCheck(capability: SiteCapability, options: { readOnlyPost?: true } = {}): ControllerMethodPreRequestHandler<RPJwtCheckResult> {
         return async (data) => {
-            const result = await this.createJwtCheck(['USER'])(data);
+            const result = await this.createJwtCheck(['USER'], options)(data);
             const context = (result as RPJwtCheckResult & { [verifiedWorkspace]: WorkspaceContext })[verifiedWorkspace];
             if (!hasSiteCapability(context, capability)) throw data.errorHandler(HttpStatus.Forbidden, `Site capability required: ${capability}`);
             return result;

@@ -51,6 +51,8 @@ export interface SiteInstallation extends MongoDBEntry {
 }
 
 export interface SitePage {
+    /** Internal CAS receipt; omitted from all editable and public page projections. */
+    creationReceipt?: { expectedUpdatedAt: number; siteUpdatedAt: number };
     key: string;
     title: string;
     path: string;
@@ -143,6 +145,7 @@ export const SiteInstallationSchema: ObjectSchema = {
         __child: {
             __type: 'object',
             __content: {
+                creationReceipt: { __type: 'object', __required: false, __child: { expectedUpdatedAt: { __type: 'number', __required: true }, siteUpdatedAt: { __type: 'number', __required: true } } },
                 key: { __type: 'string', __required: true },
                 title: { __type: 'string', __required: true },
                 path: { __type: 'string', __required: true },

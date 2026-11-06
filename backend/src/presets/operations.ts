@@ -55,7 +55,7 @@ export function normalizeSiteOperations(input: Partial<SiteOperations> | undefin
     const seoDescription = typeof value.seoDescription === 'string' ? value.seoDescription.trim() : '';
     if (seoTitle.length > 120 || seoDescription.length > 320) throw new Error('SEO title or description is too long');
     const media = (candidate: unknown, label: string): MediaRef | undefined => {
-        if (candidate === undefined) return undefined;
+        if (candidate === undefined || candidate === null) return undefined;
         if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate) || typeof (candidate as MediaRef)._id !== 'string' || !(candidate as MediaRef)._id.trim()) {
             throw new Error(`Invalid ${label} media reference`);
         }
@@ -67,6 +67,8 @@ export function normalizeSiteOperations(input: Partial<SiteOperations> | undefin
     if (analyticsId && !/^[A-Za-z0-9_-]{1,100}$/.test(analyticsId)) throw new Error('Invalid analytics ID');
     const requestedContact = value.contactFormEnabled === true;
     if (requestedContact && !options.contactDeliveryConfigured) throw new Error('Contact form delivery is not configured');
-    return { seoTitle, seoDescription, socialImage: media(value.socialImage, 'Social image'), favicon: media(value.favicon, 'Favicon'),
+    const socialImage = media(value.socialImage, 'Social image');
+    const favicon = media(value.favicon, 'Favicon');
+    return { seoTitle, seoDescription, ...(socialImage ? { socialImage } : {}), ...(favicon ? { favicon } : {}),
         ...(analyticsId ? { analyticsId } : {}), contactFormEnabled: requestedContact };
 }

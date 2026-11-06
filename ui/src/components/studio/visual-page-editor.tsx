@@ -36,7 +36,9 @@ export const VisualPageEditor = defineComponent({
         disabled: Boolean,
     },
     emits: ['update:modelValue', 'update:navigation', 'update:seoTitle', 'update:seoDescription', 'select', 'validation', 'update:panel'],
-    setup(props, { emit, slots }) {
+    setup(props, { emit, slots, expose }) {
+        const surface = ref<'properties' | 'canvas'>('properties');
+        expose({ showProperties: () => { surface.value = 'properties'; } });
         const localSelectedNodeId = ref(props.selectedNodeId || props.modelValue.root[0]?.id || '');
         const previewFrame = ref<HTMLIFrameElement>();
         const previewReady = ref(false);
@@ -94,7 +96,8 @@ export const VisualPageEditor = defineComponent({
             const type = typeof node.type === 'string' ? node.type : '';
             return props.sectionLabels[type] || (type ? '不支持的区块类型' : '未配置区块类型');
         };
-        return () => <section class="studio-visual-page-editor" aria-label="可视化页面编辑器">
+        return () => <section class={["studio-visual-page-editor", `studio-surface-${surface.value}`]} aria-label="可视化页面编辑器">
+            <div class="studio-mobile-surfaces" role="tablist" aria-label="工作区面板"><button type="button" role="tab" aria-selected={surface.value === 'properties'} onClick={() => { surface.value = 'properties'; }}>编辑内容</button><button type="button" role="tab" aria-selected={surface.value === 'canvas'} onClick={() => { surface.value = 'canvas'; }}>查看画布</button></div>
             <aside class="studio-visual-sidebar studio-visual-sidebar--left">
                 <div class="studio-visual-panel-heading"><h3>页面</h3><span>当前页面</span></div>
                 <div class="studio-visual-page-tree" aria-label="当前页面"><strong>{props.pageTitle || '未命名页面'}</strong><small>{props.pagePath || '/'}</small></div>

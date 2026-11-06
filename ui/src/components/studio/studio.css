@@ -287,3 +287,17 @@
 .studio-workspace-content .cms-entry-editor { min-width: 0; }
 @media (max-width: 1100px) { .studio-content-workspace .studio-visual-page-editor { grid-template-columns: 180px minmax(0, 1fr); } .studio-content-workspace .studio-visual-sidebar--right { grid-column: 1 / -1; } }
 @media (max-width: 767px) { .studio-content-workspace .studio-visual-page-editor { grid-template-columns: minmax(0, 1fr); } .studio-content-workspace .studio-visual-sidebar--right { grid-column: auto; } }
+
+.studio-mobile-surfaces { display: none; }
+@media (max-width: 767px) {
+  .studio-mobile-surfaces { display: flex; gap: 8px; padding: 12px; }
+  .studio-mobile-surfaces button { min-height: 44px; flex: 1; }
+  .studio-surface-properties .studio-visual-preview { display: none; }
+  .studio-surface-canvas .studio-visual-sidebar { display: none; }
+}
+
+.studio-unbound .studio-mobile-surfaces { display: none; }
+.studio-unbound .studio-visual-preview { display: block; min-height: 0; }
+.studio-unbound .studio-visual-preview-placeholder { min-height: 120px; }
+.studio-content-workspace .studio-card table { width: 100%; table-layout: fixed; overflow-wrap: anywhere; }
+.studio-content-workspace .studio-card td, .studio-content-workspace .studio-card th { padding: 8px; vertical-align: top; text-align: left; }

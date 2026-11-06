@@ -95,6 +95,9 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                 if (ownerWorkspace(site) !== workspaceId() || (workspaceContext()?.siteId && workspaceContext()?.siteId !== site._id)) throw new Error('Site access denied');
                 const draft = installationDraft(site);
                 const updatedAt = Math.max(Date.now(), expectedUpdatedAt + 1);
+                for (const page of draft.pages) {
+                    if (page.creationReceipt?.siteUpdatedAt === 0 && page.creationReceipt.expectedUpdatedAt === expectedUpdatedAt) page.creationReceipt.siteUpdatedAt = updatedAt;
+                }
                 const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id, updatedAt: expectedUpdatedAt }, {
                     $set: { ...draft, updatedAt },
                 });
