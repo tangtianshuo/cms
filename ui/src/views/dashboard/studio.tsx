@@ -235,6 +235,8 @@ export const StudioView = defineComponent({
         }
         async function savePage(event: Event) {
             event.preventDefault();
+            const form = event.currentTarget;
+            if (!(form instanceof HTMLFormElement)) return;
             const page = pageEditor.value; const installed = site.value;
             if (!page || !installed) return;
             const nodes = (page.layoutDocument as any)?.root || [];
@@ -244,6 +246,7 @@ export const StudioView = defineComponent({
                 return message ? [{ id, nodeId: node.id, message: `${field.label}：${message}` }] : [];
             }) : []);
             if (sectionErrors.value.length) { await nextTick(); sectionErrorSummary.value?.focus(); return; }
+            if (!form.reportValidity()) return;
             const bindingChanged = page.entryId !== JSON.parse(original.value).page?.entryId;
             if (bindingChanged && entryDirty.value) { error.value = '请先保存页面内容，再修改绑定内容。'; return; }
             const settingsDraft = JSON.parse(JSON.stringify(settings.value));
@@ -307,7 +310,7 @@ export const StudioView = defineComponent({
             const editorConfigs = page.sectionConfigs || page.sections.map(legacyConfig);
             const useSectionEditor = canUseSectionEditor(effectiveOptions);
             const visualLayout = page.layoutDocument || { version: 1 as const, mode: 'template' as const, root: editorConfigs.map((section: any, index: number) => ({ id: `section-${section.type}-${index + 1}`, kind: 'section' as const, type: section.type, enabled: section.enabled, props: section.data, children: [] })) };
-            return <form id="studio-page-form" class="studio-card studio-editor" onSubmit={savePage}><div v-show={sectionErrors.value.length > 0} ref={sectionErrorSummary} class="studio-section-error-summary" tabindex={-1} role="alert" aria-labelledby="section-errors-title"><h3 id="section-errors-title">请检查以下内容后保存</h3><ul>{sectionErrors.value.map(item => <li><a href={`#${item.id}`} onClick={async event => { event.preventDefault(); selectedSection.value = item.nodeId; await nextTick(); document.getElementById(item.id)?.focus(); }}>{item.message}</a></li>)}</ul></div><div class="studio-card-heading"><h2>页面资料</h2><span class="studio-badge muted">页面草稿</span></div><fieldset disabled={busy.value}>
+            return <form id="studio-page-form" class="studio-card studio-editor" novalidate onSubmit={savePage}><div v-show={sectionErrors.value.length > 0} ref={sectionErrorSummary} class="studio-section-error-summary" tabindex={-1} role="alert" aria-labelledby="section-errors-title"><h3 id="section-errors-title">请检查以下内容后保存</h3><ul>{sectionErrors.value.map(item => <li><a href={`#${item.id}`} onClick={async event => { event.preventDefault(); selectedSection.value = item.nodeId; await nextTick(); document.getElementById(item.id)?.focus(); }}>{item.message}</a></li>)}</ul></div><div class="studio-card-heading"><h2>页面资料</h2><span class="studio-badge muted">页面草稿</span></div><fieldset disabled={busy.value}>
                 <div class="studio-fields"><label>页面名称<input disabled={!site.value?.canManage} required maxlength={120} v-model={page.title} /></label><label>访问路径<input disabled={!site.value?.canManage} required v-model={page.path} readonly={page.layout === 'home' || (!page.blueprintKey && page.path.includes(':'))} /><span class="studio-help">{page.layout === 'home' ? '首页路径固定为 /。' : !page.blueprintKey && page.path.includes(':') ? '动态详情页路径由模板固定。' : '使用小写字母、数字、连字符组成的唯一路径，例如 /about-us。'}</span></label><label>SEO 标题<input disabled={!site.value?.canManage} maxlength={120} v-model={page.seoTitle} /></label><label>SEO 描述<textarea disabled={!site.value?.canManage} maxlength={320} rows={3} v-model={page.seoDescription} /></label>
                     {canBind && <label>绑定内容<select disabled={entryDirty.value || !site.value?.canManage} v-model={page.entryId}><option value="">{page.blueprintKey ? '请选择内容' : '使用默认主页内容'}</option>{state.value.models.find(model => model.key === page.modelKey)?.entries.map(entry => <option value={entry.id}>{entryTitle(entry)}</option>)}</select>{entryDirty.value && <span class="studio-help">保存页面内容后可更换绑定。</span>}</label>}
                     {useSectionEditor ? <SectionEditor modelValue={editorConfigs as any} allowed={sectionAllowed as any} required={requiredSections as any} labels={effectiveOptions.labels} media={siteImages.value} onUpload={canUpload.value ? uploadMedia : undefined} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.sectionConfigs = value; page.sections = value.map((section: any) => section.type); overlayPagePreview(page); }} /> :

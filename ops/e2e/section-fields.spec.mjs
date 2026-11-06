@@ -167,3 +167,74 @@ test('collection number constraints keep a valid draft and the real heading canv
     await page.getByLabel('标题', { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath('collection-controls.png'), mask: [page.getByText(process.env.STOREFRONT_E2E_EMAIL, { exact: false })] });
 });
+
+for (const hidden of [false, true]) {
+    test(`invalid number save focuses linked summary with the field ${hidden ? 'hidden after section selection' : 'visible'}`, async ({ page }, info) => {
+        await page.goto('/d/studio?section=pages&pageKey=collections', { waitUntil: 'domcontentloaded' });
+        await page.locator('.studio-visual-node-button').filter({ hasText: '商品列表' }).click();
+        const count = page.getByLabel('每行数量', { exact: true });
+        const frame = page.frameLocator('.studio-visual-preview iframe');
+        await expect(frame.locator('[data-section-type="heading"]')).toBeVisible();
+        const before = await page.evaluate(async () => {
+            const site = (await window.bcms.sdk.studio.getSite()).site;
+            return { updatedAt: site.updatedAt, layout: site.pages.find(page => page.key === 'collections').layoutDocument };
+        });
+        let saves = 0;
+        page.on('request', request => { if (new URL(request.url()).pathname === '/api/v4/studio/pages/collections' && request.method() === 'POST') saves++; });
+        await keyboardText(page, count, '0');
+        await expect(count).toHaveAttribute('aria-invalid', 'true');
+        if (hidden) {
+            await frame.locator('[data-section-type="heading"]').click();
+            await expect(count).toBeHidden();
+            await expect(page.getByLabel('标题', { exact: true })).toBeVisible();
+        }
+        const save = page.getByRole('button', { name: '保存页面设置', exact: true });
+        await save.focus(); await page.keyboard.press('Enter');
+        const summary = page.locator('.studio-section-error-summary');
+        await expect(summary).toBeFocused();
+        expect(saves).toBe(0);
+        const unchanged = await page.evaluate(async () => {
+            const site = (await window.bcms.sdk.studio.getSite()).site;
+            return { updatedAt: site.updatedAt, layout: site.pages.find(page => page.key === 'collections').layoutDocument };
+        });
+        expect(unchanged).toEqual(before);
+        await page.screenshot({ path: info.outputPath('invalid-number-summary.png'), mask: [page.getByText(process.env.STOREFRONT_E2E_EMAIL, { exact: false })] });
+        await summary.getByRole('link', { name: /每行数量/ }).click();
+        await expect(count).toBeVisible();
+        await expect(count).toBeFocused();
+        await expect(count).toHaveValue('0');
+        await expect(count).toHaveAttribute('aria-invalid', 'true');
+        const repaired = before.layout.root.find(node => node.type === 'grid').props.columns === 4 ? 5 : 4;
+        await keyboardText(page, count, String(repaired));
+        await expect(count).toHaveAttribute('aria-invalid', 'false');
+        await expect(summary).toBeHidden();
+        const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v4/studio/pages/collections' && response.request().method() === 'POST');
+        await save.focus(); await page.keyboard.press('Enter');
+        expect((await saved).status()).toBe(200);
+        expect(saves).toBe(1);
+        await page.reload();
+        await page.locator('.studio-visual-node-button').filter({ hasText: '商品列表' }).click();
+        await expect(count).toHaveValue(String(repaired));
+        await expect(frame.locator('[data-section-type="grid"]')).toHaveAttribute('style', `--catalog-columns: ${repaired};`);
+    });
+}
+
+test('controlled page validation retains native required metadata checks before persistence', async ({ page }) => {
+    await page.goto('/d/studio?section=pages&pageKey=collections', { waitUntil: 'domcontentloaded' });
+    const name = page.getByLabel('页面名称', { exact: true });
+    await expect(name).toBeVisible();
+    const originalName = await name.inputValue();
+    let saves = 0;
+    page.on('request', request => { if (new URL(request.url()).pathname === '/api/v4/studio/pages/collections' && request.method() === 'POST') saves++; });
+    await name.fill('');
+    await page.getByRole('button', { name: '保存页面设置', exact: true }).click();
+    await expect(name).toBeFocused();
+    expect(await name.evaluate(input => input.validity.valueMissing)).toBe(true);
+    expect(saves).toBe(0);
+    await expect(page.locator('.studio-section-error-summary')).toBeHidden();
+    await name.fill(`${originalName} repaired`);
+    const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v4/studio/pages/collections' && response.request().method() === 'POST');
+    await page.getByRole('button', { name: '保存页面设置', exact: true }).click();
+    expect((await saved).status()).toBe(200);
+    expect(saves).toBe(1);
+});
