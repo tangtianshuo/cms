@@ -5,6 +5,7 @@ import type { Media } from '../media/models/main';
 import { getPreset } from '../presets/catalog';
 import type { SiteInstallation } from '../presets/site-model';
 import { previewPresetPage } from './preset-preview';
+import type { SectionConfig } from './section-schema';
 
 function installation(): SiteInstallation {
     const preset = getPreset('market');
@@ -114,4 +115,71 @@ test('configured carousel, gallery and SEO media resolve to CMS URLs and preview
     ];
     const product = previewPresetPage({ site, pageKey: 'product', language: 'en', entry: entry('product', { title: ['Product'], slug: ['product'], price: [10] }), ...options, media });
     assert.deepEqual(product.sectionConfigs![0].data.images, [expected]);
+});
+
+function contractInstallation(): SiteInstallation {
+    const site = installation();
+    site.workspaceId = 'workspace';
+    const preset = structuredClone(getPreset('market')!);
+    preset.editor = {
+        schemaVersion: 1, models: [],
+        pages: [{ pageKey: 'home', modelKey: 'home', pathRule: { type: 'fixed', value: '/' }, allowNavigation: true, sections: ['hero'] }],
+        sections: [{ type: 'hero', label: 'Hero', allowedPages: ['home'], singleton: true, required: true, props: { image: { control: 'media' } } }],
+        operations: { canCreatePages: true, canEditNavigation: true, canPublish: true },
+    };
+    site.presetManifestSnapshot = JSON.stringify(preset);
+    const home = site.pages.find(page => page.key === 'home')!;
+    home.sections = ['hero'];
+    home.sectionConfigs = [{ type: 'hero' as SectionConfig['type'], enabled: true, data: { image: { _id: 'hero' } } }];
+    return site;
+}
+
+const contractMedia = [{ _id: 'hero', workspaceId: 'workspace', siteId: 'site', mimetype: 'image/png', accessToken: 'private-capability' }] as Media[];
+const contractEntry = entry('home', { title: ['Home'], slug: ['home'], headline: ['Hello'] });
+const contractPreview = (site: SiteInstallation, media = contractMedia) => previewPresetPage({ site, pageKey: 'home', language: 'en', entry: contractEntry, ...options, media });
+
+test('declared contract media resolves authorized capabilities and preserves winning layout, empty and disabled values', () => {
+    const site = contractInstallation();
+    const expected = 'http://cms.local/api/v4/media/hero/bin/image?cap=private-capability';
+    assert.equal(contractPreview(site).sectionConfigs![0].data.image, expected);
+    const home = site.pages.find(page => page.key === 'home')!;
+    home.layoutDocument = { version: 1, mode: 'template', root: [{ id: 'hero', kind: 'section', type: 'hero', enabled: true, props: { image: { _id: 'hero' } }, children: [] }] };
+    home.sectionConfigs![0].data.image = { _id: 'stale-config' };
+    const result = contractPreview(site);
+    assert.equal(result.sectionConfigs![0].data.image, expected);
+    assert.equal(result.layoutDocument!.root[0].props.image, expected);
+    assert.deepEqual(home.layoutDocument.root[0].props.image, { _id: 'hero' });
+    home.layoutDocument.root[0].props.image = '';
+    assert.equal(contractPreview(site).layoutDocument!.root[0].props.image, '');
+    home.layoutDocument.root[0].enabled = false;
+    home.layoutDocument.root[0].props.image = { _id: 'missing-disabled' };
+    assert.equal(contractPreview(site).layoutDocument!.root[0].enabled, false);
+});
+
+test('contract media fails closed for unavailable provenance and invalid references', () => {
+    for (const media of [[], [{ ...contractMedia[0], siteId: 'other' }], [{ ...contractMedia[0], workspaceId: 'other' }], [{ ...contractMedia[0], mimetype: 'text/plain' }], [{ ...contractMedia[0], siteId: undefined }]]) {
+        assert.throws(() => contractPreview(contractInstallation(), media), /media/i);
+    }
+    for (const value of [{ _id: 'unknown' }, { _id: '' }, { _id: 'hero', extra: true }, false, 'invalid-media-path']) {
+        const site = contractInstallation();
+        site.pages.find(page => page.key === 'home')!.sectionConfigs![0].data.image = value;
+        assert.throws(() => contractPreview(site), /media/i);
+    }
+});
+
+
+test('legacy public editor adapters retain carousel media capability resolution', () => {
+    const site = installation();
+    const preset = structuredClone(getPreset('market')!);
+    preset.editor = {
+        schemaVersion: 1, models: [],
+        pages: [{ pageKey: 'home', modelKey: 'home', pathRule: { type: 'fixed', value: '/' }, allowNavigation: true, sections: [] }],
+        sections: [], operations: { canCreatePages: true, canEditNavigation: true, canPublish: true },
+    };
+    site.presetManifestSnapshot = JSON.stringify(preset);
+    site.pages.find(page => page.key === 'home')!.sectionConfigs = [{ type: 'hero-carousel', enabled: true,
+        data: { slides: [{ image: { _id: 'hero' }, title: 'Legacy', order: 0 }] } }];
+    const result = contractPreview(site, [{ ...contractMedia[0], workspaceId: undefined }]);
+    assert.equal((result.sectionConfigs![0].data.slides as Array<{ image: string }>)[0].image,
+        'http://cms.local/api/v4/media/hero/bin/image?cap=private-capability');
 });

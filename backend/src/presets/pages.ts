@@ -195,10 +195,18 @@ export function updatePageDraft(
     if (pageContract?.pathRule?.type === 'fixed' && path !== pageContract.pathRule.value) {
         throw new Error('This page path is fixed');
     }
-    if (pageContract?.pathRule?.type === 'pattern' && !pathRuleMatches(pageContract.pathRule, path)) {
+    // Keep the untouched parameterized blueprint valid while concrete pages
+    // must satisfy its declared pattern.
+    const patternBlueprint = pageContract?.pathRule?.type === 'pattern' && !page.blueprintKey &&
+        path === page.path && path === pageContract.pathRule.value;
+    if (pageContract?.pathRule?.type === 'pattern' && !patternBlueprint && !pathRuleMatches(pageContract.pathRule, path)) {
         throw new Error('Invalid page path');
     }
     const customContentPage = Boolean(page.blueprintKey && page.layout === 'content-page');
+    // Only the installed product contract may occupy the reserved product prefix.
+    const contractProductPage = page.layout === 'product-detail' && page.modelKey === 'product' &&
+        pageContract?.pathRule?.type === 'pattern' && pageContract.pathRule.value === '/products/:slug' &&
+        pathRuleMatches(pageContract.pathRule, path);
     if (!customContentPage && (page.path === '/' || page.path.includes(':')) && !pageContract?.pathRule && path !== page.path) {
         throw new Error('This page path is fixed');
     }
@@ -206,11 +214,11 @@ export function updatePageDraft(
         if (path !== page.path) throw new Error('Invalid page path');
     }
     if (reservedPathSegments.has(path.split('/')[1]) &&
-        !(page.path === '/products/:slug' && path === page.path && !page.blueprintKey)) {
+        !(page.path === '/products/:slug' && path === page.path && !page.blueprintKey) && !contractProductPage) {
         throw new Error('Page path is reserved');
     }
     if (site.pages.some((other) => other.key !== key &&
-        !(customContentPage && other.key === page.blueprintKey && !other.blueprintKey && other.layout === 'content-page') &&
+        !((customContentPage || contractProductPage) && other.key === page.blueprintKey && !other.blueprintKey && other.layout === page.layout) &&
         (patternMatches(other.path, path) || patternMatches(path, other.path)))) {
         throw new Error('Page path conflicts with another blueprint');
     }

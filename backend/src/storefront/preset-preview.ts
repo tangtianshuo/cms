@@ -4,7 +4,8 @@ import { type PresetManifest } from '../presets/catalog';
 import { resolveInstalledPreset } from '../presets/installed';
 import { pageDraft } from '../presets/pages';
 import type { SiteInstallation } from '../presets/site-model';
-import { validateSectionMediaReferences, type SectionConfig } from './section-schema';
+import { mediaAuthorizedForSite, validateSectionMediaReferences, type SectionConfig } from './section-schema';
+import { sectionConfigsFromLayout, type LayoutDocument } from './layout-document';
 import type { SiteOperations } from '../presets/operations';
 
 export interface PresetPagePreview {
@@ -13,7 +14,7 @@ export interface PresetPagePreview {
     preset: Pick<PresetManifest, 'id' | 'version' | 'name' | 'description' | 'theme' | 'demo' | 'showcase'>;
     sections: string[];
     sectionConfigs?: SectionConfig[];
-    layoutDocument?: unknown;
+    layoutDocument?: LayoutDocument;
     seo: { title: string; description: string };
     operations?: SiteOperations & { socialImageUrl?: string; faviconUrl?: string };
 }
@@ -89,6 +90,35 @@ function resolvedSections(sections: SectionConfig[] | undefined, media: Media[],
     });
 }
 
+// Contract media controls use the same site authorization boundary as legacy
+// section media. Only declared controls are interpreted as media references.
+function resolvedContractProps(type: string, props: Record<string, unknown>, enabled: boolean,
+    manifest: PresetManifest, input: PresetPagePreviewInput): Record<string, unknown> {
+    const result = structuredClone(props);
+    const declared = manifest.editor?.sections.find(section => section.type === type)?.props || {};
+    for (const [key, schema] of Object.entries(declared)) {
+        if ((schema as { control?: string }).control !== 'media' || !(key in result)) continue;
+        const value = result[key];
+        if (typeof value === 'string') {
+            if (value && !/^(?:https?:\/\/|\/(?!\/))/.test(value)) throw new Error('Invalid contract media URL');
+            continue;
+        }
+        if (!value || typeof value !== 'object' || Array.isArray(value) ||
+            Object.keys(value).some(field => field !== '_id') ||
+            typeof (value as { _id?: unknown })._id !== 'string' || !(value as { _id: string })._id) {
+            throw new Error('Invalid contract media reference');
+        }
+        if (!enabled) continue;
+        const id = (value as { _id: string })._id;
+        const media = input.media.find(item => item._id === id);
+        if (!media || !mediaAuthorizedForSite(media, input.site, { requireSiteBinding: true })) {
+            throw new Error(`Contract media is not available for this site: ${id}`);
+        }
+        result[key] = mediaUrl(id, input.media, input.mediaOrigin);
+    }
+    return result;
+}
+
 function pointer(site: SiteInstallation, modelKey: string, entry: Entry | undefined,
     language: string, fieldKey: string, targetKey: string, relatedEntries: Entry[]): Entry | undefined {
     const value = fieldData(site, modelKey, entry, language, fieldKey)[0];
@@ -105,7 +135,9 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
     const manifest = resolveInstalledPreset(site);
     const page = pageDraft(site, input.pageKey);
     if (!page) throw new Error('Unknown preset page');
-    const contractPage = Boolean(manifest.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
+    const editorPage = manifest.editor?.pages.find(item => item.pageKey === (page.blueprintKey || page.key));
+    const contractPage = Boolean(editorPage && (editorPage.sections.length > 0 ||
+        manifest.editor?.sections.some(section => section.allowedPages.includes(editorPage.pageKey))));
     if (page.sectionConfigs && !contractPage) validateSectionMediaReferences(page.layout, page.sectionConfigs, {
         media: input.media, site,
         publishedPaths: new Set(site.pages.filter(item => item.enabled !== false && !item.path.includes(':')).map(item => item.path)),
@@ -181,13 +213,23 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
     const operations = site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false };
     const seoDescription = page.seoDescription || operations.seoDescription || (view === 'page'
         ? text(site, 'content-page', pageEntry, language, 'seoDescription') : '');
+    const layoutDocument = page.layoutDocument ? structuredClone(page.layoutDocument) as LayoutDocument : undefined;
+    if (contractPage && layoutDocument) {
+        layoutDocument.root = layoutDocument.root.map(node => ({ ...node,
+            props: resolvedContractProps(node.type, node.props, node.enabled, manifest, input) }));
+    }
+    const sectionConfigs = contractPage
+        ? layoutDocument ? sectionConfigsFromLayout(layoutDocument) as SectionConfig[]
+            : page.sectionConfigs?.map(section => ({ ...section,
+                data: resolvedContractProps(section.type, section.data, section.enabled, manifest, input) }))
+        : resolvedSections(page.sectionConfigs, input.media, input.mediaOrigin);
     return {
         kind: 'preset-page', view,
         preset: { id: manifest.id, version: manifest.version, name: site.name, description: '',
             theme: site.theme, demo, showcase: manifest.showcase ? structuredClone(manifest.showcase) : undefined },
         sections: page.sections,
-        sectionConfigs: resolvedSections(page.sectionConfigs, input.media, input.mediaOrigin),
-        ...(page.layoutDocument ? { layoutDocument: structuredClone(page.layoutDocument) } : {}),
+        sectionConfigs,
+        ...(layoutDocument ? { layoutDocument } : {}),
         seo: { title: page.seoTitle || operations.seoTitle || (view === 'page' ? demo.page.title : site.name), description: seoDescription },
         operations: { ...structuredClone(operations), socialImageUrl: mediaUrl(operations.socialImage?._id, input.media, input.mediaOrigin), faviconUrl: mediaUrl(operations.favicon?._id, input.media, input.mediaOrigin) },
     };

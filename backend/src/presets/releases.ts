@@ -243,7 +243,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
             if (page.layout === 'collection-list' && !page.blueprintKey) {
                 content.preset.demo.collection = { title: page.title, description: '', image: '' };
             }
-            pages.push({ path, pageKey: page.key, entryId: entry._id, content, ...(page.layoutDocument ? { layoutDocument: page.layoutDocument } : {}) });
+            pages.push({ path, pageKey: page.key, entryId: entry._id, content, ...(content.layoutDocument ? { layoutDocument: content.layoutDocument } : {}) });
         }
     }
     const pageForEntry = (id: string) => pages.find((page) => page.entryId === id && page.path !== '/collections');
