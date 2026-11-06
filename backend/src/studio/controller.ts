@@ -11,7 +11,7 @@ import { assertStudioWrite, entryValues, fieldDescriptors, pageOperationIds, pat
 import { createStudioPage } from './page-create';
 import { normalizeNavigation, type NavigationNode } from '../presets/navigation';
 import { normalizeSiteOperations } from '../presets/operations';
-import { validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
+import { validateDeclaredSectionProperties, validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
 import { editorSchemaForSite } from '../template-contract/editor-schema';
 import { buildContentForm, validateContentValues } from '../content-editor/schema-form';
 
@@ -161,6 +161,14 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                     }
                 }
                 const updated = updatePageDraft(site, key, parsed.data, bound);
+                // Validate the normalized winning layout, never the duplicate client sectionConfigs.
+                const savedPage = pageDraft(updated, key)!;
+                const definitions = resolveInstalledPreset(site).editor?.sections || [];
+                if (savedPage.layoutDocument && definitions.length) {
+                    const media = await Repo.media.findAll();
+                    const references = (await Promise.all(site.models.map(model => Repo.entry.methods.findAllByTemplateId(model.templateId)))).flat().filter(entry => entry.siteId === site._id && canReadContent('Entry', entry));
+                    validateDeclaredSectionProperties((savedPage.layoutDocument as { root: Array<{ type: string; enabled: boolean; props: Record<string, unknown> }> }).root.map(node => ({ type: node.type, enabled: node.enabled, data: node.props })), definitions, { media, site, referenceIds: new Set(references.map(entry => entry._id)) });
+                }
                 if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) throw conflict();
                 return pageDraft(updated, key);
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Page save failed'); }

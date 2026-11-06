@@ -3,6 +3,38 @@ import type { StudioModel } from '../../sdk/handlers/studio';
 import type { StudioValue } from '@bcms/selfhosted-backend/studio/business';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 
+export const StudioMediaPicker = defineComponent({
+    props: {
+        fieldId: { type: String, required: true }, fieldKey: { type: String, required: true },
+        value: { type: Array as PropType<Array<{ _id: string; alt_text?: string; caption?: string }>>, required: true },
+        media: { type: Array as PropType<Media[]>, required: true }, multiple: Boolean, disabled: Boolean,
+        invalid: Boolean, describedBy: String,
+        onUpload: Function as PropType<() => void>,
+        onChange: { type: Function as PropType<(value: Array<{ _id: string; alt_text?: string; caption?: string }>) => void>, required: true },
+    },
+    setup(props) {
+        const picker = ref(''); const mediaFilter = ref(''); const sdk = window.bcms.sdk;
+        return () => { const value = props.value; return <div>
+                        <div class="studio-media-selection">{(Array.isArray(value) ? value : []).filter((item): item is { _id: string; alt_text?: string; caption?: string } => '_id' in item).map(item => {
+                            const media = props.media.find(media => media._id === item._id);
+                            return <div class="studio-selected-file"><span>{media?.name || item._id}</span><button type="button" disabled={props.disabled} aria-label={`移除 ${media?.name || item._id}`} onClick={() => props.onChange((value as Array<{ _id: string }>).filter(file => file._id !== item._id))}>移除</button></div>;
+                        })}</div>
+                        <button id={props.fieldId} aria-invalid={props.invalid} aria-describedby={props.describedBy} type="button" disabled={props.disabled} aria-expanded={picker.value === props.fieldKey} onClick={() => { picker.value = picker.value === props.fieldKey ? '' : props.fieldKey; }}>选择已有素材</button>
+                        {props.onUpload && <button type="button" disabled={props.disabled} class="studio-upload-button" onClick={() => { picker.value = props.fieldKey; props.onUpload?.(); }}>上传新图片</button>}
+                        {picker.value === props.fieldKey && <div class="studio-picker"><label for={`${props.fieldId}-filter`}>筛选图片</label><input id={`${props.fieldId}-filter`} value={mediaFilter.value} onInput={event => { mediaFilter.value = (event.target as HTMLInputElement).value; }} />
+                            {props.media.length === 0 && <p class="studio-help">没有可访问的图片。{props.onUpload ? '点击「上传新图片」添加，上传完成后即可在这里选择。' : '请联系管理员上传图片。'}</p>}
+                            <div class="studio-media-grid">{props.media.filter(media => media.name.toLowerCase().includes(mediaFilter.value.toLowerCase())).map(media => {
+                                const selected = Array.isArray(value) && value.some(item => '_id' in item && item._id === media._id);
+                                return <button type="button" disabled={props.disabled} class={{ selected }} aria-pressed={selected} onClick={() => {
+                                    const items = Array.isArray(value) ? value.filter(item => '_id' in item) as Array<{ _id: string }> : [];
+                                    props.onChange(selected ? items.filter(item => item._id !== media._id) : props.multiple ? [...items, { _id: media._id }] : [{ _id: media._id }]);
+                                    if (!props.multiple) picker.value = '';
+                                }}><img loading="lazy" src={`${sdk.config.apiOrigin}${sdk.media.toUri({ media })}`} alt={media.altText || media.name} /><span>{media.name}</span></button>;
+                            })}</div></div>}
+                    </div>; };
+    },
+});
+
 export const StudioFields = defineComponent({
     props: {
         model: { type: Object as PropType<StudioModel>, required: true },
@@ -14,9 +46,6 @@ export const StudioFields = defineComponent({
         onChange: { type: Function as PropType<(key: string, value: StudioValue) => void>, required: true },
     },
     setup(props) {
-        const picker = ref('');
-        const mediaFilter = ref('');
-        const sdk = window.bcms.sdk;
         return () => <div class="studio-fields">{props.model.fields.map(field => {
             const value = props.values[field.key];
             const editorField = props.model.editorFields?.find(item => item.key === field.key);
@@ -37,24 +66,7 @@ export const StudioFields = defineComponent({
                         {!field.array && <option value="">未选择</option>}
                         {props.models.filter(model => field.referenceTemplateIds.includes(model.templateId)).flatMap(model => model.entries.map(entry => <option value={entry.id} data-template={model.templateId}>{String((entry.fields.title as string[] | undefined)?.[0] || entry.id)}</option>))}
                     </select>
-                    : field.type === 'MEDIA' ? <div>
-                        <div class="studio-media-selection">{(Array.isArray(value) ? value : []).filter((item): item is { _id: string; alt_text?: string; caption?: string } => '_id' in item).map(item => {
-                            const media = props.media.find(media => media._id === item._id);
-                            return <div class="studio-selected-file"><span>{media?.name || item._id}</span><button type="button" disabled={props.disabled} aria-label={`移除 ${media?.name || item._id}`} onClick={() => props.onChange(field.key, (value as Array<{ _id: string }>).filter(file => file._id !== item._id))}>移除</button></div>;
-                        })}</div>
-                        <button id={fieldId} type="button" disabled={props.disabled} aria-expanded={picker.value === field.key} onClick={() => { picker.value = picker.value === field.key ? '' : field.key; }}>选择已有素材</button>
-                        {props.onUpload && <button type="button" disabled={props.disabled} class="studio-upload-button" onClick={() => { picker.value = field.key; props.onUpload?.(); }}>上传新图片</button>}
-                        {picker.value === field.key && <div class="studio-picker"><label for={`${fieldId}-filter`}>筛选图片</label><input id={`${fieldId}-filter`} value={mediaFilter.value} onInput={event => { mediaFilter.value = (event.target as HTMLInputElement).value; }} />
-                            {props.media.length === 0 && <p class="studio-help">没有可访问的图片。{props.onUpload ? '点击「上传新图片」添加，上传完成后即可在这里选择。' : '请联系管理员上传图片。'}</p>}
-                            <div class="studio-media-grid">{props.media.filter(media => media.name.toLowerCase().includes(mediaFilter.value.toLowerCase())).map(media => {
-                                const selected = Array.isArray(value) && value.some(item => '_id' in item && item._id === media._id);
-                                return <button type="button" disabled={props.disabled} class={{ selected }} aria-pressed={selected} onClick={() => {
-                                    const items = Array.isArray(value) ? value.filter(item => '_id' in item) as Array<{ _id: string }> : [];
-                                    props.onChange(field.key, selected ? items.filter(item => item._id !== media._id) : field.array ? [...items, { _id: media._id }] : [{ _id: media._id }]);
-                                    if (!field.array) picker.value = '';
-                                }}><img loading="lazy" src={`${sdk.config.apiOrigin}${sdk.media.toUri({ media })}`} alt={media.altText || media.name} /><span>{media.name}</span></button>;
-                            })}</div></div>}
-                    </div> : null}
+                    : field.type === 'MEDIA' ? <StudioMediaPicker fieldId={fieldId} fieldKey={field.key} value={(Array.isArray(value) ? value.filter(item => '_id' in item) : []) as Array<{ _id: string }>} media={props.media} multiple={field.array} disabled={props.disabled} onUpload={props.onUpload} onChange={items => props.onChange(field.key, items)} /> : null}
                 {field.type === 'RICH_TEXT' && props.isNew && <p class="studio-help">新正文按纯文本段落创建；保存后可在完整编辑器中排版。</p>}
                 {field.key === 'slug' && <p class="studio-help">使用小写英文、数字和短横线，例如 shipping-policy。</p>}
             </div>;

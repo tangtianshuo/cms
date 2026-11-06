@@ -8,7 +8,13 @@ export interface VisualNode {
 
 export interface MoveTarget { position: 'before' | 'after' | 'inside' | 'end'; targetId?: string }
 
-function clone<T>(value: T): T { return structuredClone(value); }
+// Layouts also arrive as Vue reactive proxies; traverse their JSON-shaped content
+// rather than passing a Proxy to structuredClone. Keep undefined, false and zero.
+function clone<T>(value: T): T {
+    if (Array.isArray(value)) return value.map(item => clone(item)) as T;
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clone(item)])) as T;
+    return value;
+}
 function hasNode(node: VisualNode, id: string): boolean { return node.id === id || node.children.some((child) => hasNode(child, id)); }
 
 function removeNode<T extends VisualNode>(nodes: T[], id: string): { nodes: T[]; removed?: T } {

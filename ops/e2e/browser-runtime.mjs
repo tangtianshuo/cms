@@ -1,6 +1,7 @@
 // Disposable current-source CMS + actual Preview source, for early local browser work.
 // This is intentionally not a PlatformLock, release deployment or published site.
 import { execFileSync } from 'node:child_process';
+import { localSectionBundles, provisionSectionSite } from './section-fixture.mjs';
 import { BrowserProcesses } from './browser-processes.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -157,6 +158,7 @@ try {
         JSON.stringify({ schemaVersion: 1, records: [] }),
         { mode: 0o600 },
     );
+    if (process.env.E2E_SECTION_TEMPLATES_ROOT) await localSectionBundles({ templatesRoot: path.resolve(process.env.E2E_SECTION_TEMPLATES_ROOT), runRoot, root });
     const previewChild = await start(
         'preview',
         process.execPath,
@@ -268,11 +270,13 @@ try {
         auth.accessToken,
         selector,
     );
+    const sectionEnvironment = process.env.E2E_SECTION_TEMPLATES_ROOT ? await provisionSectionSite({ templatesRoot: path.resolve(process.env.E2E_SECTION_TEMPLATES_ROOT), root, runRoot, db: mongo.db(database), site, workspace, api, token: auth.accessToken, selector, cms }) : {};
     const actual = (
         await api('/presets/site', undefined, auth.accessToken, selector)
     ).site;
     const testEnv = {
         ...process.env,
+        ...sectionEnvironment,
         STOREFRONT_E2E_CMS: cms,
         STOREFRONT_E2E_EMAIL: email,
         STOREFRONT_E2E_PASSWORD: password,
@@ -299,7 +303,7 @@ try {
                 database,
                 templateId: actual.presetId,
                 templateVersion: actual.presetVersion,
-                rendererRegistry: 'empty',
+                rendererRegistry: process.env.E2E_SECTION_TEMPLATES_ROOT ? 'actual-local-bundles-not-public' : 'empty',
                 overallB3Complete: false,
             },
             null,

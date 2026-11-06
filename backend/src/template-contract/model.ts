@@ -12,11 +12,16 @@ export interface TemplateEditorField {
     visibleWhen?: { field: string; equals: unknown };
 }
 
+export interface TemplateSectionProperty {
+    control: EditorControl; required?: boolean; label?: string; description?: string; default?: unknown; options?: string[];
+    visibleWhen?: { field: string; equals: unknown };
+}
+
 export interface TemplateEditorContract {
     schemaVersion: 1;
     models: Array<{ modelKey: string; fields: TemplateEditorField[] }>;
     pages: Array<{ pageKey: string; modelKey: string; pathRule: { type: 'fixed' | 'pattern'; value: string }; allowNavigation: boolean; sections: string[] }>;
-    sections: Array<{ type: string; label: string; description?: string; allowedPages: string[]; singleton: boolean; required: boolean; props: Record<string, { control: EditorControl; required?: boolean; description?: string; default?: unknown; options?: string[] }> }>;
+    sections: Array<{ type: string; label: string; description?: string; allowedPages: string[]; singleton: boolean; required: boolean; props: Record<string, TemplateSectionProperty> }>;
     operations: { canCreatePages: boolean; canEditNavigation: boolean; canPublish: boolean };
 }
 
@@ -66,6 +71,12 @@ export function validateTemplateContract(value: unknown, identity: { id: string;
     }
     for (const section of editor.sections) {
         if (!Array.isArray(section.allowedPages) || section.allowedPages.some((page) => !pageKeys.has(page)) || !section.props || typeof section.props !== 'object') throw new Error('Template editor section is invalid');
+        for (const prop of Object.values(section.props)) {
+            if (!prop || !['text', 'number', 'boolean', 'date', 'enum', 'media', 'reference', 'rich-text', 'array', 'widget'].includes(prop.control) ||
+                prop.label !== undefined && (typeof prop.label !== 'string' || !prop.label.trim()) ||
+                prop.visibleWhen !== undefined && (!prop.visibleWhen || typeof prop.visibleWhen.field !== 'string' || !(prop.visibleWhen.field in section.props) || !Object.prototype.hasOwnProperty.call(prop.visibleWhen, 'equals')) ||
+                prop.options !== undefined && (!Array.isArray(prop.options) || prop.options.some(option => typeof option !== 'string'))) throw new Error('Template section property is invalid');
+        }
     }
     for (const migration of compatibility.migrations) {
         if (!migration || migration.to !== `${identity.id}@${identity.version}` || typeof migration.from !== 'string' || !Array.isArray(migration.steps)) throw new Error('Template migration is invalid');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSectionConfigs, validateSectionConfigs, validateSectionMediaReferences, type SectionConfig } from './section-schema';
+import { validateDeclaredSectionProperties, normalizeSectionConfigs, validateSectionConfigs, validateSectionMediaReferences, type SectionConfig } from './section-schema';
 
 test('accepts an ordered hero carousel and preserves required home sections', () => {
     const sections: SectionConfig[] = [
@@ -50,4 +50,19 @@ test('carousel rejects executable and protocol-relative links', () => {
     for (const href of ['javascript:alert(1)', '//untrusted.invalid', 'data:text/html,test']) {
         assert.throws(() => validateSectionConfigs('home', [{ type: 'hero-carousel', enabled: true, data: { slides: [{ image: { _id: 'image' }, order: 0, cta: { href } }] } }]), /link/);
     }
+});
+
+test('declared properties validate finite scalars, required visible values and media ownership', () => {
+    const sections = [{ type: 'hero', label: '首页', allowedPages: ['home'], singleton: true, required: true, props: {
+        title: { control: 'text', required: true }, count: { control: 'number' }, showButton: { control: 'boolean' },
+        href: { control: 'text', required: true, visibleWhen: { field: 'showButton', equals: true } },
+        image: { control: 'media' }, date: { control: 'date' }, tone: { control: 'enum', options: ['light'] }, body: { control: 'rich-text' },
+    } }] as any;
+    const site = { _id: 'site-a', workspaceId: 'workspace-a' } as never;
+    const media = [{ _id: 'own', siteId: 'site-a', workspaceId: 'workspace-a', mimetype: 'image/png' }, { _id: 'foreign', siteId: 'site-b', workspaceId: 'workspace-a', mimetype: 'image/png' }] as never;
+    const valid = { title: '标题', count: 0, showButton: false, image: { _id: 'own' }, body: { content: [{ text: '结构化保留' }] } };
+    const validate = (props: Record<string, unknown>) => validateDeclaredSectionProperties([{ type: 'hero', enabled: true, data: props }], sections, { media, site });
+    assert.doesNotThrow(() => validate(valid));
+    for (const patch of [{ title: ' ' }, { count: Infinity }, { count: '1' }, { showButton: true }, { date: '2026-02-30' }, { tone: 'bad' }, { image: { _id: 'foreign' } }, { image: { _id: 'unknown' } }, { image: { _id: 'own', extra: true } }]) assert.throws(() => validate({ ...valid, ...patch }), /内容|数字|日期|选项|图片|title|count|href|image/);
+    assert.deepEqual(valid.body, { content: [{ text: '结构化保留' }] });
 });

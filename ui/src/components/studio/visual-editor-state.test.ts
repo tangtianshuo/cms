@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createVisualHistory, dirtyFingerprint, moveNavigationNode, moveNode, toggleNode, updateNodeProps } from './visual-editor-state';
+import { reactive } from 'vue';
+import { createVisualHistory, dirtyFingerprint, moveNavigationNode, moveNode, toggleNode, updateNodeProps, type VisualNode } from './visual-editor-state';
 
 const nodes = () => [
     { id: 'a', kind: 'section' as const, type: 'hero', enabled: true, props: { title: 'A' }, children: [] },
@@ -43,4 +44,15 @@ test('restores the previous layout after an edit and clears redo after a new edi
     assert.equal(history.value[0].enabled, false);
     history.apply((value) => updateNodeProps(value, 'a', { title: 'Changed' }));
     assert.throws(() => history.redo(), /redo/i);
+});
+
+test('edits and moves reactive array/object proxies without mutating source or complex props', () => {
+    const source: VisualNode[] = nodes();
+    source[0].props = { title: 'Before', body: { content: [{ text: 'preserved' }] } };
+    const proxy = reactive(source);
+    const updated = updateNodeProps(proxy, 'a', new Proxy({ title: 'After' }, {}));
+    assert.equal(updated[0].props?.title, 'After');
+    assert.equal(source[0].props.title, 'Before');
+    assert.deepEqual(updated[0].props?.body, { content: [{ text: 'preserved' }] });
+    assert.deepEqual(moveNode(proxy, 'a', { position: 'end' }).map(node => node.id), ['b', 'c', 'a']);
 });

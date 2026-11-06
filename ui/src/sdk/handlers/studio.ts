@@ -11,7 +11,7 @@ export interface StudioState {
     status?: string;
     site: null | { id: string; name: string; updatedAt: number; language: string; presetId: string; presetVersion: string; publicTemplate: boolean; canManage: boolean;
         theme: { background: string; foreground: string; accent: string; muted: string; font: string }; pages: PageDraft[];
-        editorContract?: unknown;
+        editorContract?: import('@bcms/selfhosted-backend/template-contract/model').TemplateEditorContract | null;
         navigation?: NavigationNode[];
         operations: SiteOperations;
         contactDeliveryConfigured?: boolean;

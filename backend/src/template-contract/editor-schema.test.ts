@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { PropType } from '../prop/models/main';
-import { editorSchemaForModel } from './editor-schema';
+import { editorSchemaForModel, editorSchemaForSection } from './editor-schema';
 
 test('editor schema uses template contract labels and controls while retaining model field shape', () => {
     const preset = {
@@ -13,4 +13,21 @@ test('editor schema uses template contract labels and controls while retaining m
         { key: 'title', label: 'Headline', control: 'rich-text', required: true, array: false, description: 'Shown above the fold' },
         { key: 'cover', label: 'Cover', control: 'media', required: false, array: false },
     ]);
+});
+
+
+test('section schema keeps defaults, visibility and complex controls while supplying legacy labels', () => {
+    const body = { content: [{ text: 'preserve formatting' }] };
+    const preset = { editor: { sections: [{ type: 'hero', props: {
+        title: { control: 'text', required: true }, showButton: { control: 'boolean', label: '显示按钮', default: false },
+        buttonHref: { control: 'text', description: '按钮链接', visibleWhen: { field: 'showButton', equals: true } },
+        body: { control: 'rich-text', default: body },
+    } }] } } as never;
+    const fields = editorSchemaForSection(preset, 'hero');
+    assert.equal(fields[0].label, '标题');
+    assert.equal(fields[1].default, false);
+    assert.deepEqual(fields[2].visibleWhen, { field: 'showButton', equals: true });
+    assert.deepEqual(fields[3].default, body);
+    assert.equal(fields[3].control, 'rich-text');
+    assert.deepEqual(editorSchemaForSection(preset, 'missing'), []);
 });

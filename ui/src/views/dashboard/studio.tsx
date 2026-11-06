@@ -17,6 +17,7 @@ import { settingsRequest } from '../../components/studio/settings-request';
 import { siteImageOptions } from '../../components/studio/media-options';
 import type { NavigationNode } from '../../components/studio/navigation-editor';
 import { SiteOperations } from '../../components/studio/site-operations';
+import { sectionFieldError, sectionFieldSupported, sectionFieldVisible, sectionPropertyFields } from '../../components/studio/section-property-state';
 import { VisualPageEditor } from '../../components/studio/visual-page-editor';
 import { PageCreateWizard, type PageBlueprintOption } from '../../components/studio/page-create-wizard';
 import { loadPreviewRuntime, resolvePreviewTarget, type PreviewRuntime } from '../../util/template-preview';
@@ -35,6 +36,10 @@ export const StudioView = defineComponent({
         const loading = ref(true);
         const busy = ref(false);
         const error = ref('');
+        const sectionInputErrors = ref<Record<string, string>>({});
+        const sectionErrors = ref<Array<{ id: string; nodeId: string; message: string }>>([]);
+        const sectionErrorSummary = ref<HTMLElement>();
+        const selectedSection = ref('');
         const notice = ref('');
         const mediaError = ref('');
         const modelKey = ref('product');
@@ -72,7 +77,7 @@ export const StudioView = defineComponent({
         const entryDirty = computed(() => Boolean(editor.value) && JSON.stringify(values.value) !== (original.value ? JSON.stringify(JSON.parse(original.value).values) : '{}'));
         const pageDirty = computed(() => Boolean(pageEditor.value) && JSON.stringify(pageEditor.value) !== (original.value ? JSON.stringify(JSON.parse(original.value).page) : undefined));
         const settingsDirty = computed(() => JSON.stringify(settings.value) !== settingsOriginal.value);
-        const dirty = computed(() => (Boolean(editor.value || pageEditor.value) && (snapshot() !== original.value || settingsDirty.value)) || (currentSection.value === 'settings' && settingsDirty.value));
+        const dirty = computed(() => Object.keys(sectionInputErrors.value).length > 0 || (Boolean(editor.value || pageEditor.value) && (snapshot() !== original.value || settingsDirty.value)) || (currentSection.value === 'settings' && settingsDirty.value));
         const pagePreviewTarget = computed(() => resolvePreviewTarget(previewPayload.value, {
             templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
             legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
@@ -112,14 +117,25 @@ export const StudioView = defineComponent({
         }
         function overlayPagePreview(page: PageDraft) {
             if (!previewPayload.value || typeof previewPayload.value !== 'object' || !Array.isArray((previewPayload.value as any).pages)) return;
-            const payload = structuredClone(previewPayload.value) as any;
+            const payload = JSON.parse(JSON.stringify(previewPayload.value)) as any;
             const target = payload.pages.find((item: any) => item.pageKey === page.key);
             if (!target?.content) return;
-            target.content.layoutDocument = page.layoutDocument;
-            target.content.sectionConfigs = page.sectionConfigs;
+            const previewLayout = page.layoutDocument ? JSON.parse(JSON.stringify(page.layoutDocument)) : undefined;
+            for (const node of previewLayout?.root || []) {
+                const declared = site.value?.editorContract?.sections.find(section => section.type === node.type)?.props || {};
+                for (const [key, field] of Object.entries(declared)) if (field.control === 'media' && node.props[key] && typeof node.props[key] === 'object' && '_id' in node.props[key]) {
+                    const image = siteImages.value.find(item => item._id === node.props[key]._id);
+                    if (!image) { previewError.value = '所选图片不可用于当前网站。'; return; }
+                    node.props[key] = `${sdk.config.apiOrigin}${sdk.media.toUri({ media: image })}`;
+                }
+            }
+            // The renderer intentionally gives the page-level layout precedence.
+            target.layoutDocument = previewLayout;
+            target.content.layoutDocument = previewLayout;
+            target.content.sectionConfigs = previewLayout?.root.map((node: any) => ({ type: node.type, enabled: node.enabled, data: node.props })) || page.sectionConfigs;
             target.content.sections = page.sections;
             target.content.seo = { ...(target.content.seo || {}), title: page.seoTitle, description: page.seoDescription };
-            payload.navigation = structuredClone(settings.value.navigation);
+            payload.navigation = JSON.parse(JSON.stringify(settings.value.navigation));
             previewPayload.value = payload;
         }
         async function refresh() {
@@ -191,6 +207,7 @@ export const StudioView = defineComponent({
         }
         watch(error, async message => { if (message) { await nextTick(); const summary = document.getElementById('studio-error-summary'); summary?.focus(); summary?.scrollIntoView({ block: 'center' }); } });
         watch(() => route.fullPath, () => { if (!loading.value) applyDeepLink(); });
+        watch(() => pageEditor.value?.key, () => { sectionInputErrors.value = {}; sectionErrors.value = []; selectedSection.value = ''; });
         async function saveEntry(event: Event) {
             event.preventDefault();
             const current = editor.value; const target = activeModel.value; const installed = site.value;
@@ -220,6 +237,13 @@ export const StudioView = defineComponent({
             event.preventDefault();
             const page = pageEditor.value; const installed = site.value;
             if (!page || !installed) return;
+            const nodes = (page.layoutDocument as any)?.root || [];
+            sectionErrors.value = nodes.flatMap((node: any) => node.enabled ? sectionPropertyFields(installed.editorContract?.sections.find(section => section.type === node.type)?.props || {}).filter(field => sectionFieldSupported(field) && sectionFieldVisible(field, { ...Object.fromEntries(sectionPropertyFields(installed.editorContract?.sections.find(section => section.type === node.type)?.props || {}).filter(item => item.default !== undefined).map(item => [item.key, item.default])), ...node.props })).flatMap(field => {
+                const id = `section-${node.id}-${field.key}`;
+                const message = sectionInputErrors.value[id] || sectionFieldError(field, node.props[field.key] ?? field.default);
+                return message ? [{ id, nodeId: node.id, message: `${field.label}：${message}` }] : [];
+            }) : []);
+            if (sectionErrors.value.length) { await nextTick(); sectionErrorSummary.value?.focus(); return; }
             const bindingChanged = page.entryId !== JSON.parse(original.value).page?.entryId;
             if (bindingChanged && entryDirty.value) { error.value = '请先保存页面内容，再修改绑定内容。'; return; }
             const settingsDraft = JSON.parse(JSON.stringify(settings.value));
@@ -283,12 +307,12 @@ export const StudioView = defineComponent({
             const editorConfigs = page.sectionConfigs || page.sections.map(legacyConfig);
             const useSectionEditor = canUseSectionEditor(effectiveOptions);
             const visualLayout = page.layoutDocument || { version: 1 as const, mode: 'template' as const, root: editorConfigs.map((section: any, index: number) => ({ id: `section-${section.type}-${index + 1}`, kind: 'section' as const, type: section.type, enabled: section.enabled, props: section.data, children: [] })) };
-            return <form id="studio-page-form" class="studio-card studio-editor" onSubmit={savePage}><div class="studio-card-heading"><h2>页面资料</h2><span class="studio-badge muted">页面草稿</span></div><fieldset disabled={busy.value || !site.value?.canManage}>
-                <div class="studio-fields"><label>页面名称<input required maxlength={120} v-model={page.title} /></label><label>访问路径<input required v-model={page.path} readonly={page.layout === 'home' || (!page.blueprintKey && page.path.includes(':'))} /><span class="studio-help">{page.layout === 'home' ? '首页路径固定为 /。' : !page.blueprintKey && page.path.includes(':') ? '动态详情页路径由模板固定。' : '使用小写字母、数字、连字符组成的唯一路径，例如 /about-us。'}</span></label><label>SEO 标题<input maxlength={120} v-model={page.seoTitle} /></label><label>SEO 描述<textarea maxlength={320} rows={3} v-model={page.seoDescription} /></label>
-                    {canBind && <label>绑定内容<select disabled={entryDirty.value} v-model={page.entryId}><option value="">{page.blueprintKey ? '请选择内容' : '使用默认主页内容'}</option>{state.value.models.find(model => model.key === page.modelKey)?.entries.map(entry => <option value={entry.id}>{entryTitle(entry)}</option>)}</select>{entryDirty.value && <span class="studio-help">保存页面内容后可更换绑定。</span>}</label>}
+            return <form id="studio-page-form" class="studio-card studio-editor" onSubmit={savePage}><div v-show={sectionErrors.value.length > 0} ref={sectionErrorSummary} class="studio-section-error-summary" tabindex={-1} role="alert" aria-labelledby="section-errors-title"><h3 id="section-errors-title">请检查以下内容后保存</h3><ul>{sectionErrors.value.map(item => <li><a href={`#${item.id}`} onClick={async event => { event.preventDefault(); selectedSection.value = item.nodeId; await nextTick(); document.getElementById(item.id)?.focus(); }}>{item.message}</a></li>)}</ul></div><div class="studio-card-heading"><h2>页面资料</h2><span class="studio-badge muted">页面草稿</span></div><fieldset disabled={busy.value}>
+                <div class="studio-fields"><label>页面名称<input disabled={!site.value?.canManage} required maxlength={120} v-model={page.title} /></label><label>访问路径<input disabled={!site.value?.canManage} required v-model={page.path} readonly={page.layout === 'home' || (!page.blueprintKey && page.path.includes(':'))} /><span class="studio-help">{page.layout === 'home' ? '首页路径固定为 /。' : !page.blueprintKey && page.path.includes(':') ? '动态详情页路径由模板固定。' : '使用小写字母、数字、连字符组成的唯一路径，例如 /about-us。'}</span></label><label>SEO 标题<input disabled={!site.value?.canManage} maxlength={120} v-model={page.seoTitle} /></label><label>SEO 描述<textarea disabled={!site.value?.canManage} maxlength={320} rows={3} v-model={page.seoDescription} /></label>
+                    {canBind && <label>绑定内容<select disabled={entryDirty.value || !site.value?.canManage} v-model={page.entryId}><option value="">{page.blueprintKey ? '请选择内容' : '使用默认主页内容'}</option>{state.value.models.find(model => model.key === page.modelKey)?.entries.map(entry => <option value={entry.id}>{entryTitle(entry)}</option>)}</select>{entryDirty.value && <span class="studio-help">保存页面内容后可更换绑定。</span>}</label>}
                     {useSectionEditor ? <SectionEditor modelValue={editorConfigs as any} allowed={sectionAllowed as any} required={requiredSections as any} labels={effectiveOptions.labels} media={siteImages.value} onUpload={canUpload.value ? uploadMedia : undefined} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.sectionConfigs = value; page.sections = value.map((section: any) => section.type); overlayPagePreview(page); }} /> :
-                        <VisualPageEditor modelValue={visualLayout as any} pageTitle={page.title} pagePath={page.path} seoTitle={page.seoTitle} seoDescription={page.seoDescription} previewPayload={previewPayload.value as any} previewNotice={previewError.value || (previewLoading.value ? '正在加载网站预览…' : previewPayload.value ? pagePreviewTarget.value.notice : '')} previewUrl={pagePreviewUrl.value} previewPath={page.path} pageKey={page.key} templateId={site.value?.presetId} templateVersion={site.value?.presetVersion} sectionLabels={effectiveOptions.labels} navigation={settings.value.navigation || site.value?.navigation || []} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.layoutDocument = value; page.sectionConfigs = value.root.map((node: any) => ({ type: node.type, enabled: node.enabled, data: node.props })); page.sections = value.root.map((node: any) => node.type); overlayPagePreview(page); }} onUpdate:navigation={(value: NavigationNode[]) => { settings.value.navigation = value; overlayPagePreview(page); }} onUpdate:seoTitle={(value: string) => { page.seoTitle = value; overlayPagePreview(page); }} onUpdate:seoDescription={(value: string) => { page.seoDescription = value; overlayPagePreview(page); }} />}
-                    <label class="studio-check"><input type="checkbox" disabled={page.layout === 'home'} checked={page.enabled !== false} onChange={event => { page.enabled = (event.target as HTMLInputElement).checked; }} />启用页面</label><label class="studio-check"><input type="checkbox" checked={page.navigation !== false} onChange={event => { page.navigation = (event.target as HTMLInputElement).checked; }} />加入导航</label>
+                        <VisualPageEditor modelValue={visualLayout as any} pageTitle={page.title} pagePath={page.path} seoTitle={page.seoTitle} seoDescription={page.seoDescription} previewPayload={previewPayload.value as any} previewNotice={previewError.value || (previewLoading.value ? '正在加载网站预览…' : previewPayload.value ? pagePreviewTarget.value.notice : '')} previewUrl={pagePreviewUrl.value} previewPath={page.path} pageKey={page.key} templateId={site.value?.presetId} templateVersion={site.value?.presetVersion} sectionLabels={effectiveOptions.labels} sectionDefinitions={site.value?.editorContract?.sections || []} media={siteImages.value} models={state.value.models} onUpload={canUpload.value ? uploadMedia : undefined} selectedNodeId={selectedSection.value} onSelect={(id: string) => { selectedSection.value = id; }} onValidation={({ nodeId, key, error: validationError }: { nodeId: string; key: string; error: string | null }) => { const id = `section-${nodeId}-${key}`; if (validationError) sectionInputErrors.value[id] = validationError; else delete sectionInputErrors.value[id]; sectionErrors.value = sectionErrors.value.filter(item => item.id !== id); }} navigation={settings.value.navigation || site.value?.navigation || []} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.layoutDocument = value; page.sectionConfigs = value.root.map((node: any) => ({ type: node.type, enabled: node.enabled, data: node.props })); page.sections = value.root.map((node: any) => node.type); overlayPagePreview(page); }} onUpdate:navigation={(value: NavigationNode[]) => { settings.value.navigation = value; overlayPagePreview(page); }} onUpdate:seoTitle={(value: string) => { page.seoTitle = value; overlayPagePreview(page); }} onUpdate:seoDescription={(value: string) => { page.seoDescription = value; overlayPagePreview(page); }} />}
+                    <label class="studio-check"><input type="checkbox" disabled={page.layout === 'home' || !site.value?.canManage} checked={page.enabled !== false} onChange={event => { page.enabled = (event.target as HTMLInputElement).checked; }} />启用页面</label><label class="studio-check"><input disabled={!site.value?.canManage} type="checkbox" checked={page.navigation !== false} onChange={event => { page.navigation = (event.target as HTMLInputElement).checked; }} />加入导航</label>
                 </div>{!editor.value && <p class="studio-help">{page.path.includes(':') ? '此页面按商品或分类自动生成，请到对应内容分类编辑资料。' : '此页面尚未绑定可编辑内容，可在上方绑定内容后保存。'}</p>}</fieldset></form>;
         };
         function createPageFromBlueprint(blueprint: PageBlueprintOption) {
@@ -349,7 +373,7 @@ export const StudioView = defineComponent({
                     <span class="studio-save-state">{busy.value ? '正在保存…' : dirty.value ? '有未保存的修改' : '草稿已保存'}</span>
                     <button type="button" onClick={openSitePreview} disabled={previewLoading.value}>预览</button>
                     <button type="button" onClick={openReleaseManager}>发布</button>
-                    <button class="primary" type="submit" form={editingSettings() ? 'studio-page-form' : 'studio-entry-form'} disabled={busy.value || (editingSettings() ? (!pageDirty.value && !settingsDirty.value) || !site.value?.canManage : editor.value?.entry ? !entryDirty.value || !activeModel.value?.canEdit || !editor.value.entry.hasLanguage : !dirty.value || !activeModel.value?.canCreate)}>保存{editingSettings() ? '页面设置' : '草稿'}</button>
+                    <button class="primary" type="submit" form={editingSettings() ? 'studio-page-form' : 'studio-entry-form'} disabled={busy.value || (editingSettings() ? (!pageDirty.value && !settingsDirty.value && !Object.keys(sectionInputErrors.value).length) || !site.value?.canManage : editor.value?.entry ? !entryDirty.value || !activeModel.value?.canEdit || !editor.value.entry.hasLanguage : !dirty.value || !activeModel.value?.canCreate)}>保存{editingSettings() ? '页面设置' : '草稿'}</button>
                 </> : site.value && <>
                     {currentSection.value === 'products' && !selectedModel.value?.singleEntry && <button class="primary" disabled={!selectedModel.value?.canCreate} onClick={() => selectedModel.value && openEntry(selectedModel.value, null)}><StudioIcon name="plus" size={17} />新增{selectedModel.value ? studioModelLabel(selectedModel.value) : '内容'}</button>}
                     {currentSection.value === 'pages' && <button class="primary" disabled={!site.value.canManage || !site.value.blueprints.length} onClick={createPage}><StudioIcon name="plus" size={17} />新增页面</button>}

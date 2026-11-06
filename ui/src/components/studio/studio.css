@@ -261,3 +261,14 @@
   .studio-card { padding: 16px; }
   .studio-page-create-wizard { padding: 18px; }
 }
+
+.studio-section-fields { display: grid; gap: 16px; min-width: 0; }
+.studio-section-fields .studio-field { min-width: 0; }
+.studio-section-fields input:not([type="checkbox"]), .studio-section-fields select { width: 100%; min-width: 0; }
+.studio-section-fields input[type="checkbox"] { width: 22px; height: 22px; margin: 10px; }
+.studio-section-fields button { min-height: 44px; }
+.studio-field-error { color: var(--studio-danger, #b42318); font-size: 13px; margin: 4px 0 0; }
+.studio-section-error-summary { padding: 16px; margin-bottom: 16px; border: 2px solid var(--studio-danger, #b42318); border-radius: 8px; }
+.studio-section-error-summary:focus { outline: 2px solid var(--studio-blue); outline-offset: 3px; }
+.studio-section-error-summary a { color: inherit; text-decoration: underline; }
+.studio-section-fields [aria-invalid="true"] { border-color: var(--studio-danger, #b42318); }

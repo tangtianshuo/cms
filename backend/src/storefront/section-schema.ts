@@ -1,3 +1,4 @@
+import type { TemplateEditorContract, TemplateSectionProperty } from '../template-contract/model';
 import type { Media } from '../media/models/main';
 import { ownerWorkspace } from '../workspaces/context';
 import type { SiteInstallation } from '../presets/site-model';
@@ -134,4 +135,49 @@ export function legacySections(_layout: string, sections: string[] = []): Sectio
     const types = sections.map(item => mapping[item]).filter((item): item is SectionType => Boolean(item));
     if (types.length === 0) return [];
     return types.map(type => ({ type, enabled: true, data: type === 'hero-carousel' ? { slides: [] } : type === 'product-gallery' ? { images: [] } : {} }));
+}
+
+/** Validate scalar declarations without rewriting preserved complex or hidden values. */
+export function validateDeclaredSectionValues(props: Record<string, unknown>, declared: Record<string, TemplateSectionProperty>, enabled = true): void {
+    for (const [key, field] of Object.entries(declared)) {
+        const value = props[key] ?? field.default;
+        const visible = !field.visibleWhen || JSON.stringify(props[field.visibleWhen.field] ?? declared[field.visibleWhen.field]?.default) === JSON.stringify(field.visibleWhen.equals);
+        const empty = value === undefined || value === null || typeof value === 'string' && !value.trim();
+        const label = field.label || field.description || key;
+        if (field.required && enabled && visible && empty) throw new Error(`${label}: 请填写内容`);
+        if (empty) continue;
+        if (field.control === 'text' && /href$/i.test(key) && (typeof value !== 'string' || !/^(?:https?:\/\/|\/(?!\/))/.test(value) || value.includes('\\'))) throw new Error(`${label}: 请输入有效的网站路径或网址`);
+        if (field.control === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) throw new Error(`${label}: 请输入有效数字`);
+        if (field.control === 'boolean' && typeof value !== 'boolean' || field.control === 'text' && typeof value !== 'string') throw new Error(`${label}: 内容格式无效`);
+        if (field.control === 'enum' && !field.options?.includes(value as string)) throw new Error(`${label}: 请选择列表中的选项`);
+        if (field.control === 'date' && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) throw new Error(`${label}: 请选择有效日期`);
+    }
+}
+export function validateDeclaredSectionProperties(configs: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }>, sections: TemplateEditorContract['sections'], options: {
+    media: readonly Media[]; site: Pick<SiteInstallation, '_id' | 'workspaceId'>; referenceIds?: Set<string>;
+}): void {
+    for (const section of configs) {
+        const declared = sections.find(item => item.type === section.type)?.props || {};
+        validateDeclaredSectionValues(section.data, declared, section.enabled);
+        for (const [key, field] of Object.entries(declared)) {
+            const value = section.data[key];
+            if (value === undefined || value === null || value === '') continue;
+            if (field.control === 'media') {
+                let id: string | undefined;
+                if (typeof value === 'string') {
+                    if (!/^(?:https?:\/\/|\/(?!\/))/.test(value) || value.includes('\\')) throw new Error(`${key}: 请选择可访问的图片`);
+                    try { const match = /^\/api\/v4\/media\/([^/]+)\/bin\//.exec(new URL(value, 'https://media.invalid').pathname); if (match) id = decodeURIComponent(match[1]); } catch { throw new Error(`${key}: 图片地址无效`); }
+                } else if (mediaRef(value) && Object.keys(value).length === 1) id = value._id;
+                else throw new Error(`${key}: 请选择可访问的图片`);
+                if (id) {
+                    const media = options.media.find(item => item._id === id);
+                    if (!media || !mediaAuthorizedForSite(media, options.site, { requireSiteBinding: true })) throw new Error(`${key}: 图片不可用于当前网站`);
+                }
+            }
+            if (field.control === 'reference') {
+                const id = typeof value === 'string' ? value : value && typeof value === 'object' && !Array.isArray(value) ? (value as { eid?: unknown }).eid : undefined;
+                if (typeof id !== 'string' || !options.referenceIds?.has(id)) throw new Error(`${key}: 内容引用不可用于当前网站`);
+            }
+        }
+    }
 }

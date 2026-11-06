@@ -1,3 +1,5 @@
+import { validateDeclaredSectionValues } from './section-schema';
+import type { TemplateSectionProperty } from '../template-contract/model';
 export interface LayoutNode {
     id: string;
     kind: 'section' | 'container' | 'component';
@@ -30,17 +32,7 @@ function assertNode(node: LayoutNode, seen: Set<string>, contract?: LayoutContra
         const declared = section.props || {};
         if (Object.keys(declared).length > 0) {
             for (const key of Object.keys(props)) if (!(key in declared)) throw new Error(`Unknown layout prop: ${node.type}.${key}`);
-            for (const [key, rawSchema] of Object.entries(declared)) {
-                const schema = rawSchema as { control?: string; required?: boolean; options?: unknown[] };
-                if (schema.required && node.enabled && !(key in props)) throw new Error(`Required layout prop missing: ${node.type}.${key}`);
-                if (!(key in props)) continue;
-                const value = props[key];
-                const control = schema.control;
-                if (control === 'number' && typeof value !== 'number') throw new Error(`Invalid layout prop: ${node.type}.${key}`);
-                if (control === 'boolean' && typeof value !== 'boolean') throw new Error(`Invalid layout prop: ${node.type}.${key}`);
-                if (control === 'text' && typeof value !== 'string') throw new Error(`Invalid layout prop: ${node.type}.${key}`);
-                if (control === 'enum' && Array.isArray(schema.options) && !schema.options.includes(value)) throw new Error(`Invalid layout prop: ${node.type}.${key}`);
-            }
+            validateDeclaredSectionValues(props, declared as Record<string, TemplateSectionProperty>, node.enabled);
         }
     }
 }
