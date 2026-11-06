@@ -167,7 +167,7 @@ test('switching the whole-site view clears its descriptor and rejects the previo
         return snapshot();
       },
     } } };
-  const node = type => markRaw({ type, children: [], parent: null, props: {}, ...(type === 'iframe' ? {
+  const node = type => markRaw({ type, children: [], parent: null, props: {}, style: {}, ...(type === 'iframe' ? {
     contentWindow: { postMessage: (...args) => messages.push(args) },
   } : {}) });
   const renderer = createRenderer({

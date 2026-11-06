@@ -4,6 +4,8 @@ import {
     ModalWrapper,
 } from '@bcms/selfhosted-ui/components/modals/_wrapper';
 import { TextInput } from '@bcms/selfhosted-ui/components/inputs/text';
+import { mediaReferenceAllowedForSite } from '@bcms/selfhosted-utils/site-media';
+import type { ContentMediaSite } from '../../studio/content-media-context';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 import {
     Breadcrumb,
@@ -17,6 +19,8 @@ import { useI18n } from 'vue-i18n';
 
 export interface ModalMediaSelectInput {
     mediaId?: string;
+    site?: ContentMediaSite;
+    isCurrent?: () => boolean;
     altText?: string;
     caption?: string;
 }
@@ -43,9 +47,10 @@ export const ModalMediaSelect = defineComponent({
         const dirId = ref('');
         const searchTerm = ref('');
         let searchDebouce: NodeJS.Timeout | undefined = undefined;
+        const allowed = (media: Media) => !data.value.site || mediaReferenceAllowedForSite(media, data.value.site);
         const mediaData = computed(() => {
             const medias = sdk.store.media.findMany(
-                (e) => e.parentId === dirId.value,
+                (e) => e.parentId === dirId.value && allowed(e),
             );
             const output: {
                 dirs: Media[];
@@ -107,7 +112,7 @@ export const ModalMediaSelect = defineComponent({
 
         function getSelectedMediaPreview(mediaId: string) {
             const media = sdk.store.media.findById(mediaId);
-            if (!media) {
+            if (!media || !allowed(media)) {
                 return '';
             }
             return (
@@ -130,9 +135,8 @@ export const ModalMediaSelect = defineComponent({
         onMounted(() => {
             const handler = props.handler;
             handler._onOpen = (event) => {
-                if (event?.data) {
-                    data.value = event.data;
-                }
+                dirId.value = '';
+                data.value = event?.data || {};
                 throwable(async () => {
                     await sdk.media.getAll();
                 }).catch((err) => console.error(err));
@@ -143,7 +147,7 @@ export const ModalMediaSelect = defineComponent({
                     return [false, null as never];
                 }
                 const media = sdk.store.media.findById(data.value.mediaId);
-                if (!media) {
+                if (!media || !allowed(media) || data.value.isCurrent?.() === false) {
                     notification.error(
                         t('modals.mediaPicker.internalError'),
                     );

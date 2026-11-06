@@ -1,6 +1,7 @@
 import {
     computed,
     defineComponent,
+    inject,
     onBeforeUnmount,
     onMounted,
     type PropType,
@@ -18,6 +19,7 @@ import {
 import { MediaPreview } from '@bcms/selfhosted-ui/components/media-preview';
 import { prettyFileSize } from '@bcms/selfhosted-ui/util/file';
 import { Icon } from '@bcms/selfhosted-ui/components/icon';
+import { contentMediaSiteKey } from '../../studio/content-media-context';
 import { useI18n } from 'vue-i18n';
 
 export const MediaSelect = defineComponent({
@@ -47,6 +49,9 @@ export const MediaSelect = defineComponent({
 
         const media = computed(() => sdk.store.media.findById(props.mediaId));
         const unsubs: UnsubscribeFns = [];
+        const contentSite = inject(contentMediaSiteKey, undefined);
+        let alive = true;
+        let ownsPicker = false;
 
         onMounted(async () => {
             if (props.entrySync && props.id) {
@@ -79,6 +84,8 @@ export const MediaSelect = defineComponent({
         });
 
         onBeforeUnmount(() => {
+            alive = false;
+            if (ownsPicker) modal.handlers.mediaSelect.close();
             callAndClearUnsubscribeFns(unsubs);
         });
 
@@ -102,13 +109,21 @@ export const MediaSelect = defineComponent({
                     <button
                         class={`w-full flex flex-col xs:flex-row gap-2`}
                         onClick={() => {
+                            const context = sdk.context;
+                            const site = contentSite?.value;
+                            const isCurrent = () => alive && sdk.context === context && contentSite?.value?._id === site?._id;
+                            ownsPicker = true;
                             modal.handlers.mediaSelect.open({
                                 data: {
+                                    site, isCurrent,
                                     mediaId: media.value?._id || '',
                                     altText: props.altText || '',
                                     caption: props.caption || '',
                                 },
+                                onCancel() { ownsPicker = false; },
                                 onDone(data) {
+                                    ownsPicker = false;
+                                    if (!isCurrent()) return;
                                     ctx.emit('change', {
                                         media: data.media,
                                         altText: data.altText,

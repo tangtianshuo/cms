@@ -1,3 +1,8 @@
+import { prepareEntryCreate } from '../entry/create';
+import { validateEntrySiteReferences } from '../entry/site-references';
+import { EntryFactory } from '../entry/factory';
+import { EntryCreateBodySchema, type EntryCreateBody } from '../entry/models/controller';
+import { ObjectUtility } from '../_utils/object-utility';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { createController, createControllerMethod, HttpStatus } from '../_server';
@@ -119,7 +124,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Save failed'); }
         } }),
         addPage: createControllerMethod({ path: '/pages', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('pages.manage'), async handler({ request, errorHandler }) {
-            const parsed = z.object({ operationId: z.string().uuid(), expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().max(160), blueprintKey: z.string(), fields: z.record(studioValueSchema) }).strict().safeParse(request.body);
+            const parsed = z.object({ operationId: z.string().uuid(), expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().max(160), blueprintKey: z.string(), fields: z.record(studioValueSchema).optional(), entry: z.unknown().optional() }).strict().refine(body => (body.fields !== undefined) !== (body.entry !== undefined)).safeParse(request.body);
             if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid new page');
             try {
                 const site = await selectedSite();
@@ -132,8 +137,19 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                     // Retry after an interrupted binding is safe; new stale requests cannot write.
                     if (!await Repo.entry.findById(ids.entryId)) throw conflict();
                 }
-                await validateSelectedMedia(site, blueprint.modelKey, parsed.data.fields);
-                const entry = patchEntry(site, template, blueprint.modelKey, null, parsed.data.fields, workspaceContext()!.actorId, ids.entryId);
+                let entry;
+                if (parsed.data.entry !== undefined) {
+                    const invalid = ObjectUtility.compareWithSchema(parsed.data.entry, EntryCreateBodySchema, 'entry');
+                    if (invalid) throw new Error('Invalid page content');
+                    const body = parsed.data.entry as EntryCreateBody;
+                    const [languages, statuses, widgets, groups, medias, templates] = await Promise.all([Repo.language.findAll(), Repo.entryStatus.findAll(), Repo.widget.findAll(), Repo.group.findAll(), Repo.media.findAll(), Repo.template.findAll()]);
+                    const prepared = prepareEntryCreate(body, template.props, languages.map(item => item.code), statuses.map(item => item._id), widgets, groups, templates, medias);
+                    entry = { ...EntryFactory.create({ templateId: template._id, workspaceId: workspaceContext()!.workspaceId, siteId: site._id, userId: workspaceContext()!.actorId, groupId: body.groupId || site.contentGroupId || site._id, ...prepared }), _id: ids.entryId };
+                } else {
+                    await validateSelectedMedia(site, blueprint.modelKey, parsed.data.fields!);
+                    entry = patchEntry(site, template, blueprint.modelKey, null, parsed.data.fields!, workspaceContext()!.actorId, ids.entryId);
+                }
+                await validateEntrySiteReferences(entry, template, Repo);
                 return await createStudioPage(site, parsed.data.operationId, entry, parsed.data, {
                     findEntry: id => Repo.entry.findById(id), addEntry: createdEntry => Repo.entry.add(createdEntry),
                     saveSite: (updated, expected) => Repo.siteInstallation.methods.saveDraft(updated, expected), findSite: () => Repo.siteInstallation.methods.findSelected(),

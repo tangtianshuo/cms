@@ -1,3 +1,4 @@
+import { contentEditorLocation } from '../../components/studio/editor-target';
 import { computed, defineComponent, onBeforeUpdate, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Loader } from '@bcms/selfhosted-ui/components/loader';
@@ -111,6 +112,11 @@ export const EntriesView = defineComponent({
             return output;
         });
 
+        function editorLocation(entryId: string | null) {
+            const context = sdk.context!.context;
+            return contentEditorLocation({ intent: entryId ? 'edit' : 'create', workspaceId: context.workspaceId, siteId: context.siteId, templateId: params.value.templateId, entryId, language: lngCode.value, groupId: selectedGroup.value || undefined });
+        }
+
         function tableRowActions(entryLite: EntryLite, info?: EntryLiteInfo) {
             const output: DropdownItem[] = [
                 {
@@ -219,9 +225,9 @@ export const EntriesView = defineComponent({
                     ? media.value.find((e) => e._id === info.media)
                     : undefined;
                 rows.push({
-                    href: route.path + `/${entry._id}`,
+                    href: router.resolve(editorLocation(entry._id)).href,
                     async onClick() {
-                        await router.push(route.path + `/${entry._id}`);
+                        await router.push(editorLocation(entry._id));
                     },
                     id: entry._id,
                     cells: [
@@ -308,7 +314,7 @@ export const EntriesView = defineComponent({
                                     <LanguageSwitch />
                                 </div>
                                 <Button
-                                    onClick={() => router.push({ path: `${route.path}/create`, query: selectedGroup.value ? { group: selectedGroup.value } : {} })}
+                                    onClick={() => router.push(editorLocation(null))}
                                 >
                                     {t('views.entries.createNew')}
                                 </Button>
@@ -333,7 +339,7 @@ export const EntriesView = defineComponent({
                                     title={''}
                                     subtitle={t('views.entries.empty')}
                                     ctaText={t('views.entries.createNew')}
-                                    clickHandler={() => router.push({ path: `${route.path}/create`, query: selectedGroup.value ? { group: selectedGroup.value } : {} })}
+                                    clickHandler={() => router.push(editorLocation(null))}
                                 />
                             ) : (
                                 <div class={`mt-10`}>

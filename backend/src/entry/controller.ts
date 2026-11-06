@@ -36,7 +36,20 @@ import { SocketManager } from '@bcms/selfhosted-backend/socket/manager';
 import { propsValueCheck } from '@bcms/selfhosted-backend/prop/values';
 import { entryContentNodeToHtml } from '@bcms/selfhosted-backend/entry/content';
 import { EventManager } from '@bcms/selfhosted-backend/event/manager';
+import { assertSiteCapability } from '../authorization/site-access';
+import { workspaceContext } from '../workspaces/context';
 import { prepareEntryCreate } from '@bcms/selfhosted-backend/entry/create';
+import { validateEntrySiteReferences } from './site-references';
+
+async function assertEntrySite(templateId: string, entry?: Entry, write = false) {
+    const context = workspaceContext();
+    assertSiteCapability(context, write ? 'content.write' : 'content.read');
+    const template = await Repo.template.findById(templateId);
+    if (!template || (template.siteId && template.siteId !== context.siteId) || (entry?.siteId && entry.siteId !== context.siteId)) {
+        throw Object.assign(new Error('Content not found or not permitted in selected site'), { status: 403 });
+    }
+    return template;
+}
 
 export const EntryController = createController({
     name: 'Entry',
@@ -73,8 +86,10 @@ export const EntryController = createController({
                 },
                 preRequestHandler: RP.createJwtCheck(),
                 async handler() {
-                    const templates = await Repo.template.findAll();
-                    const entries = await Repo.entry.findAll();
+                    const context = workspaceContext();
+                    assertSiteCapability(context, 'content.read');
+                    const templates = (await Repo.template.findAll()).filter(template => !template.siteId || template.siteId === context.siteId);
+                    const entries = (await Repo.entry.findAll()).filter(entry => !entry.siteId || entry.siteId === context.siteId);
                     const entriesLite: EntryLite[] = [];
                     const groups = await Repo.group.findAll();
                     for (let i = 0; i < entries.length; i++) {
@@ -152,10 +167,8 @@ export const EntryController = createController({
                             `Template with ID "${params.templateId}" does not exist`,
                         );
                     }
-                    const entries =
-                        await Repo.entry.methods.findAllByTemplateId(
-                            params.templateId,
-                        );
+                    await assertEntrySite(params.templateId);
+                    const entries = (await Repo.entry.methods.findAllByTemplateId(params.templateId)).filter(entry => !entry.siteId || entry.siteId === workspaceContext()?.siteId);
                     const groups = await Repo.group.findAll();
                     return {
                         items: entries.map((e) =>
@@ -290,10 +303,8 @@ export const EntryController = createController({
                     const params = request.params as {
                         templateId: string;
                     };
-                    const entries =
-                        await Repo.entry.methods.findAllByTemplateId(
-                            params.templateId,
-                        );
+                    await assertEntrySite(params.templateId);
+                    const entries = (await Repo.entry.methods.findAllByTemplateId(params.templateId)).filter(entry => !entry.siteId || entry.siteId === workspaceContext()?.siteId);
                     return {
                         items: entries,
                         limit: entries.length,
@@ -373,6 +384,7 @@ export const EntryController = createController({
                             `Entry with ID "${params.entryId}" does not exist`,
                         );
                     }
+                    await assertEntrySite(params.templateId, entry);
                     const groups = await Repo.group.findAll();
                     return {
                         item: EntryFactory.toLite(entry, template, groups),
@@ -438,6 +450,7 @@ export const EntryController = createController({
                             `Entry with ID "${params.entryId}" does not exist`,
                         );
                     }
+                    await assertEntrySite(params.templateId, entry);
                     return { item: entry };
                 },
             }),
@@ -586,6 +599,7 @@ export const EntryController = createController({
                             `Template with ID "${params.templateId}" does not exist`,
                         );
                     }
+                    await assertEntrySite(params.templateId, undefined, true);
                     let prepared: EntryCreateBody;
                     try {
                         const [languages, statuses, widgets, groups, medias] = await Promise.all([
@@ -608,6 +622,8 @@ export const EntryController = createController({
                         ...prepared,
                         groupId: body.groupId,
                     });
+                    if (template.siteId) entry.siteId = template.siteId;
+                    await validateEntrySiteReferences(entry, template, Repo);
                     entry = await Repo.entry.add(entry);
                     SocketManager.channelEmit(
                         ['global'],
@@ -696,6 +712,8 @@ export const EntryController = createController({
                             `Entry with ID "${body._id}" does not exist`,
                         );
                     }
+                    await assertEntrySite(params.templateId, entry, true);
+                    if (body.expectedUpdatedAt !== undefined && (!Number.isSafeInteger(body.expectedUpdatedAt) || body.expectedUpdatedAt < 0)) throw errorHandler(HttpStatus.BadRequest, 'Invalid content version');
                     if (body.status) {
                         const status = await Repo.entryStatus.findById(
                             body.status,
@@ -789,7 +807,8 @@ export const EntryController = createController({
                         });
                     }
                     if (body.groupId !== undefined) entry.groupId = body.groupId;
-                    entry = await Repo.entry.update(entry);
+                    await validateEntrySiteReferences(entry, template, Repo, lng.code);
+                    entry = await Repo.entry.update(entry, false, body.expectedUpdatedAt);
                     SocketManager.channelEmit(
                         ['global'],
                         'entry',

@@ -88,6 +88,7 @@ test('page editor selection uses labels and only one editor for legacy or visual
  assert.equal(canUseSectionEditor({allowed:['custom-block'],required:'',visual:false}),false);
  const studio=readFileSync(new URL('../src/views/dashboard/studio.tsx',import.meta.url),'utf8');
  assert.equal((studio.match(/<PageCreateWizard/g)||[]).length,1);
- assert.ok(studio.includes('sectionLabels={effectiveOptions.labels}'));
+ const workspace=readFileSync(new URL('../src/components/studio/content-workspace.tsx',import.meta.url),'utf8');
+ assert.ok(workspace.includes('sectionLabels={effectiveOptions.labels}'));
  assert.ok(!studio.includes('>上移 {name}</button>'));
 });

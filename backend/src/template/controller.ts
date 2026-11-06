@@ -1,3 +1,4 @@
+import { workspaceContext } from '../workspaces/context';
 import { v4 as uuidv4 } from 'uuid';
 import {
     createController,
@@ -186,6 +187,7 @@ export const TemplateController = createController({
                         }
                         items = await Repo.template.findAllById(templateIds);
                     }
+                    items = items.filter(item => !item.siteId || item.siteId === workspaceContext()?.siteId);
                     return {
                         items,
                         total: items.length,
@@ -246,6 +248,7 @@ export const TemplateController = createController({
                             `Template with ID "${params.templateId}" does not exist`,
                         );
                     }
+                    if (template.siteId && template.siteId !== workspaceContext()?.siteId) throw Object.assign(new Error('Model not permitted in selected site'), { status: 403 });
                     return {
                         item: template,
                     };

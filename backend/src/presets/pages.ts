@@ -219,6 +219,7 @@ export function updatePageDraft(
     }
     if (site.pages.some((other) => other.key !== key &&
         !((customContentPage || contractProductPage) && other.key === page.blueprintKey && !other.blueprintKey && other.layout === page.layout) &&
+        !(path === page.path && path.includes(':') && !page.blueprintKey && other.blueprintKey === page.key && other.layout === page.layout && other.modelKey === page.modelKey) &&
         (patternMatches(other.path, path) || patternMatches(path, other.path)))) {
         throw new Error('Page path conflicts with another blueprint');
     }

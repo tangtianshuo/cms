@@ -32,10 +32,11 @@ export const VisualPageEditor = defineComponent({
         models: { type: Array as PropType<StudioModel[]>, default: () => [] },
         onUpload: Function as PropType<() => void>,
         selectedNodeId: { type: String, default: '' },
+        panel: { type: String as PropType<'content' | 'sections' | 'page'>, default: 'sections' },
         disabled: Boolean,
     },
-    emits: ['update:modelValue', 'update:navigation', 'update:seoTitle', 'update:seoDescription', 'select', 'validation'],
-    setup(props, { emit }) {
+    emits: ['update:modelValue', 'update:navigation', 'update:seoTitle', 'update:seoDescription', 'select', 'validation', 'update:panel'],
+    setup(props, { emit, slots }) {
         const localSelectedNodeId = ref(props.selectedNodeId || props.modelValue.root[0]?.id || '');
         const previewFrame = ref<HTMLIFrameElement>();
         const previewReady = ref(false);
@@ -56,6 +57,7 @@ export const VisualPageEditor = defineComponent({
         };
         const select = (id: string, notifyFrame = true) => {
             localSelectedNodeId.value = id;
+            emit('update:panel', 'sections');
             emit('select', id);
             if (notifyFrame) sendSelect(id, String(props.modelValue.root.find(node => node.id === id)?.type || 'section'));
         };
@@ -102,10 +104,16 @@ export const VisualPageEditor = defineComponent({
             </aside>
             <div class="studio-visual-preview" aria-label="草稿预览">{props.previewUrl ? <iframe key={`${props.previewUrl}:${previewSiteId()}`} ref={previewFrame} title="草稿预览" src={props.previewUrl} onLoad={deliverPreview} sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer" /> : <div class="studio-visual-preview-placeholder"><strong>草稿预览</strong><p>{props.previewNotice || (props.previewPayload ? '当前网站尚未提供预览。' : '保存后可在这里打开网站预览。')}</p></div>}</div>
             <aside class="studio-visual-sidebar studio-visual-sidebar--right">
+                <div class="studio-editor-tabs" role="tablist" aria-label="页面编辑">{(['content', 'sections', 'page'] as const).filter(key => key === 'sections' || slots[key]).map(key => <button type="button" role="tab" aria-selected={props.panel === key} onClick={() => emit('update:panel', key)}>{({ content: '页面内容', sections: '区块', page: '页面信息' })[key]}</button>)}</div>
+                <div v-show={props.panel === 'content'}>{slots.content?.()}</div>
+                <div v-show={props.panel === 'page'}>{slots.page?.()}</div>
+                <div v-show={props.panel === 'sections'}>
                 <div class="studio-visual-panel-heading"><h3>属性与 SEO</h3>{selectedNode() && <span>{nodeLabel(selectedNode()!)}</span>}</div>
                 <div class="studio-visual-properties studio-visual-seo"><label>SEO 标题<input maxlength={120} value={props.seoTitle} disabled={props.disabled} onInput={event => emit('update:seoTitle', (event.target as HTMLInputElement).value)} /></label><label>SEO 描述<textarea maxlength={320} rows={3} value={props.seoDescription} disabled={props.disabled} onInput={event => emit('update:seoDescription', (event.target as HTMLTextAreaElement).value)} /></label></div>
-                {props.modelValue.root.map(node => <div key={node.id} style={{ display: selectedNode()?.id === node.id ? undefined : 'none' }}><SectionPropertyFields nodeId={node.id} fields={sectionPropertyFields(props.sectionDefinitions.find(section => section.type === node.type)?.props || {})} values={node.props || {}} media={props.media} models={props.models} disabled={props.disabled} onUpload={props.onUpload} onValidation={(key, error) => emit('validation', { nodeId: node.id, key, error })} onChange={(key, value) => { if (!props.disabled) update(updateNodeProps(props.modelValue.root, node.id, { ...node.props, [key]: value })); }} /></div>)}
+                {slots.sections?.()}
+                {!slots.sections && props.modelValue.root.map(node => <div key={node.id} style={{ display: selectedNode()?.id === node.id ? undefined : 'none' }}><SectionPropertyFields nodeId={node.id} fields={sectionPropertyFields(props.sectionDefinitions.find(section => section.type === node.type)?.props || {})} values={node.props || {}} media={props.media} models={props.models} disabled={props.disabled} onUpload={props.onUpload} onValidation={(key, error) => emit('validation', { nodeId: node.id, key, error })} onChange={(key, value) => { if (!props.disabled) update(updateNodeProps(props.modelValue.root, node.id, { ...node.props, [key]: value })); }} /></div>)}
                 {!selectedNode() && <p class="studio-help">选择左侧区块编辑属性。</p>}
+                </div>
             </aside>
         </section>;
     },

@@ -50,6 +50,7 @@ export const EntryCreateBodySchema: ObjectSchema = {
 };
 
 export interface EntryUpdateBody {
+    expectedUpdatedAt?: number;
     groupId?: string;
     _id: string;
     templateId: string;
@@ -62,6 +63,7 @@ export interface EntryUpdateBody {
 }
 
 export const EntryUpdateBodySchema: ObjectSchema = {
+    expectedUpdatedAt: { __type: 'number', __required: false },
     groupId: { __type: 'string', __required: false },
     _id: {
         __type: 'string',

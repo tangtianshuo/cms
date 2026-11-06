@@ -8,6 +8,9 @@ export interface PageCreateSource {
     saveSite(site: SiteInstallation, expectedUpdatedAt: number): Promise<boolean>;
     findSite(): Promise<SiteInstallation | null>;
 }
+function sameContent(a: Entry, b: Entry) {
+    return a.templateId === b.templateId && a.siteId === b.siteId && a.groupId === b.groupId && JSON.stringify(a.meta) === JSON.stringify(b.meta) && JSON.stringify(a.content) === JSON.stringify(b.content) && JSON.stringify(a.statuses) === JSON.stringify(b.statuses);
+}
 export async function createStudioPage(site: SiteInstallation, operationId: string, entry: Entry,
     input: { title: string; path: string; blueprintKey: string }, source: PageCreateSource): Promise<PageDraft> {
     const ids = pageOperationIds(site._id, operationId);
@@ -16,7 +19,7 @@ export async function createStudioPage(site: SiteInstallation, operationId: stri
     if (oldPage) {
         if (oldPage.entryId !== ids.entryId || oldPage.blueprintKey !== input.blueprintKey || oldPage.path !== input.path || oldPage.title !== input.title) throw Object.assign(new Error('Operation already used; start a new page'), { status: 409 });
         const existing = await source.findEntry(ids.entryId);
-        if (!existing || existing.templateId !== entry.templateId || JSON.stringify(existing.meta) !== JSON.stringify(entry.meta)) throw Object.assign(new Error('Operation Entry changed; start a new page'), { status: 409 });
+        if (!existing || !sameContent(existing, entry)) throw Object.assign(new Error('Operation Entry changed; start a new page'), { status: 409 });
         return oldPage;
     }
     const blueprint = site.pages.find(page => page.key === input.blueprintKey && !page.blueprintKey);
@@ -30,7 +33,7 @@ export async function createStudioPage(site: SiteInstallation, operationId: stri
         try { existing = await source.addEntry(entry); }
         catch (cause) { existing = await source.findEntry(ids.entryId); if (!existing) throw cause; }
     }
-    if (existing.templateId !== entry.templateId || JSON.stringify(existing.meta) !== JSON.stringify(entry.meta)) throw Object.assign(new Error('Operation Entry changed; use its advanced editor or start a new page'), { status: 409 });
+    if (!sameContent(existing, entry)) throw Object.assign(new Error('Operation Entry changed; use its advanced editor or start a new page'), { status: 409 });
     if (!await source.saveSite(updated, site.updatedAt)) {
         const latest = await source.findSite();
         const winner = latest && pageDraft(latest, ids.pageKey);

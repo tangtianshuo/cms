@@ -1,332 +1,84 @@
-import { computed, defineComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { onBeforeRouteLeave, onBeforeRouteUpdate, RouterLink, useRoute, useRouter } from 'vue-router';
+import { computed, defineComponent, onMounted, ref, watch } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import type { StudioEntry, StudioModel, StudioState } from '../../sdk/handlers/studio';
-import type { StudioValue } from '@bcms/selfhosted-backend/studio/business';
 import type { PageDraft } from '@bcms/selfhosted-backend/presets/pages';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
-import { StudioFields } from '../../components/studio/fields';
+import { ContentWorkspace } from '../../components/studio/content-workspace';
+import { contentEditorLocation, resolveEditorTarget, type EditorTarget } from '../../components/studio/editor-target';
 import { ReleaseManager } from '../../components/storefront/release-manager';
 import { userErrorMessage } from '../../util/user-message';
 import '../../components/studio/studio.css';
 import { StudioIcon } from '../../components/studio/icon';
 import { studioSection, studioSections, studioModelLabel, siteSetupHref } from '../../layouts/dashboard/navigation';
 import { MediaView } from './media';
-import { NavigationEditor } from '../../components/studio/navigation-editor';
-import { SectionEditor } from '../../components/studio/section-editor';
 import { settingsRequest } from '../../components/studio/settings-request';
 import { siteImageOptions } from '../../components/studio/media-options';
-import type { NavigationNode } from '../../components/studio/navigation-editor';
 import { SiteOperations } from '../../components/studio/site-operations';
-import { sectionFieldError, sectionFieldSupported, sectionFieldVisible, sectionPropertyFields } from '../../components/studio/section-property-state';
-import { VisualPageEditor } from '../../components/studio/visual-page-editor';
 import { PageCreateWizard, type PageBlueprintOption } from '../../components/studio/page-create-wizard';
-import { loadPreviewRuntime, resolvePreviewTarget, type PreviewRuntime } from '../../util/template-preview';
-import { canUseSectionEditor, sectionTypesForEditor } from '../../components/studio/page-options';
-
-type Section = 'overview' | 'operations' | 'products' | 'pages' | 'media' | 'settings' | 'release';
-const sections = studioSections;
 function entryTitle(entry: StudioEntry) { return String((entry.fields.title as string[] | undefined)?.[0] || '未命名内容'); }
 export const StudioView = defineComponent({
     setup() {
-        const sdk = window.bcms.sdk;
-        const route = useRoute();
-        const router = useRouter();
-        const state = ref<StudioState>({ site: null, models: [] });
-        const media = ref<Media[]>([]);
-        const loading = ref(true);
-        const busy = ref(false);
-        const error = ref('');
-        const sectionInputErrors = ref<Record<string, string>>({});
-        const sectionErrors = ref<Array<{ id: string; nodeId: string; message: string }>>([]);
-        const sectionErrorSummary = ref<HTMLElement>();
-        const selectedSection = ref('');
-        const notice = ref('');
-        const mediaError = ref('');
-        const modelKey = ref('product');
-        const editor = ref<{ modelKey: string; entry: StudioEntry | null; operationId: string; newPage?: boolean }>();
-        const values = ref<Record<string, StudioValue>>({});
-        const original = ref('');
-        const pageEditor = ref<PageDraft>();
-        const pageWizardOpen = ref(false);
-        const previewPayload = ref<unknown>();
-        const previewRuntime = ref<PreviewRuntime | null>(null);
-        const previewLoading = ref(false);
-        const previewError = ref('');
-        let previewSequence = 0;
-        function clearPreview() {
-            previewSequence++;
-            previewPayload.value = undefined; previewRuntime.value = null;
-            previewError.value = ''; previewLoading.value = false;
-        }
-        const editorTab = ref<'content' | 'page'>('content');
-        const pageTitle = ref('');
-        const pagePath = ref('');
-        const settings = ref<{ name: string; background: string; foreground: string; accent: string; muted: string; navigation: NavigationNode[]; operations: { seoTitle: string; seoDescription: string; socialImage?: { _id: string }; favicon?: { _id: string }; analyticsId?: string; contactFormEnabled: boolean }; contactDeliveryConfigured?: boolean }>({ name: '', background: '', foreground: '', accent: '', muted: '', navigation: [], operations: { seoTitle: '', seoDescription: '', contactFormEnabled: false } });
-        const settingsOriginal = ref('');
-        const currentSection = computed<Section>(() => studioSection(route.query.section));
-        const sectionInfo = computed(() => sections.find(item => item.key === currentSection.value)!);
-        const contentSearch = ref('');
-        const pageSearch = ref('');
+        const sdk = window.bcms.sdk; const route = useRoute(); const router = useRouter();
+        const state = ref<StudioState>({ site: null, models: [] }); const media = ref<Media[]>([]);
+        const loading = ref(true); const busy = ref(false); const error = ref(''); const notice = ref('');
+        const editorTarget = ref<EditorTarget>(); const pageWizardOpen = ref(false); const modelKey = ref('product');
+        const [language] = window.bcms.useLanguage();
+        const settings = ref<any>({ name: '', background: '', foreground: '', accent: '', muted: '', navigation: [], operations: {} }); const settingsOriginal = ref('');
+        const dirty = computed(() => JSON.stringify(settings.value) !== settingsOriginal.value);
+        const currentSection = computed(() => studioSection(route.query.category === 'pages' && route.query.section === 'content' ? 'pages' : route.query.section));
+        const sectionInfo = computed(() => studioSections.find(item => item.key === currentSection.value)!);
+        const site = computed(() => state.value.site); const selectedModel = computed(() => state.value.models.find(item => item.key === modelKey.value));
+        const contentSearch = ref(''); const pageSearch = ref('');
+        const siteImages = computed(() => siteImageOptions(media.value, site.value?.id));
         const filteredEntries = computed(() => (selectedModel.value?.entries || []).filter(entry => `${entryTitle(entry)} ${String(entry.fields.slug || '')}`.toLowerCase().includes(contentSearch.value.trim().toLowerCase())));
         const filteredPages = computed(() => (site.value?.pages || []).filter(page => `${page.title} ${page.path}`.toLowerCase().includes(pageSearch.value.trim().toLowerCase())));
-        const site = computed(() => state.value.site);
-        const siteImages = computed(() => siteImageOptions(media.value, site.value?.id));
-        const selectedModel = computed(() => state.value.models.find(item => item.key === modelKey.value));
-        const activeModel = computed(() => state.value.models.find(item => item.key === editor.value?.modelKey));
-        const snapshot = () => JSON.stringify({ values: values.value, page: pageEditor.value, title: pageTitle.value, path: pagePath.value });
-        const entryDirty = computed(() => Boolean(editor.value) && JSON.stringify(values.value) !== (original.value ? JSON.stringify(JSON.parse(original.value).values) : '{}'));
-        const pageDirty = computed(() => Boolean(pageEditor.value) && JSON.stringify(pageEditor.value) !== (original.value ? JSON.stringify(JSON.parse(original.value).page) : undefined));
-        const settingsDirty = computed(() => JSON.stringify(settings.value) !== settingsOriginal.value);
-        const dirty = computed(() => Object.keys(sectionInputErrors.value).length > 0 || (Boolean(editor.value || pageEditor.value) && (snapshot() !== original.value || settingsDirty.value)) || (currentSection.value === 'settings' && settingsDirty.value));
-        const pagePreviewTarget = computed(() => resolvePreviewTarget(previewPayload.value, {
-            templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
-            legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
-            renderers: import.meta.env.VITE_TEMPLATE_PREVIEW_RENDERERS,
-        }, previewRuntime.value));
-        const pagePreviewUrl = computed(() => pagePreviewTarget.value.url || (pagePreviewTarget.value.origin ? `${pagePreviewTarget.value.origin}/preview` : ''));
-        const canUpload = computed(() => sdk.context?.context.role !== 'viewer' && Boolean(sdk.context?.context.instanceAdmin || sdk.context?.context.mediaPermissions?.post));
-        function canLeave() { return !busy.value && (!dirty.value || window.confirm('有尚未保存的修改。确定放弃这些修改吗？')); }
-        function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || busy.value) { event.preventDefault(); event.returnValue = ''; } }
-        onBeforeRouteLeave(() => canLeave());
-        onBeforeRouteUpdate(() => { if (!canLeave()) return false; clearPreview(); editor.value = undefined; pageEditor.value = undefined; error.value = ''; });
-        onBeforeUnmount(() => { clearPreview(); window.removeEventListener('beforeunload', beforeUnload); });
-        function resetSettings() {
-            const current = state.value.site;
-            if (current) settings.value = { name: current.name, background: current.theme.background, foreground: current.theme.foreground, accent: current.theme.accent, muted: current.theme.muted,
-                navigation: JSON.parse(JSON.stringify(current.navigation || current.pages.filter(page => page.navigation !== false && page.enabled !== false && !page.path.includes(':')).map(page => ({ id: `page-${page.key}`, label: page.title, href: page.path, children: [], enabled: true })) )) as NavigationNode[], operations: JSON.parse(JSON.stringify(current.operations || { seoTitle: current.name, seoDescription: '', contactFormEnabled: false })) };
-            settingsOriginal.value = JSON.stringify(settings.value);
-        }
-        async function loadMedia() {
-            mediaError.value = '';
-            try { media.value = (await sdk.media.getAll({ skipCache: true })).filter(item => ['IMG', 'SVG', 'GIF'].includes(item.type)); }
-            catch (cause) { mediaError.value = userErrorMessage(cause); }
-        }
-        async function loadPreview() {
-            clearPreview();
-            const sequence = previewSequence;
-            previewLoading.value = true;
-            try {
-                const payload = await sdk.send({ url: '/api/v4/storefront/site-preview', method: 'GET' });
-                const runtime = await loadPreviewRuntime(payload, url => sdk.send({ url, method: 'GET' }));
-                if (sequence !== previewSequence) return;
-                previewRuntime.value = runtime;
-                previewPayload.value = payload;
-            } catch (cause) {
-                if (sequence === previewSequence) previewError.value = userErrorMessage(cause);
-            } finally { if (sequence === previewSequence) previewLoading.value = false; }
-        }
-        function overlayPagePreview(page: PageDraft) {
-            if (!previewPayload.value || typeof previewPayload.value !== 'object' || !Array.isArray((previewPayload.value as any).pages)) return;
-            const payload = JSON.parse(JSON.stringify(previewPayload.value)) as any;
-            const target = payload.pages.find((item: any) => item.pageKey === page.key);
-            if (!target?.content) return;
-            const previewLayout = page.layoutDocument ? JSON.parse(JSON.stringify(page.layoutDocument)) : undefined;
-            for (const node of previewLayout?.root || []) {
-                const declared = site.value?.editorContract?.sections.find(section => section.type === node.type)?.props || {};
-                for (const [key, field] of Object.entries(declared)) if (field.control === 'media' && node.props[key] && typeof node.props[key] === 'object' && '_id' in node.props[key]) {
-                    const image = siteImages.value.find(item => item._id === node.props[key]._id);
-                    if (!image) { previewError.value = '所选图片不可用于当前网站。'; return; }
-                    node.props[key] = `${sdk.config.apiOrigin}${sdk.media.toUri({ media: image })}`;
-                }
-            }
-            // The renderer intentionally gives the page-level layout precedence.
-            target.layoutDocument = previewLayout;
-            target.content.layoutDocument = previewLayout;
-            target.content.sectionConfigs = previewLayout?.root.map((node: any) => ({ type: node.type, enabled: node.enabled, data: node.props })) || page.sectionConfigs;
-            target.content.sections = page.sections;
-            target.content.seo = { ...(target.content.seo || {}), title: page.seoTitle, description: page.seoDescription };
-            payload.navigation = JSON.parse(JSON.stringify(settings.value.navigation));
-            previewPayload.value = payload;
-        }
+        function resetSettings() { const current = site.value; if (current) settings.value = { name: current.name, ...current.theme, navigation: JSON.parse(JSON.stringify(current.navigation || [])), operations: JSON.parse(JSON.stringify(current.operations)) }; settingsOriginal.value = JSON.stringify(settings.value); }
+        let sequence = 0;
         async function refresh() {
-            state.value = await sdk.studio.getSite();
-            resetSettings();
-            if (!selectedModel.value && state.value.models[0]) modelKey.value = state.value.models[0].key;
-        }
-        async function run(action: () => Promise<void>) {
-            if (busy.value) return;
-            busy.value = true; error.value = ''; notice.value = '';
-            try { await action(); }
-            catch (cause) { error.value = userErrorMessage(cause); }
-            finally { busy.value = false; }
-        }
-        function manageModel(key: string) { void router.push({ path: '/d/studio', query: { section: 'products', modelKey: key } }); }
-        function uploadMedia() {
-            if (!canUpload.value) return;
-            window.bcms.modalService.handlers.mediaCreateFile.open({ onDone: async () => { await loadMedia(); } });
-        }
-        function openEntry(target: StudioModel, entry: StudioEntry | null, newPage = false, checkLeave = true) {
-            if (checkLeave && !canLeave()) return false;
-            editor.value = { modelKey: target.key, entry, operationId: crypto.randomUUID(), newPage };
-            pageEditor.value = undefined; editorTab.value = 'content'; error.value = ''; notice.value = '';
-            values.value = {};
-            for (const field of target.fields) {
-                const raw = entry?.fields[field.key];
-                if (field.type === 'MEDIA' || field.type === 'ENTRY_POINTER') values.value[field.key] = JSON.parse(JSON.stringify(Array.isArray(raw) ? raw : [])) as StudioValue;
-                else if (field.editable) values.value[field.key] = Array.isArray(raw) && raw[0] !== undefined ? raw[0] as StudioValue : field.type === 'BOOLEAN' ? false : '';
-                else if (!entry && field.type === 'RICH_TEXT') values.value[field.key] = '';
-            }
-            if (!entry && target.key === 'site-settings') { values.value.title = 'Site settings'; values.value.slug = 'settings'; }
-            if (!entry && target.key === 'home') { values.value.title = 'Home'; values.value.slug = 'home'; }
-            pageTitle.value = ''; pagePath.value = '/'; original.value = snapshot();
-            return true;
-        }
-        function openPage(page: PageDraft, tab: 'content' | 'page' = 'content', checkLeave = true) {
-            const target = state.value.models.find(model => model.key === page.modelKey);
-            const bound = target?.entries.find(entry => entry.id === page.entryId) || (target?.singleEntry ? target.entries[0] : undefined);
-            if (target && bound) { if (!openEntry(target, bound, false, checkLeave)) return; }
-            else { if (checkLeave && !canLeave()) return; editor.value = undefined; values.value = {}; pageTitle.value = ''; pagePath.value = ''; }
-            pageEditor.value = JSON.parse(JSON.stringify(page)); editorTab.value = editor.value ? tab : 'page';
-            original.value = snapshot(); error.value = ''; notice.value = '';
-            void loadPreview();
-        }
-        function closeEditor() { if (!canLeave()) return; clearPreview(); editor.value = undefined; pageEditor.value = undefined; error.value = ''; }
-        function applyDeepLink() {
-            const requestedModel = typeof route.query.modelKey === 'string' ? route.query.modelKey : '';
-            const requestedEntry = typeof route.query.entryId === 'string' ? route.query.entryId : '';
-            const requestedPage = typeof route.query.pageKey === 'string' ? route.query.pageKey : '';
-            if (requestedPage) {
-                const page = site.value?.pages.find(page => page.key === requestedPage);
-                if (page) openPage(page, 'page');
-                else error.value = '目标页面不存在，或当前网站没有此页面。';
-                return;
-            }
-            if (!requestedModel) return;
-            const target = state.value.models.find(model => model.key === requestedModel);
-            if (!target) { error.value = '目标内容模型不存在，或你没有访问权限。'; return; }
-            modelKey.value = target.key;
-            contentSearch.value = '';
-            if (requestedEntry) {
-                const entry = target.entries.find(entry => entry.id === requestedEntry);
-                if (entry) {
-                    openEntry(target, entry);
-                    if (typeof route.query.field === 'string') void nextTick(() => { const control = document.getElementById(`studio-field-${route.query.field}`); control?.scrollIntoView({ block: 'center' }); control?.focus(); });
+            const generation = ++sequence; editorTarget.value = undefined; error.value = ''; loading.value = true;
+            try {
+                const context = await sdk.ensureContext();
+                // Do not apply any query selector to the SDK. Existing selected context is authoritative.
+                if ((route.query.workspaceId && route.query.workspaceId !== context.context.workspaceId) || (route.query.siteId && route.query.siteId !== context.context.siteId)) throw new Error('目标不属于当前网站，请先选择对应网站。');
+                const loaded = await sdk.studio.getSite();
+                const templates = await sdk.template.getAll(); const languages = await sdk.language.getAll();
+                if (generation !== sequence) return;
+                state.value = loaded;
+                for (const template of templates.filter(item => !item.siteId && !loaded.models.some(model => model.templateId === item._id))) {
+                    const permissions = context.context.templatePermissions?.find(grant => grant._id === template._id);
+                    loaded.models.push({ key: template._id, label: template.label, templateId: template._id, singleEntry: template.singleEntry, canCreate: context.context.instanceAdmin || Boolean(permissions?.post), canEdit: context.context.instanceAdmin || Boolean(permissions?.put), fields: [], entries: [] });
                 }
-                else error.value = '目标内容不存在，或你没有访问权限。';
-            } else if (target.singleEntry) openEntry(target, target.entries[0] || null);
-        }
-        watch(error, async message => { if (message) { await nextTick(); const summary = document.getElementById('studio-error-summary'); summary?.focus(); summary?.scrollIntoView({ block: 'center' }); } });
-        watch(() => route.fullPath, () => { if (!loading.value) applyDeepLink(); });
-        watch(() => pageEditor.value?.key, () => { sectionInputErrors.value = {}; sectionErrors.value = []; selectedSection.value = ''; });
-        async function saveEntry(event: Event) {
-            event.preventDefault();
-            const current = editor.value; const target = activeModel.value; const installed = site.value;
-            if (!current || !target || !installed) return;
-            const oldValues = JSON.parse(original.value).values as Record<string, StudioValue>;
-            const changes = Object.fromEntries(Object.entries(values.value).filter(([key, value]) => !current.entry || JSON.stringify(value) !== JSON.stringify(oldValues[key])));
-            await run(async () => {
-                if (current.newPage) {
-                    const blueprint = installed.blueprints.find(item => item.modelKey === target.key);
-                    if (!blueprint) throw new Error('当前模板不支持创建此类页面。');
-                    await sdk.studio.createPage({ operationId: current.operationId, expectedUpdatedAt: installed.updatedAt, title: pageTitle.value,
-                        path: pagePath.value, blueprintKey: blueprint.key, fields: changes });
-                } else {
-                    const saved = await sdk.studio.saveEntry(target.key, { entryId: current.entry?.id, operationId: current.operationId,
-                        expectedUpdatedAt: current.entry?.updatedAt, fields: changes });
-                    if (current.entry) {
-                        current.entry = { ...current.entry, id: saved.id, updatedAt: saved.updatedAt };
-                        const baseline = JSON.parse(original.value); baseline.values = JSON.parse(JSON.stringify(values.value));
-                        original.value = JSON.stringify(baseline);
-                        await refresh(); notice.value = '内容草稿已保存。使用右上角「发布更新」同步到网站。'; return;
+                modelKey.value = typeof route.query.modelKey === 'string' ? route.query.modelKey : loaded.models[0]?.key || '';
+                const requestedModel = route.query.templateId ? loaded.models.find(model => model.templateId === route.query.templateId) : loaded.models.find(model => model.key === modelKey.value || model.templateId === modelKey.value);
+                if (requestedModel) modelKey.value = requestedModel.key;
+                const isTarget = Boolean(route.query.entryId || route.query.pageKey || route.query.intent || route.query.templateId || requestedModel?.singleEntry && route.query.modelKey);
+                if (requestedModel && !loaded.site?.pages.some(page => page.modelKey === requestedModel.key) && !loaded.models.find(model => model.key === requestedModel.key)?.entries.length && !requestedModel.fields.length) {
+                    const entries = await sdk.entry.getAllLiteByTemplateId({ templateId: requestedModel.templateId, skipCache: true });
+                    requestedModel.entries = entries.map(entry => ({ id: entry._id, updatedAt: entry.updatedAt, hasLanguage: entry.info.some(info => info.lng === language.value), fields: { title: [entry.info.find(info => info.lng === language.value)?.title || '未命名内容'] } }));
+                }
+                if (isTarget) {
+                    const query = { ...route.query };
+                    if (!query.modelKey && !query.pageKey && requestedModel) query.modelKey = requestedModel.key;
+                    const resolved = resolveEditorTarget(query, { workspaceId: context.context.workspaceId, siteId: context.context.siteId, language: loaded.site?.language || language.value, languages: languages.map(item => item.code), models: loaded.models, pages: loaded.site?.pages || [] });
+                    if (resolved.entryId) {
+                        const entry = await sdk.entry.get({ templateId: resolved.templateId, entryId: resolved.entryId, skipCache: true });
+                        if (entry.siteId && entry.siteId !== context.context.siteId) throw new Error('目标内容不属于当前网站。');
                     }
+                    if (generation !== sequence) return;
+                    editorTarget.value = resolved;
                 }
-                editor.value = undefined; pageEditor.value = undefined; await refresh(); notice.value = '草稿已保存。使用右上角「发布更新」同步到网站。';
-            });
+                resetSettings();
+                media.value = (await sdk.media.getAll()).filter(item => ['IMG','SVG','GIF'].includes(item.type));
+            } catch (cause) { if (generation === sequence) error.value = userErrorMessage(cause); }
+            finally { if (generation === sequence) loading.value = false; }
         }
-        async function savePage(event: Event) {
-            event.preventDefault();
-            const form = event.currentTarget;
-            if (!(form instanceof HTMLFormElement)) return;
-            const page = pageEditor.value; const installed = site.value;
-            if (!page || !installed) return;
-            const nodes = (page.layoutDocument as any)?.root || [];
-            sectionErrors.value = nodes.flatMap((node: any) => node.enabled ? sectionPropertyFields(installed.editorContract?.sections.find(section => section.type === node.type)?.props || {}).filter(field => sectionFieldSupported(field) && sectionFieldVisible(field, { ...Object.fromEntries(sectionPropertyFields(installed.editorContract?.sections.find(section => section.type === node.type)?.props || {}).filter(item => item.default !== undefined).map(item => [item.key, item.default])), ...node.props })).flatMap(field => {
-                const id = `section-${node.id}-${field.key}`;
-                const message = sectionInputErrors.value[id] || sectionFieldError(field, node.props[field.key] ?? field.default);
-                return message ? [{ id, nodeId: node.id, message: `${field.label}：${message}` }] : [];
-            }) : []);
-            if (sectionErrors.value.length) { await nextTick(); sectionErrorSummary.value?.focus(); return; }
-            if (!form.reportValidity()) return;
-            const bindingChanged = page.entryId !== JSON.parse(original.value).page?.entryId;
-            if (bindingChanged && entryDirty.value) { error.value = '请先保存页面内容，再修改绑定内容。'; return; }
-            const settingsDraft = JSON.parse(JSON.stringify(settings.value));
-            const settingsChanged = settingsDirty.value;
-            await run(async () => {
-                await sdk.studio.savePage(page.key, { expectedUpdatedAt: installed.updatedAt, title: page.title, path: page.path, seoTitle: page.seoTitle,
-                    seoDescription: page.seoDescription, sections: page.sections, sectionConfigs: page.sectionConfigs, layoutDocument: page.layoutDocument, entryId: page.entryId, enabled: page.enabled !== false, navigation: page.navigation !== false });
-                if (settingsChanged) {
-                    await refresh();
-                    if (!state.value.site) throw new Error('网站状态刷新失败，请重试。');
-                    await sdk.studio.saveSettings({ expectedUpdatedAt: state.value.site.updatedAt, name: settingsDraft.name,
-                        theme: { background: settingsDraft.background, foreground: settingsDraft.foreground, accent: settingsDraft.accent, muted: settingsDraft.muted },
-                        navigation: settingsDraft.navigation, operations: settingsDraft.operations });
-                }
-                const baseline = JSON.parse(original.value); baseline.page = JSON.parse(JSON.stringify(page));
-                original.value = JSON.stringify(baseline);
-                await refresh(); settingsOriginal.value = JSON.stringify(settings.value); await loadPreview(); notice.value = '页面设置已保存。内容标签中未保存的修改仍然保留。';
-                if (bindingChanged) {
-                    const target = state.value.models.find(model => model.key === page.modelKey);
-                    const bound = target?.entries.find(entry => entry.id === page.entryId) || (target?.singleEntry ? target.entries[0] : undefined);
-                    // Rebind the editor only when no unsaved content can be displaced.
-                    if (target && bound) openPage(page, 'page', false);
-                    else { editor.value = undefined; values.value = {}; original.value = snapshot(); }
-                }
-            });
-        }
-        async function saveSettings(event: Event) {
-            event.preventDefault(); if (!site.value) return;
-            await run(async () => {
-                await sdk.studio.saveSettings(settingsRequest(site.value!.updatedAt, settings.value));
-                await refresh(); notice.value = '网站设置已保存为草稿。';
-            });
-        }
-        onMounted(async () => {
-            window.addEventListener('beforeunload', beforeUnload);
-            try { await refresh(); await loadMedia(); applyDeepLink(); }
-            catch (cause) { error.value = userErrorMessage(cause); }
-            finally { loading.value = false; }
-        });
-        const entryEditor = () => {
-            const current = editor.value!; const target = activeModel.value!;
-            const editable = current.entry ? target.canEdit && current.entry.hasLanguage : target.canCreate;
-            return <form id="studio-entry-form" onSubmit={saveEntry} class="studio-card studio-editor"><div class="studio-card-heading"><div><p class="studio-eyebrow">{current.newPage ? '新增网站页面' : studioModelLabel(target)}</p><h2>基本资料</h2></div><span class="studio-badge muted">{current.entry ? '编辑草稿' : '新增内容'}</span></div>
-                <p class="studio-help">保存后可通过右上角预览和发布。当前内容语言：{site.value?.language}。</p>
-                {!editable && <p role="status" class="studio-warning">当前内容没有此语言版本，或你没有编辑权限。请联系管理员或使用完整编辑器。</p>}
-                {current.newPage && <div class="studio-fields"><label>页面名称<input required maxlength={120} value={pageTitle.value} disabled={busy.value} onInput={event => { pageTitle.value = (event.target as HTMLInputElement).value; }} /></label><label>页面路径<input required pattern="/[a-z0-9-]+(/[a-z0-9-]+)*" value={pagePath.value} disabled={busy.value} onInput={event => { pagePath.value = (event.target as HTMLInputElement).value; }} /><span class="studio-help">例如 /shipping-policy。页面会绑定本次创建的内容。</span></label></div>}
-                <StudioFields model={target} models={state.value.models} values={values.value} media={media.value} isNew={!current.entry} disabled={busy.value || !editable} onUpload={canUpload.value ? uploadMedia : undefined} onChange={(key, value) => { values.value = { ...values.value, [key]: value }; }} />
-                {mediaError.value && <p class="studio-warning">素材加载失败：{mediaError.value}。未修改的素材引用将保留。</p>}
-                {current.entry && <details class="studio-advanced"><summary>高级编辑</summary><RouterLink class="studio-text-link" to={`/d/template/${target.templateId}/entry/${current.entry.id}`}>打开完整编辑器 →</RouterLink></details>}
-            </form>;
-        };
-        const pageForm = () => {
-            const page = pageEditor.value!; const options = site.value?.pageOptions[page.key];
-            const canBind = page.layout === 'home' || Boolean(page.blueprintKey);
-            const fallbackAllowed = page.layout === 'home' ? ['hero-carousel', 'info-grid', 'faq'] :
-                page.layout === 'product-detail' ? ['product-gallery', 'product-information', 'product-description', 'faq'] : ['info-grid', 'faq'];
-            const effectiveOptions = options || { allowed: fallbackAllowed, required: '', requiredSections: [], labels: {}, visual: false };
-            const sectionAllowed = sectionTypesForEditor(effectiveOptions);
-            const requiredSections = effectiveOptions.requiredSections || (effectiveOptions.required ? [effectiveOptions.required] : []);
-            const legacyConfig = (name: string) => ({ type: name === 'hero' ? 'hero-carousel' : ['feature', 'heading', 'grid', 'story'].includes(name) ? 'info-grid' : name === 'gallery' ? 'product-gallery' : name === 'information' ? 'product-information' : name === 'description' ? 'product-description' : name, enabled: false, data: name === 'hero' || name === 'hero-carousel' ? { slides: [] } : name === 'gallery' || name === 'product-gallery' ? { images: [] } : ['feature', 'heading', 'grid', 'story', 'info-grid', 'faq'].includes(name) ? { items: [] } : {} });
-            const editorConfigs = page.sectionConfigs || page.sections.map(legacyConfig);
-            const useSectionEditor = canUseSectionEditor(effectiveOptions);
-            const visualLayout = page.layoutDocument || { version: 1 as const, mode: 'template' as const, root: editorConfigs.map((section: any, index: number) => ({ id: `section-${section.type}-${index + 1}`, kind: 'section' as const, type: section.type, enabled: section.enabled, props: section.data, children: [] })) };
-            return <form id="studio-page-form" class="studio-card studio-editor" novalidate onSubmit={savePage}><div v-show={sectionErrors.value.length > 0} ref={sectionErrorSummary} class="studio-section-error-summary" tabindex={-1} role="alert" aria-labelledby="section-errors-title"><h3 id="section-errors-title">请检查以下内容后保存</h3><ul>{sectionErrors.value.map(item => <li><a href={`#${item.id}`} onClick={async event => { event.preventDefault(); selectedSection.value = item.nodeId; await nextTick(); document.getElementById(item.id)?.focus(); }}>{item.message}</a></li>)}</ul></div><div class="studio-card-heading"><h2>页面资料</h2><span class="studio-badge muted">页面草稿</span></div><fieldset disabled={busy.value}>
-                <div class="studio-fields"><label>页面名称<input disabled={!site.value?.canManage} required maxlength={120} v-model={page.title} /></label><label>访问路径<input disabled={!site.value?.canManage} required v-model={page.path} readonly={page.layout === 'home' || (!page.blueprintKey && page.path.includes(':'))} /><span class="studio-help">{page.layout === 'home' ? '首页路径固定为 /。' : !page.blueprintKey && page.path.includes(':') ? '动态详情页路径由模板固定。' : '使用小写字母、数字、连字符组成的唯一路径，例如 /about-us。'}</span></label><label>SEO 标题<input disabled={!site.value?.canManage} maxlength={120} v-model={page.seoTitle} /></label><label>SEO 描述<textarea disabled={!site.value?.canManage} maxlength={320} rows={3} v-model={page.seoDescription} /></label>
-                    {canBind && <label>绑定内容<select disabled={entryDirty.value || !site.value?.canManage} v-model={page.entryId}><option value="">{page.blueprintKey ? '请选择内容' : '使用默认主页内容'}</option>{state.value.models.find(model => model.key === page.modelKey)?.entries.map(entry => <option value={entry.id}>{entryTitle(entry)}</option>)}</select>{entryDirty.value && <span class="studio-help">保存页面内容后可更换绑定。</span>}</label>}
-                    {useSectionEditor ? <SectionEditor modelValue={editorConfigs as any} allowed={sectionAllowed as any} required={requiredSections as any} labels={effectiveOptions.labels} media={siteImages.value} onUpload={canUpload.value ? uploadMedia : undefined} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.sectionConfigs = value; page.sections = value.map((section: any) => section.type); overlayPagePreview(page); }} /> :
-                        <VisualPageEditor modelValue={visualLayout as any} pageTitle={page.title} pagePath={page.path} seoTitle={page.seoTitle} seoDescription={page.seoDescription} previewPayload={previewPayload.value as any} previewNotice={previewError.value || (previewLoading.value ? '正在加载网站预览…' : previewPayload.value ? pagePreviewTarget.value.notice : '')} previewUrl={pagePreviewUrl.value} previewPath={page.path} pageKey={page.key} templateId={site.value?.presetId} templateVersion={site.value?.presetVersion} sectionLabels={effectiveOptions.labels} sectionDefinitions={site.value?.editorContract?.sections || []} media={siteImages.value} models={state.value.models} onUpload={canUpload.value ? uploadMedia : undefined} selectedNodeId={selectedSection.value} onSelect={(id: string) => { selectedSection.value = id; }} onValidation={({ nodeId, key, error: validationError }: { nodeId: string; key: string; error: string | null }) => { const id = `section-${nodeId}-${key}`; if (validationError) sectionInputErrors.value[id] = validationError; else delete sectionInputErrors.value[id]; sectionErrors.value = sectionErrors.value.filter(item => item.id !== id); }} navigation={settings.value.navigation || site.value?.navigation || []} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.layoutDocument = value; page.sectionConfigs = value.root.map((node: any) => ({ type: node.type, enabled: node.enabled, data: node.props })); page.sections = value.root.map((node: any) => node.type); overlayPagePreview(page); }} onUpdate:navigation={(value: NavigationNode[]) => { settings.value.navigation = value; overlayPagePreview(page); }} onUpdate:seoTitle={(value: string) => { page.seoTitle = value; overlayPagePreview(page); }} onUpdate:seoDescription={(value: string) => { page.seoDescription = value; overlayPagePreview(page); }} />}
-                    <label class="studio-check"><input type="checkbox" disabled={page.layout === 'home' || !site.value?.canManage} checked={page.enabled !== false} onChange={event => { page.enabled = (event.target as HTMLInputElement).checked; }} />启用页面</label><label class="studio-check"><input disabled={!site.value?.canManage} type="checkbox" checked={page.navigation !== false} onChange={event => { page.navigation = (event.target as HTMLInputElement).checked; }} />加入导航</label>
-                </div>{!editor.value && <p class="studio-help">{page.path.includes(':') ? '此页面按商品或分类自动生成，请到对应内容分类编辑资料。' : '此页面尚未绑定可编辑内容，可在上方绑定内容后保存。'}</p>}</fieldset></form>;
-        };
-        function createPageFromBlueprint(blueprint: PageBlueprintOption) {
-            pageWizardOpen.value = false;
-            const target = state.value.models.find(model => model.key === blueprint?.modelKey);
-            if (target) openEntry(target, null, true);
-        }
+        function manageModel(key: string) { void router.push({ path: '/d/studio', query: { section: 'content', modelKey: key } }); }
+        function openEntry(model: StudioModel, entry: StudioEntry | null, blueprint?: string) { const context = sdk.context?.context; if (!context) return; void router.push({ ...contentEditorLocation({ intent: entry ? 'edit' : 'create', workspaceId: context.workspaceId, siteId: context.siteId, templateId: model.templateId, modelKey: model.key, entryId: entry?.id || null, language: site.value?.language || language.value }), ...(blueprint ? { query: { ...contentEditorLocation({ intent: 'create', workspaceId: context.workspaceId, siteId: context.siteId, templateId: model.templateId, modelKey: model.key, entryId: null, language: site.value?.language || language.value }).query, blueprint } } : {}) }); }
+        function openPage(page: PageDraft, panel?: 'page') { const model = state.value.models.find(model => model.key === page.modelKey); const bound = model?.entries.find(entry => entry.id === page.entryId) || (model?.singleEntry ? model.entries[0] : undefined); const context = sdk.context?.context; if (!context) return; const location = contentEditorLocation({ intent: bound ? 'edit' : 'page', workspaceId: context.workspaceId, siteId: context.siteId, templateId: model?.templateId || '', modelKey: model?.key, entryId: bound?.id || null, pageKey: page.key, language: site.value?.language || language.value }); if (panel) location.query.panel = panel; void router.push(location); }
         function createPage() { pageWizardOpen.value = true; }
-        function openSitePreview() { window.open('/d/presets/site-preview', '_blank', 'noopener,noreferrer'); }
-        function openReleaseManager() { if (!canLeave()) return; void router.push({ path: '/d/studio', query: { section: 'release' } }); }
-
+        function createPageFromBlueprint(blueprint: PageBlueprintOption) { pageWizardOpen.value = false; const model = state.value.models.find(model => model.key === blueprint.modelKey); if (model) openEntry(model, null, blueprint.key); }
+        async function saveSettings(event: Event) { event.preventDefault(); if (!site.value || busy.value) return; busy.value = true; error.value = ''; try { await sdk.studio.saveSettings(settingsRequest(site.value.updatedAt, settings.value)); await refresh(); notice.value = '网站设置已保存为草稿。'; } catch (cause) { error.value = userErrorMessage(cause); } finally { busy.value = false; } }
+        watch(() => route.fullPath, refresh); onMounted(refresh);
         const emptyState = (title: string, detail: string) => <div class="studio-empty"><span class="studio-empty-icon"><StudioIcon name="pages" size={26} /></span><h3>{title}</h3><p>{detail}</p></div>;
         const listView = () => <>
             <div class="studio-list-toolbar"><label class="studio-search"><StudioIcon name="search" /><input type="search" aria-label="搜索商品与内容" placeholder="搜索名称或路径…" value={contentSearch.value} onInput={event => { contentSearch.value = (event.target as HTMLInputElement).value; }} /></label><span class="studio-help">共 {filteredEntries.value.length} 项</span></div>
@@ -358,49 +110,28 @@ export const StudioView = defineComponent({
                 <section class="studio-card studio-website-card"><div class="studio-card-heading"><h2>当前网站</h2><span class="studio-badge muted">已安装模板</span></div><a class="studio-website-preview" href="/d/presets/site-preview" target="_blank" rel="noopener"><span class="studio-site-monogram">{site.value!.name.slice(0, 1)}</span><span><StudioIcon name="external" size={14} />预览网站草稿</span></a><h3>{site.value!.name}</h3><p class="studio-help">{sdk.context?.workspace.name}</p><dl class="studio-details"><dt>内容语言</dt><dd>{site.value!.language}</dd><dt>管理权限</dt><dd>{site.value!.canManage ? '网站管理员' : '内容编辑者'}</dd></dl><RouterLink class="studio-button" to="/d/studio?section=settings">管理网站设置<StudioIcon name="arrow" size={14} /></RouterLink></section></div>
 
         </>;
-        const settingsView = () => <div class="studio-settings-layout"><form id="studio-settings-form" class="studio-card studio-editor" onSubmit={saveSettings}><div class="studio-card-heading"><h2>基本信息与外观</h2><span class="studio-badge muted">保存为草稿</span></div><p class="studio-help">修改网站名称和模板支持的品牌颜色。</p><fieldset disabled={busy.value || !site.value?.canManage}><div class="studio-fields"><label>网站名称<input required maxlength={80} v-model={settings.value.name} /></label><div class="studio-color-grid">{(['background', 'foreground', 'accent', 'muted'] as const).map(key => <label>{({ background: '背景颜色', foreground: '文字颜色', accent: '强调颜色', muted: '弱化颜色' })[key]}<div class="studio-color"><input type="color" aria-label={`${key} 颜色选择器`} v-model={settings.value[key]} /><input required pattern="#[a-fA-F0-9]{6}" aria-label={`${key} 十六进制颜色`} v-model={settings.value[key]} /></div></label>)}</div><NavigationEditor modelValue={settings.value.navigation} pages={site.value?.pages || []} disabled={!site.value?.canManage || busy.value} onUpdate:modelValue={(value: NavigationNode[]) => { settings.value.navigation = value; }} /></div></fieldset>{!site.value?.canManage && <p class="studio-warning">网站设置需要管理员权限。</p>}</form><aside class="studio-card studio-settings-guide"><h2>网站管理</h2><p class="studio-help">资料与外观保存为草稿，通过右上角统一发布。</p><RouterLink class="studio-settings-link" to="/d/domains"><StudioIcon name="external" />域名与访问<StudioIcon name="chevron" size={14} /></RouterLink>{site.value?.canManage && <RouterLink class="studio-settings-link" to="/d/workspaces#workspace-members"><StudioIcon name="settings" />成员与权限<StudioIcon name="chevron" size={14} /></RouterLink>}<div class="studio-nav-divider" /><h3>搜索与分享</h3><label>搜索引擎标题<input maxlength={120} value={settings.value.operations.seoTitle} onInput={event => { settings.value.operations.seoTitle = (event.target as HTMLInputElement).value; }} /></label><label>搜索引擎描述<textarea maxlength={320} rows={3} value={settings.value.operations.seoDescription} onInput={event => { settings.value.operations.seoDescription = (event.target as HTMLTextAreaElement).value; }} /></label>{(['socialImage', 'favicon'] as const).map(key => <label>{key === 'socialImage' ? '社交分享图片' : '网站图标'}<select aria-label={key === 'socialImage' ? '社交分享图片' : '网站图标'} disabled={busy.value || !site.value?.canManage} value={settings.value.operations[key]?._id || ''} onChange={event => { const id = (event.target as HTMLSelectElement).value; settings.value.operations[key] = id ? { _id: id } : undefined; }}><option value="">未设置</option>{settings.value.operations[key]?._id && !media.value.some(item => item._id === settings.value.operations[key]?._id) && <option value={settings.value.operations[key]?._id}>原有图片（素材未加载）</option>}{siteImages.value.map(item => <option value={item._id}>{item.name}</option>)}</select></label>)}<label>统计工具 ID<input value={settings.value.operations.analyticsId || ""} onInput={event => { settings.value.operations.analyticsId = (event.target as HTMLInputElement).value.trim() || undefined; }} /></label><label class="studio-check"><input type="checkbox" disabled={busy.value || !site.value?.canManage || !site.value?.contactDeliveryConfigured} checked={settings.value.operations.contactFormEnabled} onChange={event => { settings.value.operations.contactFormEnabled = (event.target as HTMLInputElement).checked; }} />启用联系表单 <span class="studio-help">{site.value?.contactDeliveryConfigured ? '通过 Gateway 接收询盘' : '请先配置 Gateway 询盘服务'}</span></label><h3>品牌与联系信息</h3><p class="studio-help">更新品牌名称、联系邮箱及网站公告。</p><button onClick={() => manageModel('site-settings')}>编辑品牌与联系资料 →</button><details><summary>模板与高级配置</summary><p class="studio-help">模板 {site.value?.presetId} · {site.value?.presetVersion}<br />字体：{site.value?.theme.font}</p><RouterLink class="studio-text-link" to="/d/presets">模板安装与兼容性 →</RouterLink><RouterLink class="studio-text-link" to="/d/domains">域名与访问设置 →</RouterLink></details></aside></div>;
+        const settingsView = () => <div class="studio-settings-layout"><form id="studio-settings-form" class="studio-card studio-editor" onSubmit={saveSettings}><div class="studio-card-heading"><h2>基本信息与外观</h2><span class="studio-badge muted">保存为草稿</span></div><p class="studio-help">修改网站名称和模板支持的品牌颜色。</p><fieldset disabled={busy.value || !site.value?.canManage}><div class="studio-fields"><label>网站名称<input required maxlength={80} v-model={settings.value.name} /></label><div class="studio-color-grid">{(['background', 'foreground', 'accent', 'muted'] as const).map(key => <label>{({ background: '背景颜色', foreground: '文字颜色', accent: '强调颜色', muted: '弱化颜色' })[key]}<div class="studio-color"><input type="color" aria-label={`${key} 颜色选择器`} v-model={settings.value[key]} /><input required pattern="#[a-fA-F0-9]{6}" aria-label={`${key} 十六进制颜色`} v-model={settings.value[key]} /></div></label>)}</div><button type="button" onClick={() => { const home = site.value?.pages.find(page => page.layout === 'home'); if (home) openPage(home, 'page'); }}>编辑网站导航 →</button></div></fieldset>{!site.value?.canManage && <p class="studio-warning">网站设置需要管理员权限。</p>}</form><aside class="studio-card studio-settings-guide"><h2>网站管理</h2><p class="studio-help">资料与外观保存为草稿，通过右上角统一发布。</p><RouterLink class="studio-settings-link" to="/d/domains"><StudioIcon name="external" />域名与访问<StudioIcon name="chevron" size={14} /></RouterLink>{site.value?.canManage && <RouterLink class="studio-settings-link" to="/d/workspaces#workspace-members"><StudioIcon name="settings" />成员与权限<StudioIcon name="chevron" size={14} /></RouterLink>}<div class="studio-nav-divider" /><h3>搜索与分享</h3><label>搜索引擎标题<input maxlength={120} value={settings.value.operations.seoTitle} onInput={event => { settings.value.operations.seoTitle = (event.target as HTMLInputElement).value; }} /></label><label>搜索引擎描述<textarea maxlength={320} rows={3} value={settings.value.operations.seoDescription} onInput={event => { settings.value.operations.seoDescription = (event.target as HTMLTextAreaElement).value; }} /></label>{(['socialImage', 'favicon'] as const).map(key => <label>{key === 'socialImage' ? '社交分享图片' : '网站图标'}<select aria-label={key === 'socialImage' ? '社交分享图片' : '网站图标'} disabled={busy.value || !site.value?.canManage} value={settings.value.operations[key]?._id || ''} onChange={event => { const id = (event.target as HTMLSelectElement).value; settings.value.operations[key] = id ? { _id: id } : undefined; }}><option value="">未设置</option>{settings.value.operations[key]?._id && !media.value.some(item => item._id === settings.value.operations[key]?._id) && <option value={settings.value.operations[key]?._id}>原有图片（素材未加载）</option>}{siteImages.value.map(item => <option value={item._id}>{item.name}</option>)}</select></label>)}<label>统计工具 ID<input value={settings.value.operations.analyticsId || ""} onInput={event => { settings.value.operations.analyticsId = (event.target as HTMLInputElement).value.trim() || undefined; }} /></label><label class="studio-check"><input type="checkbox" disabled={busy.value || !site.value?.canManage || !site.value?.contactDeliveryConfigured} checked={settings.value.operations.contactFormEnabled} onChange={event => { settings.value.operations.contactFormEnabled = (event.target as HTMLInputElement).checked; }} />启用联系表单 <span class="studio-help">{site.value?.contactDeliveryConfigured ? '通过 Gateway 接收询盘' : '请先配置 Gateway 询盘服务'}</span></label><h3>品牌与联系信息</h3><p class="studio-help">更新品牌名称、联系邮箱及网站公告。</p><button onClick={() => manageModel('site-settings')}>编辑品牌与联系资料 →</button><details><summary>模板与高级配置</summary><p class="studio-help">模板 {site.value?.presetId} · {site.value?.presetVersion}<br />字体：{site.value?.theme.font}</p><RouterLink class="studio-text-link" to="/d/presets">模板安装与兼容性 →</RouterLink><RouterLink class="studio-text-link" to="/d/domains">域名与访问设置 →</RouterLink></details></aside></div>;
         const contentNavigation = () => <nav class="studio-content-tabs" aria-label="网站内容分类">
             <RouterLink class={{ active: currentSection.value === 'pages' }} aria-current={currentSection.value === 'pages' ? 'page' : undefined} to="/d/studio?section=pages">页面</RouterLink>
             {state.value.models.filter(model => !['home', 'content-page'].includes(model.key)).map(model => <RouterLink key={model.key} class={{ active: currentSection.value === 'products' && modelKey.value === model.key }} aria-current={currentSection.value === 'products' && modelKey.value === model.key ? 'page' : undefined} to={{ path: '/d/studio', query: { section: 'products', modelKey: model.key } }}>{studioModelLabel(model)}</RouterLink>)}
         </nav>;
-        const isEditing = () => Boolean(editor.value || pageEditor.value);
-        const editingSettings = () => pageEditor.value && editorTab.value === 'page';
-        return () => <div class="cms-studio">
-            <header class="studio-header"><div>
-                {isEditing() && <button class="studio-back" type="button" disabled={busy.value} onClick={closeEditor}>← 返回{sectionInfo.value.label}</button>}
-                <p class="studio-eyebrow">{isEditing() ? 'EDIT CONTENT' : sectionInfo.value.eyebrow}</p>
-                <h1>{pageEditor.value ? pageEditor.value.title : editor.value ? editor.value.newPage ? '新增网站页面' : editor.value.entry ? activeModel.value?.singleEntry ? studioModelLabel(activeModel.value) : entryTitle(editor.value.entry) : activeModel.value?.key === 'product' ? '新增商品' : '新增内容' : sectionInfo.value.label}</h1>
-                <p class="studio-subtitle">{isEditing() ? '保存草稿后，通过右上角预览和发布。' : currentSection.value === 'overview' ? `欢迎回来，${sdk.store.user.methods.me()?.username || '内容编辑者'}。${sectionInfo.value.description}` : sectionInfo.value.description}</p>
-            </div><div class="studio-actions">
-                {isEditing() ? <>
-                    <span class="studio-save-state">{busy.value ? '正在保存…' : dirty.value ? '有未保存的修改' : '草稿已保存'}</span>
-                    <button type="button" onClick={openSitePreview} disabled={previewLoading.value}>预览</button>
-                    <button type="button" onClick={openReleaseManager}>发布</button>
-                    <button class="primary" type="submit" form={editingSettings() ? 'studio-page-form' : 'studio-entry-form'} disabled={busy.value || (editingSettings() ? (!pageDirty.value && !settingsDirty.value && !Object.keys(sectionInputErrors.value).length) || !site.value?.canManage : editor.value?.entry ? !entryDirty.value || !activeModel.value?.canEdit || !editor.value.entry.hasLanguage : !dirty.value || !activeModel.value?.canCreate)}>保存{editingSettings() ? '页面设置' : '草稿'}</button>
-                </> : site.value && <>
-                    {currentSection.value === 'products' && !selectedModel.value?.singleEntry && <button class="primary" disabled={!selectedModel.value?.canCreate} onClick={() => selectedModel.value && openEntry(selectedModel.value, null)}><StudioIcon name="plus" size={17} />新增{selectedModel.value ? studioModelLabel(selectedModel.value) : '内容'}</button>}
-                    {currentSection.value === 'pages' && <button class="primary" disabled={!site.value.canManage || !site.value.blueprints.length} onClick={createPage}><StudioIcon name="plus" size={17} />新增页面</button>}
-                    {currentSection.value === 'settings' && <button class="primary" type="submit" form="studio-settings-form" disabled={!dirty.value || busy.value || !site.value.canManage}>保存设置草稿</button>}
-                </>}
+        return () => editorTarget.value ? <ContentWorkspace key={`${editorTarget.value.intent}:${editorTarget.value.templateId}:${editorTarget.value.entryId}:${editorTarget.value.pageKey}:${editorTarget.value.language}`} target={editorTarget.value} /> : <div class="cms-studio">
+            <header class="studio-header"><div><p class="studio-eyebrow">{sectionInfo.value.eyebrow}</p><h1>{sectionInfo.value.label}</h1><p class="studio-subtitle">{sectionInfo.value.description}</p></div><div class="studio-actions">
+                {currentSection.value === 'products' && !selectedModel.value?.singleEntry && <button class="primary" disabled={!selectedModel.value?.canCreate} onClick={() => selectedModel.value && openEntry(selectedModel.value, null)}>新增{selectedModel.value ? studioModelLabel(selectedModel.value) : '内容'}</button>}
+                {currentSection.value === 'pages' && <button class="primary" disabled={!site.value?.canManage || !site.value.blueprints.length} onClick={createPage}>新增页面</button>}
+                {currentSection.value === 'settings' && <button class="primary" type="submit" form="studio-settings-form" disabled={!dirty.value || busy.value || !site.value?.canManage}>保存设置草稿</button>}
             </div></header>
-            {error.value && <div id="studio-error-summary" tabindex={-1} role="alert" class="studio-error"><strong>操作未完成</strong><p>{error.value}</p><p>{isEditing() || dirty.value ? '修改仍保留在表单中。若提示内容冲突，请复制需要保留的修改后刷新。' : '请检查当前权限与网站状态，然后刷新重试。'}</p></div>}
-            {notice.value && <div role="status" class="studio-success">{notice.value}</div>}
-            {loading.value ? <div role="status" class="studio-card studio-empty">正在读取当前网站内容…</div> : !site.value ? <div class="studio-card studio-empty"><h2>开始搭建你的网站</h2><p>从左侧选择网站，即可开始管理内容。</p><div class="studio-actions"><RouterLink class="studio-button" to="/d/workspaces">管理网站</RouterLink>{sdk.context?.context.admin && <RouterLink class="studio-button primary" to={siteSetupHref}>开始创建网站</RouterLink>}</div></div> : <>
-                <PageCreateWizard open={pageWizardOpen.value} blueprints={(site.value.blueprints || []) as PageBlueprintOption[]} disabled={busy.value || !site.value.canManage} onCreate={createPageFromBlueprint} onClose={() => { pageWizardOpen.value = false; }} />
-                {['products', 'pages'].includes(currentSection.value) && contentNavigation()}
-                {pageEditor.value && editor.value && <div class="studio-editor-tabs" role="tablist" aria-label="页面编辑">
-                    <button id="studio-content-tab" type="button" role="tab" aria-selected={editorTab.value === 'content'} aria-controls="studio-page-panel" onClick={() => { editorTab.value = 'content'; }}>页面内容{entryDirty.value ? ' · 未保存' : ''}</button>
-                    <button id="studio-settings-tab" type="button" role="tab" aria-selected={editorTab.value === 'page'} aria-controls="studio-page-panel" onClick={() => { editorTab.value = 'page'; }}>页面设置{pageDirty.value ? ' · 未保存' : ''}</button>
-                </div>}
-                {isEditing() ? <div id="studio-page-panel" role={pageEditor.value && editor.value ? 'tabpanel' : undefined} aria-labelledby={pageEditor.value && editor.value ? editorTab.value === 'page' ? 'studio-settings-tab' : 'studio-content-tab' : undefined}>{editingSettings() ? pageForm() : editor.value && activeModel.value ? entryEditor() : pageEditor.value ? pageForm() : null}</div>
-                : currentSection.value === 'overview' ? overview()
+            {error.value && <div role="alert" class="studio-error"><strong>操作未完成</strong><p>{error.value}</p></div>}{notice.value && <p role="status" class="studio-success">{notice.value}</p>}
+            {loading.value ? <div role="status" class="studio-card studio-empty">正在读取当前网站内容…</div> : <>
+                <PageCreateWizard open={pageWizardOpen.value} blueprints={(site.value?.blueprints || []) as PageBlueprintOption[]} disabled={busy.value || !site.value?.canManage} onCreate={createPageFromBlueprint} onClose={() => { pageWizardOpen.value = false; }} />
+                {['products','pages'].includes(currentSection.value) && contentNavigation()}
+                {currentSection.value === 'overview' ? site.value ? overview() : emptyState('开始搭建你的网站', '请选择网站或创建网站。')
                 : currentSection.value === 'operations' ? <SiteOperations />
                 : currentSection.value === 'products' ? listView()
                 : currentSection.value === 'pages' ? pagesView()
                 : currentSection.value === 'media' ? <MediaView />
                 : currentSection.value === 'settings' ? settingsView()
-                : site.value.canManage ? <section class="studio-card"><div class="studio-card-heading"><div><h2>检查与发布</h2><p class="studio-help">检查本次变更后确认发布，也可在这里查看历史版本。</p></div></div><ReleaseManager onSaved={refresh} /></section>
-                : <section class="studio-card studio-empty"><h2>发布需要网站管理员权限</h2><p>保存内容后，请管理员检查并发布。</p></section>}
+                : site.value?.canManage ? <ReleaseManager onSaved={refresh} /> : emptyState('发布需要网站管理员权限','请管理员检查并发布。')}
             </>}
         </div>;
     },

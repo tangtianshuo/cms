@@ -135,3 +135,26 @@ test('legacy public manifests expose renderer sections instead of layout names',
     assert.equal(options?.labels['hero-carousel'], '首页轮播');
     assert.equal(options?.visual, false);
 });
+
+test('an unchanged parameterized blueprint remains valid beside its concrete children', () => {
+    const installed = site();
+    installed.models.push({ key: 'content-page', templateId: 'content-template', fields: [] });
+    const bound = { _id: 'delivery', templateId: 'content-template' } as Entry;
+    const created = createPageDraft(installed, 'delivery-page', {
+        blueprintKey: 'content', title: 'Delivery', path: '/pages/delivery', seoTitle: 'Delivery',
+        seoDescription: '', sections: ['info-grid'], entryId: bound._id,
+    }, bound);
+    const blueprint = pageDraft(created, 'content')!;
+    assert.doesNotThrow(() => updatePageDraft(created, 'content', blueprint));
+    assert.throws(() => updatePageDraft(created, 'content', { ...blueprint, path: '/changed/:slug' }), /fixed|invalid/i);
+    const wrongModel = structuredClone(created);
+    wrongModel.pages.find(page => page.key === 'delivery-page')!.modelKey = 'product';
+    assert.throws(() => updatePageDraft(wrongModel, 'content', pageDraft(wrongModel, 'content')!), /conflict/i);
+    const unrelated = structuredClone(created);
+    unrelated.pages.find(page => page.key === 'delivery-page')!.blueprintKey = 'collections';
+    assert.throws(() => updatePageDraft(unrelated, 'content', pageDraft(unrelated, 'content')!), /conflict/i);
+    assert.throws(() => createPageDraft(created, 'duplicate-page', {
+        blueprintKey: 'content', title: 'Duplicate', path: '/pages/delivery', seoTitle: 'Duplicate',
+        seoDescription: '', sections: ['info-grid'], entryId: bound._id,
+    }, bound), /conflict/i);
+});

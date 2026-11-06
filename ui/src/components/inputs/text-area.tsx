@@ -59,9 +59,7 @@ export const TextAreaInput = defineComponent({
                     placeholder:
                         props.placeholder || t('components.text.placeholder'),
                 }),
-                Collaboration.configure({
-                    document: ydoc,
-                }),
+                ...(props.entrySync ? [Collaboration.configure({ document: ydoc })] : []),
             ],
             editable: !props.disabled,
             editorProps: { attributes: {

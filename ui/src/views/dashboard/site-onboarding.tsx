@@ -47,7 +47,7 @@ const contentLinks = [
         key: 'content',
         title: '网站页面',
         detail: '完善关于我们等页面并保存草稿。',
-        href: '/d/studio?section=pages',
+        href: '/d/studio?section=content&category=pages',
     },
 ];
 

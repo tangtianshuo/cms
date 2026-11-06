@@ -1,6 +1,6 @@
 import type { TemplateEditorContract, TemplateSectionProperty } from '../template-contract/model';
 import type { Media } from '../media/models/main';
-import { ownerWorkspace } from '../workspaces/context';
+import { mediaReferenceAllowedForSite } from '../_utils/site-media';
 import type { SiteInstallation } from '../presets/site-model';
 
 export type MediaRef = { _id: string };
@@ -31,12 +31,7 @@ function mediaRef(value: unknown): value is MediaRef {
 }
 
 export function mediaAuthorizedForSite(media: Pick<Media, '_id' | 'mimetype' | 'workspaceId'> & { siteId?: string }, site: Pick<SiteInstallation, '_id' | 'workspaceId'>, options: { requireSiteBinding?: boolean } = {}): boolean {
-    if (ownerWorkspace(media) !== ownerWorkspace(site)) return false;
-    if (media.siteId && media.siteId !== site._id) return false;
-    if (options.requireSiteBinding && media.siteId !== site._id) return false;
-    // Non-default workspaces have site-bound media after the media repository
-    // stamps the selected site. Missing provenance cannot be accepted there.
-    if (ownerWorkspace(site) !== 'default' && media.siteId !== site._id) return false;
+    if (!mediaReferenceAllowedForSite(media, site, options)) return false;
     return typeof media.mimetype === 'string' && media.mimetype.startsWith('image/');
 }
 

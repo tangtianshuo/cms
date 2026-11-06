@@ -221,6 +221,7 @@ for (const hidden of [false, true]) {
 
 test('controlled page validation retains native required metadata checks before persistence', async ({ page }) => {
     await page.goto('/d/studio?section=pages&pageKey=collections', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('tab', { name: '页面信息', exact: true }).click();
     const name = page.getByLabel('页面名称', { exact: true });
     await expect(name).toBeVisible();
     const originalName = await name.inputValue();

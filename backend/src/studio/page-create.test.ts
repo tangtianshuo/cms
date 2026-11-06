@@ -46,3 +46,15 @@ test('content page instances accept concrete paths from both supported UAT forms
         assert.equal(created.blueprintKey, 'content');
     }
 });
+
+test('same operation rejects changed full content, status and group after a lost response', async () => {
+    let current = site; let saved: Entry | null = null; let adds = 0;
+    const full = { ...entry, groupId: 'general', statuses: [{ lng: 'en', id: 'draft' }], content: [{ lng: 'en', nodes: [{ type: 'paragraph', content: [{ type: 'text', text: 'Original body' }] }], plainText: '<p>Original body</p>' }] } as Entry;
+    const source = { findEntry: async () => saved, addEntry: async (value: Entry) => { adds++; saved = value; return value; }, saveSite: async (value: SiteInstallation) => { current = value; return true; }, findSite: async () => current };
+    const created = await createStudioPage(current, 'op', full, input, source);
+    assert.equal((await createStudioPage(current, 'op', structuredClone(full), input, source)).key, created.key);
+    for (const patch of [{ groupId: 'changed' }, { statuses: [{ lng: 'en', id: 'other' }] }, { content: [{ lng: 'en', nodes: [], plainText: '' }] }]) {
+        await assert.rejects(() => createStudioPage(current, 'op', { ...full, ...patch } as Entry, input, source), /changed/);
+    }
+    assert.equal(adds, 1);
+});
