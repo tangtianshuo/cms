@@ -12,3 +12,8 @@
 /deliverables/
 /manual-assets/
 .DS_Store
+
+# Browser auth state, build output and evidence may contain private session data.
+/.e2e/
+/test-results/
+/playwright-report/
