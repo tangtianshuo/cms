@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { gatewayPublishConfig, gatewayPublishConfigs, gatewayRequest, GatewayRevisionConflict, GatewayUnavailableError } from './gateway-client';
+import { gatewayPublishConfig, gatewayPublishConfigs, gatewayRequest, gatewayManagementRequest, GatewayRevisionConflict, GatewayUnavailableError } from './gateway-client';
 import { runWithWorkspace } from '../workspaces/context';
 
 const bindingEnv = {
@@ -116,4 +116,35 @@ test('Gateway registry outages retain a safe code distinct from invalid template
 test('Gateway conflict responses retain the existing revision-conflict behavior', async () => {
     const fetcher = (async () => Response.json({ error: 'revision_conflict' }, { status: 409 })) as typeof fetch;
     await assert.rejects(gatewayRequest(fetcher, 'https://gateway.invalid', 'fixture-secret'), GatewayRevisionConflict);
+});
+
+test('Gateway transport preserves Headers and sets service authorization authoritatively', async () => {
+    const headers = new Headers({ 'X-CMS-Workspace': 'w1', 'X-CMS-Site': 's1', Authorization: 'Bearer browser', 'Content-Type': 'text/plain' });
+    const fetcher = (async (_url, init) => {
+        assert.ok(init?.headers instanceof Headers);
+        const sent = new Headers(init.headers);
+        assert.equal(sent.get('X-CMS-Workspace'), 'w1'); assert.equal(sent.get('X-CMS-Site'), 's1');
+        assert.equal(sent.get('Authorization'), 'Bearer trusted-secret'); assert.equal(sent.get('Content-Type'), 'application/json');
+        return Response.json({ ok: true });
+    }) as typeof fetch;
+    await gatewayRequest(fetcher, 'https://gateway.example', 'trusted-secret', { headers });
+    assert.equal(headers.get('Authorization'), 'Bearer browser');
+});
+
+test('management transport replaces forged source headers and removes source mode for legacy calls', async () => {
+    const base = { gatewayBaseUrl: 'https://gateway.example', serviceSecret: 'trusted-secret',
+        workspaceId: '11111111-1111-4111-8111-111111111111', siteId: '22222222-2222-4222-8222-222222222222',
+        cmsWorkspaceId: 'w1', cmsSiteId: 's1', siteUrl: 'https://s1.example' };
+    const original = new Headers({ 'x-cms-workspace': 'foreign-workspace', 'x-cms-site': 'foreign-site', 'X-Trace': 'preserved' });
+    for (const sourceHeaders of [{ 'X-CMS-Workspace': 'w1', 'X-CMS-Site': 's1' }, undefined]) {
+        const fetcher = (async (_url, init) => {
+            const sent = new Headers(init?.headers);
+            assert.equal(sent.get('X-CMS-Workspace'), sourceHeaders ? 'w1' : null);
+            assert.equal(sent.get('X-CMS-Site'), sourceHeaders ? 's1' : null);
+            assert.equal(sent.get('X-Trace'), 'preserved');
+            return Response.json({ ok: true });
+        }) as typeof fetch;
+        await gatewayManagementRequest(fetcher, 'https://gateway.example', { ...base, sourceHeaders }, { headers: original });
+    }
+    assert.equal(original.get('X-CMS-Site'), 'foreign-site');
 });

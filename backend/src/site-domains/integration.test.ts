@@ -39,7 +39,11 @@ test('real Mongo unique domain ownership, primary concurrency, HTTP trust and im
         const controller = await factory({} as never);
         for (const method of await controller.methods(controller)) fastify.route({ method: method.type.toUpperCase() as 'GET' | 'POST' | 'DELETE', url: `${controller.path}${method.path}`, handler: method.handler });
     }
-    const site = { _id: 'site', slot: 'default', name: 'Store', createdAt: 1, updatedAt: 1, currentReleaseId: 'release' } as SiteInstallation;
+    const preset = getPreset('atelier'); assert.ok(preset);
+    const site: SiteInstallation = { _id: 'site', slot: 'default', name: 'Store', pages: [], models: [],
+        presetId: preset.id, presetVersion: preset.version, theme: preset.theme,
+        status: 'ready', importError: '', includeDemo: false, demoSeeded: false,
+        createdAt: 1, updatedAt: 1, currentReleaseId: 'release' };
     await Repo.siteInstallation.add(site, true);
     await Repo.storefrontRelease.add({ _id: 'release', siteId: 'site', createdAt: 1, updatedAt: 1, createdBy: 'admin', previousReleaseId: '', payload: JSON.stringify({ schemaVersion: 1, siteId: 'site', pages: [{ path: '/', content: { seo: { title: 'Published', description: 'Published content' }, preset: getPreset('atelier'), view: 'home' } }], navigation: [], redirects: [], language: 'en' }) }, true);
     const service = domainService();

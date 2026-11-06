@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ownerWorkspace } from '../workspaces/context';
 import { canonicalJson, type PublicTemplateRecord } from './registry';
-import { gatewayRequest, validateConfig, type GatewayPublishConfig } from './gateway-client';
+import { gatewayManagementRequest, validateConfig, type GatewayPublishConfig } from './gateway-client';
 import type { GatewayReleaseSource } from './gateway-publish';
 import type { ReleaseRecord, ReleaseSnapshot } from './releases';
 import type { SiteInstallation } from './site-model';
@@ -55,7 +55,7 @@ export async function readGatewayState(site: SiteInstallation,
     config: GatewayPublishConfig, fetcher: typeof fetch = fetch): Promise<GatewayState> {
     const { base } = validateConfig(config);
     if (site._id !== config.cmsSiteId || ownerWorkspace(site) !== config.cmsWorkspaceId) throw new Error('Gateway site binding mismatch');
-    const value = await gatewayRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/publication-state`, config.serviceSecret, { method: 'GET' }) as GatewayState;
+    const value = await gatewayManagementRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/publication-state`, config, { method: 'GET' }) as GatewayState;
     if (!value || !Number.isSafeInteger(value.revision) || value.revision < 0 || value.active === undefined) throw new Error('Gateway returned invalid publication state');
     const active = value.active;
     if (!active) return value;

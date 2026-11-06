@@ -12,7 +12,7 @@ const config = (cmsWorkspaceId: string, cmsSiteId: string): GatewayPublishConfig
 
 test('recovery tick catches configuration parsing failures instead of rejecting', async () => {
     const errors: unknown[] = [];
-    await assert.doesNotReject(runGatewayRecoveryTick(() => gatewayPublishConfigs({ GATEWAY_SITE_BINDINGS: '{' }), async () => undefined,
+    await assert.doesNotReject(runGatewayRecoveryTick(async () => gatewayPublishConfigs({ GATEWAY_SITE_BINDINGS: '{' }), async () => undefined,
         cause => errors.push(cause)));
     assert.equal(errors.length, 1);
 });
@@ -21,7 +21,7 @@ test('recovery tick continues after one binding fails and runs each binding in i
     const bindings = [config('workspace-a', 'site-a'), config('workspace-b', 'site-b'), config('workspace-c', 'site-c')];
     const visited: string[] = [];
     const errors: unknown[] = [];
-    await runGatewayRecoveryTick(() => bindings, binding => withGatewayRecoveryWorkspace(binding, async () => {
+    await runGatewayRecoveryTick(async () => bindings, binding => withGatewayRecoveryWorkspace(binding, async () => {
         const context = workspaceContext();
         assert.equal(context?.workspaceId, binding.cmsWorkspaceId);
         assert.equal(context?.siteId, binding.cmsSiteId);
@@ -29,5 +29,18 @@ test('recovery tick continues after one binding fails and runs each binding in i
         if (binding.cmsSiteId === 'site-b') throw new Error('recover failed');
     }), cause => errors.push(cause));
     assert.deepEqual(visited, ['site-a', 'site-b', 'site-c']);
+    assert.equal(errors.length, 1);
+});
+
+test('recovery tick awaits config loading and owns each exact per-item workspace context', async () => {
+    const visited: string[] = [], errors: unknown[] = [];
+    await runGatewayRecoveryTick(async () => { await Promise.resolve(); return [config('w1', 's1'), config('w2', 's2')]; }, async binding => {
+        const context = workspaceContext();
+        assert.equal(context?.workspaceId, binding.cmsWorkspaceId); assert.equal(context?.siteId, binding.cmsSiteId);
+        assert.equal(context?.actorId, '__gateway-recovery'); assert.equal(context?.instanceAdmin, true);
+        visited.push(binding.cmsSiteId);
+    }, cause => errors.push(cause));
+    assert.deepEqual(visited, ['s1', 's2']); assert.equal(errors.length, 0);
+    await runGatewayRecoveryTick(async () => { throw new Error('async database failure'); }, async () => { throw new Error('must not recover'); }, cause => errors.push(cause));
     assert.equal(errors.length, 1);
 });

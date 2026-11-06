@@ -14,11 +14,12 @@ import { ReleaseController } from './release-controller';
 import { PresetController } from './controller';
 import { StudioController } from '../studio/controller';
 import { canonicalJson } from './registry';
+import { runWithWorkspace } from '../workspaces/context';
 import type { SiteInstallation } from './site-model';
 import type { ReleaseSnapshot } from './releases';
 test.after(() => keyValueStore.destroy());
 
-test('authenticated observation blocks pending without mutation and binds ready authority to immutable content', {
+for (const mode of ['legacy', 'provisioned'] as const) test(`authenticated ${mode} observation blocks pending without mutation and binds ready authority to immutable content`, {
     skip: !process.env.STOREFRONT_TEST_MONGO, timeout: 60000,
 }, async context => {
     const app = Fastify(), gateway = Fastify();
@@ -27,7 +28,7 @@ test('authenticated observation blocks pending without mutation and binds ready 
     const mongoUrl = process.env.STOREFRONT_TEST_MONGO; assert.ok(mongoUrl);
     await app.register(fastifyMongo, { url: mongoUrl, database, forceClose: true, monitorCommands: true });
     context.after(async () => { await app.mongo.db?.dropDatabase(); await app.close(); await gateway.close(); });
-    for (const repo of [Repo.workspace, Repo.user, Repo.siteInstallation, Repo.storefrontRelease, Repo.storefrontReleaseAudit, Repo.media]) {
+    for (const repo of [Repo.workspace, Repo.user, Repo.siteInstallation, Repo.siteGatewayBinding, Repo.storefrontRelease, Repo.storefrontReleaseAudit, Repo.media]) {
         await new Promise<void>((resolve, reject) => repo.init().initialize({ fastify: app,
             next: (error?: Error) => error ? reject(error) : resolve() } as never));
     }
@@ -68,6 +69,8 @@ test('authenticated observation blocks pending without mutation and binds ready 
     let available = true;
     gateway.all('/*', async (request, reply) => {
         calls.push(request.method); if (!available) return reply.code(503).send({ error: 'private diagnostic' });
+        assert.equal(request.headers['x-cms-workspace'], mode === 'provisioned' ? 'default' : undefined);
+        assert.equal(request.headers['x-cms-site'], mode === 'provisioned' ? cmsSiteId : undefined);
         assert.equal(request.url, `/api/v1/sites/${gatewaySiteId}/publication-state`); assert.equal(request.method, 'GET'); return state;
     });
     const address = await gateway.listen({ host: '127.0.0.1', port: 0 });
@@ -75,6 +78,11 @@ test('authenticated observation blocks pending without mutation and binds ready 
     process.env.GATEWAY_BASE_URL = address; process.env.CMS_SERVICE_SECRET = 'observation-private-service-secret';
     process.env.GATEWAY_SITE_BINDINGS = JSON.stringify([{ cmsWorkspaceId: 'default', cmsSiteId, workspaceId, siteId: gatewaySiteId, siteUrl: 'https://shop.example.com' }]);
     context.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+    if (mode === 'provisioned') {
+        delete process.env.GATEWAY_SITE_BINDINGS;
+        await runWithWorkspace({ workspaceId: 'default', siteId: cmsSiteId, actorId: '__site-provisioning', admin: true, instanceAdmin: true, role: 'admin' },
+            () => Repo.siteGatewayBinding.methods.persist({ cmsWorkspaceId: 'default', cmsSiteId, workspaceId, siteId: gatewaySiteId, siteUrl: 'https://shop.example.com', source: 'provisioned' }));
+    }
     app.setErrorHandler((error, _request, reply) => reply.code((error as unknown as { status?: number }).status || 500).send({ message: error.message }));
     const controller = await ReleaseController({} as never);
     for (const method of await controller.methods(controller)) app.route({ method: method.type.toUpperCase() as 'GET' | 'POST', url: controller.path + method.path, handler: method.handler });

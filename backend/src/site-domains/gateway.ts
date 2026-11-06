@@ -1,4 +1,5 @@
-import { gatewayPublishConfig, gatewayRequest, validateConfig } from '../presets/gateway-client';
+import { resolveGatewayPublishConfig } from '../site-provisioning/config';
+import { gatewayManagementRequest, validateConfig } from '../presets/gateway-client';
 
 export interface GatewayDomainProjection {
     status: 'ready';
@@ -25,11 +26,11 @@ function valid(value: unknown): value is Omit<GatewayDomainProjection, 'status'>
         });
 }
 
-export async function readGatewayDomainState(siteId: string, env: NodeJS.ProcessEnv = process.env, fetcher: typeof fetch = fetch): Promise<GatewayDomainProjection | GatewayDomainUnavailable> {
-    const config = gatewayPublishConfig(env);
+export async function readGatewayDomainState(siteId: string, env: NodeJS.ProcessEnv = process.env, fetcher: typeof fetch = fetch, resolveConfig = resolveGatewayPublishConfig): Promise<GatewayDomainProjection | GatewayDomainUnavailable> {
+    const config = await resolveConfig(env);
     if (!config.gatewayBaseUrl || !config.serviceSecret || config.cmsSiteId !== siteId) return { status: 'unconfigured' };
     const { base } = validateConfig(config);
-    const value = await gatewayRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/domains`, config.serviceSecret);
+    const value = await gatewayManagementRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/domains`, config);
     if (!valid(value)) throw new Error('Gateway returned invalid domain state');
     return { status: 'ready', route: value.route, domains: value.domains };
 }

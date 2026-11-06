@@ -1,7 +1,8 @@
+import { gatewayPublishConfig } from './gateway-client';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { gatewayPublishConfig, publishGatewayRelease, readGatewayOperation, type GatewayPublishConfig, type GatewayReleaseSource } from './gateway-publish';
+import { publishGatewayRelease, readGatewayOperation, type GatewayPublishConfig, type GatewayReleaseSource } from './gateway-publish';
 import type { ReleaseRecord, ReleaseSnapshot } from './releases';
 import type { SiteInstallation } from './site-model';
 import { recoverGatewayPublication } from './gateway-recovery';
@@ -173,7 +174,7 @@ test('Gateway publication pins the persisted version, reads revision and persist
         manifestChecksum: record.manifestChecksum, imageDigest: record.imageDigest,
         imageRepository: record.imageRepository, sourceCommit: record.sourceCommit });
     assert.equal(h.calls.find((call) => call.url.endsWith('/publish-operations'))?.init.headers &&
-        (h.calls.find((call) => call.url.endsWith('/publish-operations'))?.init.headers as Record<string, string>).Authorization, 'Bearer test-secret');
+        new Headers(h.calls.find((call) => call.url.endsWith('/publish-operations'))?.init.headers).get('Authorization'), 'Bearer test-secret');
 });
 
 test('Gateway control outage persists a pending intent without claiming readiness', async () => {
@@ -442,4 +443,26 @@ test('a deterministic missing-media failure releases the reservation for a corre
     const corrected = await publishGatewayRelease(h.state, 'admin', '', requestKey.replace('3333', '7777'), config, h.fetcher,
         () => ({ ...snapshot, language: 'zh' }));
     assert.equal(corrected.operationId, 'operation-1');
+});
+
+test('all publication and recovery management requests carry the resolved CMS source identity', async () => {
+    const h = harness();
+    const dynamic = { ...config, sourceHeaders: { 'X-CMS-Workspace': 'default', 'X-CMS-Site': cmsSiteId } };
+    const sent: Headers[] = [];
+    const verify = (init?: RequestInit) => { sent.push(new Headers(init?.headers)); };
+    const fetcher = (async (url, init) => { verify(init); return h.fetcher(url, init); }) as typeof fetch;
+    const result = await publishGatewayRelease(h.state, 'publisher-1', '', requestKey, dynamic, fetcher, () => snapshot);
+    await readGatewayOperation(h.state, h.site, result.operationId, dynamic, async (_url, init) => {
+        verify(init); return Response.json({ id: result.operationId, releaseId: result.releaseId, status: 'pending', revision: 10 });
+    });
+    await recoverGatewayPublication(h.state, dynamic, async (url, init) => {
+        verify(init);
+        if (String(url).includes('/publish-operations/')) return Response.json({ id: result.operationId, releaseId: result.releaseId, status: 'pending', revision: 10 });
+        return h.fetcher(url, init);
+    });
+    for (const path of ['/publication-state', '/template-pin', '/releases', '/publish-operations']) assert.ok(h.calls.some(call => call.url.endsWith(path)));
+    for (const headers of sent) {
+        assert.equal(headers.get('X-CMS-Workspace'), 'default'); assert.equal(headers.get('X-CMS-Site'), cmsSiteId);
+        assert.equal(headers.get('Authorization'), 'Bearer test-secret');
+    }
 });

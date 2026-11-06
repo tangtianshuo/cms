@@ -17,6 +17,7 @@ import { SiteInstallationRepo } from '@bcms/selfhosted-backend/presets/site-repo
 import { ReleaseRepo, ReleaseAuditRepo } from '@bcms/selfhosted-backend/presets/release-repo';
 import { LeadRepo } from './leads/repo';
 import { AnalyticsRepo } from './analytics/repo';
+import { SiteGatewayBindingRepo } from './site-provisioning/repo';
 
 export class Repo {
     static readonly resourceShare = ResourceShareRepo;
@@ -40,4 +41,5 @@ export class Repo {
     static readonly storefrontReleaseAudit = ReleaseAuditRepo;
     static readonly lead = LeadRepo;
     static readonly analytics = AnalyticsRepo;
+    static readonly siteGatewayBinding = SiteGatewayBindingRepo;
 }

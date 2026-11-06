@@ -270,6 +270,7 @@ async function main() {
             Repo.entryStatus.init(),
             Repo.backup.init(),
             Repo.siteInstallation.init(),
+            Repo.siteGatewayBinding.init(),
             Repo.storefrontRelease.init(),
             Repo.storefrontReleaseAudit.init(),
             Repo.siteDomain.init(),

@@ -8,6 +8,7 @@ export interface GatewayPublishConfig {
     cmsWorkspaceId: string;
     cmsSiteId: string;
     siteUrl: string;
+    sourceHeaders?: Record<string, string>;
 }
 
 export interface GatewaySiteBinding {
@@ -122,10 +123,13 @@ export function validateConfig(config: GatewayPublishConfig) {
 }
 
 export async function gatewayRequest(fetcher: typeof fetch, url: string, secret: string, init: RequestInit = {}): Promise<unknown> {
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${secret}`);
+    headers.set('Content-Type', 'application/json');
     let response: Response;
     try {
         response = await fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000),
-            headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json', ...init.headers } });
+            headers });
     } catch (cause) {
         const detail = cause instanceof Error && cause.message ? `: ${cause.message}` : '';
         throw new GatewayUnavailableError(`Gateway control is unavailable${detail}`, { cause });
@@ -144,4 +148,13 @@ export async function gatewayRequest(fetcher: typeof fetch, url: string, secret:
     }
     const body = await response.json();
     return body;
+}
+
+/** Management calls accept only server-resolved source authority. */
+export function gatewayManagementRequest(fetcher: typeof fetch, url: string, config: GatewayPublishConfig, init: RequestInit = {}) {
+    const headers = new Headers(init.headers);
+    headers.delete('X-CMS-Workspace');
+    headers.delete('X-CMS-Site');
+    for (const [name, value] of Object.entries(config.sourceHeaders || {})) headers.set(name, value);
+    return gatewayRequest(fetcher, url, config.serviceSecret, { ...init, headers });
 }

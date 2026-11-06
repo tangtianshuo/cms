@@ -1,3 +1,4 @@
+import { resolveGatewayPublishConfig } from '../site-provisioning/config';
 import { ownerWorkspace } from '../workspaces/context';
 import { z } from 'zod';
 import { createController, createControllerMethod, HttpStatus } from '../_server';
@@ -6,7 +7,7 @@ import { Repo } from '../repo';
 import { RP } from '../security/route-protection/main';
 import type { ReleaseSnapshot } from './releases';
 import { buildRelease, publishRelease, releaseDiff, rollbackRelease, ReleaseValidationError } from './releases';
-import { gatewayBound, gatewayPublishConfig, GatewayRevisionConflict, publishGatewayRelease, readGatewayOperation,
+import { gatewayBound, GatewayRevisionConflict, publishGatewayRelease, readGatewayOperation,
     publicRecord } from './gateway-publish';
 import { isGatewayUnavailable } from './gateway-client';
 import { releaseSource } from './release-source';
@@ -32,14 +33,14 @@ export const ReleaseController = createController({
                     return observeGatewayPublication({
                         findSite: () => Repo.siteInstallation.methods.findSelected(),
                         findRelease: id => Repo.storefrontRelease.findById(id),
-                    }, gatewayPublishConfig(), query.data.marker);
+                    }, await resolveGatewayPublishConfig(), query.data.marker);
                 },
             }),
             gateway: createControllerMethod({
                 path: '/gateway', type: 'get', preRequestHandler: RP.createSiteCapabilityCheck('operations.read'),
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
-                    const config = gatewayPublishConfig();
+                    const config = await resolveGatewayPublishConfig();
                     let site = await Repo.siteInstallation.methods.findSelected();
                     let gatewayUnavailable = false;
                     if (site && gatewayBound(site, config)) {
@@ -74,7 +75,7 @@ export const ReleaseController = createController({
                 async handler({ request, reply, errorHandler }) {
                     reply.header('Cache-Control', 'no-store');
                     const site = await Repo.siteInstallation.methods.findSelected();
-                    const config = gatewayPublishConfig();
+                    const config = await resolveGatewayPublishConfig();
                     if (!site || !gatewayBound(site, config)) throw errorHandler(HttpStatus.NotFound, 'Gateway publication not found');
                     const { operationId } = request.params as { operationId: string };
                     try { return await readGatewayOperation(releaseSource(), site, operationId, config); }
@@ -86,7 +87,7 @@ export const ReleaseController = createController({
                 async handler({ reply }) {
                     reply.header('Cache-Control', 'no-store');
                     let site = await Repo.siteInstallation.methods.findSelected();
-                    const config = gatewayPublishConfig();
+                    const config = await resolveGatewayPublishConfig();
                     const bound = gatewayBound(site, config);
                     if (site && bound) {
                         try { site = await recoverGatewayPublication(releaseSource(), config); }
@@ -109,10 +110,10 @@ export const ReleaseController = createController({
                     reply.header('Cache-Control', 'no-store');
                     const source = releaseSource();
                     const site = await source.findSite();
+                    const config = await resolveGatewayPublishConfig();
                     try {
                         if (!Config.storefrontEnabled) throw new Error('Storefront is disabled');
                         if (!site) throw new Error('Site is not installed');
-                        const config = gatewayPublishConfig();
                         const bound = gatewayBound(site, config);
                         if (bound) await reconcileGatewayState(source, site, config);
                         const currentId = bound ? site.gatewayCurrentReleaseId : site.currentReleaseId;
@@ -127,7 +128,7 @@ export const ReleaseController = createController({
                     } catch (cause) {
                         const issueDetails = cause instanceof ReleaseValidationError ? cause.issues : [{ code: 'release-invalid', message: cause instanceof Error ? cause.message : 'Validation failed' }];
                         return { valid: false, issues: issueDetails.map(issue => issue.message), issueDetails,
-                            expectedReleaseId: (gatewayBound(site, gatewayPublishConfig()) ? site?.gatewayCurrentReleaseId : site?.currentReleaseId) || '', pageCount: 0, diff: null };
+                            expectedReleaseId: (gatewayBound(site, config) ? site?.gatewayCurrentReleaseId : site?.currentReleaseId) || '', pageCount: 0, diff: null };
                     }
                 },
             }),
@@ -141,7 +142,7 @@ export const ReleaseController = createController({
                         if (parsed.data.target === 'gateway') {
                             if (!parsed.data.requestKey) throw new Error('Gateway publication requestKey is required');
                             return await publishGatewayRelease(releaseSource(), token.payload.userId,
-                                parsed.data.expectedReleaseId, parsed.data.requestKey, gatewayPublishConfig(), fetch, buildRelease,
+                                parsed.data.expectedReleaseId, parsed.data.requestKey, await resolveGatewayPublishConfig(), fetch, buildRelease,
                                 { snapshotHash: parsed.data.snapshotHash });
                         }
                         const record = await publishRelease(releaseSource(), token.payload.userId, parsed.data.expectedReleaseId, parsed.data.snapshotHash);
@@ -159,7 +160,7 @@ export const ReleaseController = createController({
                     const parsed = publishBody.extend({ releaseId: z.string().min(1) }).safeParse(request.body);
                     if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid rollback request');
                     try {
-                        const config = gatewayPublishConfig();
+                        const config = await resolveGatewayPublishConfig();
                         if (gatewayBound(await Repo.siteInstallation.methods.findSelected(), config)) {
                             if (!parsed.data.requestKey) throw new Error('Gateway rollback requestKey is required');
                             return await publishGatewayRelease(releaseSource(), token.payload.userId,

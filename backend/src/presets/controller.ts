@@ -1,3 +1,4 @@
+import { resolveGatewayPublishConfig } from '../site-provisioning/config';
 import { withWorkspaceCreation } from '../workspaces/lifecycle';
 import { canReadContent, workspaceContext, workspaceId } from '../workspaces/context';
 import { z } from 'zod';
@@ -13,7 +14,7 @@ import { resolveInstalledPreset } from './installed';
 import { adoptPublicTemplate, importPreset, planImport, previewPublicTemplateUpgrade, type ImportSource } from './import';
 import { getPublicRegistry, getPublicTemplate } from './registry';
 import { createPageDraft, pageDraft, pageSectionOptionsForPage, updatePageDraft } from './pages';
-import { gatewayBound, gatewayPublishConfig } from './gateway-publish';
+import { gatewayBound } from './gateway-publish';
 import { buildSiteOperationsStatus } from './operations';
 import { ownerWorkspace } from '../workspaces/context';
 import { validateSectionMediaReferences } from '../storefront/section-schema';
@@ -65,7 +66,7 @@ async function siteView() {
     const site = await Repo.siteInstallation.methods.findSelected();
     if (!site) return { site: null, checklist: [], pageOptions: {} };
     let gatewayReady = false;
-    if (gatewayBound(site, gatewayPublishConfig()) && site.gatewayPublishIntent) {
+    if (gatewayBound(site, await resolveGatewayPublishConfig()) && site.gatewayPublishIntent) {
         try { gatewayReady = JSON.parse(site.gatewayPublishIntent).status === 'ready'; } catch { /* malformed intent is not a successful publication */ }
     }
     const templates: Parameters<typeof buildChecklist>[1] = {};
@@ -161,7 +162,7 @@ export const PresetController = createController({
                     const site = await Repo.siteInstallation.methods.findSelected();
                     if (!site) return { scope: { workspaceId: workspaceId(), siteId: '' }, site: null };
                     const domains = await Repo.siteDomain.methods.list(site._id);
-                    const config = gatewayPublishConfig();
+                    const config = await resolveGatewayPublishConfig();
                     const bound = gatewayBound(site, config);
                     let gatewayStatus: 'ready' | 'pending' | 'failed' | 'unknown' = 'unknown';
                     if (site.gatewayPublishIntent) {

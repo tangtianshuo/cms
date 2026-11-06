@@ -1,5 +1,5 @@
-import { GatewayRevisionConflict, gatewayRequest, isGatewayUnavailable, validateConfig, type GatewayPublishConfig } from './gateway-client';
-export { gatewayPublishConfig, GatewayRevisionConflict, GatewayUnavailableError, type GatewayPublishConfig } from './gateway-client';
+import { GatewayRevisionConflict, gatewayManagementRequest, isGatewayUnavailable, validateConfig, type GatewayPublishConfig } from './gateway-client';
+export { GatewayRevisionConflict, GatewayUnavailableError, type GatewayPublishConfig } from './gateway-client';
 import { createHash, randomUUID } from 'node:crypto';
 import { ownerWorkspace } from '../workspaces/context';
 import { MediaRetentionError } from '../media/retention';
@@ -214,7 +214,7 @@ export async function publishGatewayRelease(
     }
     // Reserve and retain the immutable action before mutating the shared Gateway pin.
     // Reconfirm it on every upload attempt; a cached pin cannot prove external state.
-    const pin = await gatewayRequest(fetcher, `${target}/template-pin`, config.serviceSecret, {
+    const pin = await gatewayManagementRequest(fetcher, `${target}/template-pin`, config, {
         method: 'PUT', body: JSON.stringify({ templateId: intent.record.id, templateVersion: intent.record.version }),
     });
     if (!identityMatches(pin, intent.record)) throw new Error('Gateway template pin does not match the approved public template record');
@@ -224,7 +224,7 @@ export async function publishGatewayRelease(
         if (!await source.saveSite(pinnedSite, site.updatedAt)) throw new Error('CMS site changed while binding its Gateway template');
         Object.assign(site, pinnedSite);
     }
-    await gatewayRequest(fetcher, `${target}/releases`, config.serviceSecret, { method: 'POST', body: JSON.stringify({
+    await gatewayManagementRequest(fetcher, `${target}/releases`, config, { method: 'POST', body: JSON.stringify({
         siteId: config.siteId, releaseId: intent.releaseId, checksum: intent.checksum,
         metadata: { templateId: intent.record.id, templateVersion: intent.record.version,
             manifestChecksum: intent.record.manifestChecksum, imageDigest: intent.record.imageDigest,
@@ -237,7 +237,7 @@ export async function publishGatewayRelease(
     Object.assign(site, submitting);
     let operation: unknown;
     try {
-        operation = await gatewayRequest(fetcher, `${target}/publish-operations`, config.serviceSecret, {
+        operation = await gatewayManagementRequest(fetcher, `${target}/publish-operations`, config, {
             method: 'POST', body: JSON.stringify({ releaseId: intent.releaseId,
                 idempotencyKey: intent.idempotencyKey, expectedRevision: intent.revision }),
         });
@@ -280,7 +280,7 @@ export async function readGatewayOperation(source: GatewayReleaseSource, site: S
     const intent = parseIntent(site);
     if (!intent?.operationId || intent.operationId !== operationId) throw new Error('Gateway publication operation not found');
     const url = `${base.origin}/api/v1/sites/${config.siteId}/publish-operations/${encodeURIComponent(operationId)}`;
-    const result = await gatewayRequest(fetcher, url, config.serviceSecret, { method: 'GET' });
+    const result = await gatewayManagementRequest(fetcher, url, config, { method: 'GET' });
     if (!result || typeof result !== 'object' || (result as { id?: unknown }).id !== operationId ||
         (result as { releaseId?: unknown }).releaseId !== intent.releaseId ||
         !['pending', 'ready', 'failed'].includes(String((result as { status?: unknown }).status)) ||

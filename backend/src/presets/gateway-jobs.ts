@@ -1,7 +1,8 @@
 import type { Module } from '../_server';
 import { Config } from '../config';
 import { runWithWorkspace } from '../workspaces/context';
-import { gatewayPublishConfigs, type GatewayPublishConfig } from './gateway-client';
+import type { GatewayPublishConfig } from './gateway-client';
+import { resolveGatewayPublishConfigs } from '../site-provisioning/config';
 import { gatewayBound } from './gateway-publish';
 import { recoverGatewayPublication } from './gateway-recovery';
 import { releaseSource } from './release-source';
@@ -15,10 +16,8 @@ export function withGatewayRecoveryWorkspace<T>(config: GatewayPublishConfig, ac
 }
 
 async function recoverBinding(config: GatewayPublishConfig) {
-    await withGatewayRecoveryWorkspace(config, async () => {
-        const source = releaseSource();
-        if (gatewayBound(await source.findSite(), config)) await recoverGatewayPublication(source, config);
-    });
+    const source = releaseSource();
+    if (gatewayBound(await source.findSite(), config)) await recoverGatewayPublication(source, config);
 }
 
 function reportRecoveryFailure(cause: unknown) {
@@ -26,15 +25,15 @@ function reportRecoveryFailure(cause: unknown) {
 }
 
 export async function runGatewayRecoveryTick(
-    loadConfigs: () => GatewayPublishConfig[] = gatewayPublishConfigs,
+    loadConfigs: () => Promise<GatewayPublishConfig[]> = resolveGatewayPublishConfigs,
     recover: RecoveryAction = recoverBinding,
     report: RecoveryErrorHandler = reportRecoveryFailure,
 ) {
     let configs: GatewayPublishConfig[];
-    try { configs = loadConfigs(); }
+    try { configs = await loadConfigs(); }
     catch (cause) { report(cause); return; }
     for (const config of configs) {
-        try { await recover(config); }
+        try { await withGatewayRecoveryWorkspace(config, () => recover(config)); }
         catch (cause) { report(cause); }
     }
 }
