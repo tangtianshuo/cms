@@ -6,7 +6,20 @@ import type { SectionConfig } from '../storefront/section-schema';
 import type { SiteOperations } from './operations';
 import type { LayoutDocument } from '../storefront/layout-document';
 
+export interface ProvisioningState {
+    requestKey: string;
+    status: 'pending' | 'running' | 'ready' | 'failed';
+    attempts: number;
+    nextAttemptAt: number;
+    leaseToken?: string;
+    leaseUntil?: number;
+    lastError?: string;
+}
+
 export interface SiteInstallation extends MongoDBEntry {
+    creationRequestKey?: string;
+    creationName?: string;
+    provisioning?: ProvisioningState;
     workspaceId?: string;
     contentGroupId?: string;
     templateNamespace?: string;
@@ -77,6 +90,17 @@ export const SiteInstallationSchema: ObjectSchema = {
     workspaceId: { __type: 'string', __required: false },
     contentGroupId: { __type: 'string', __required: false },
     templateNamespace: { __type: 'string', __required: false },
+    creationRequestKey: { __type: 'string', __required: false },
+    creationName: { __type: 'string', __required: false },
+    provisioning: { __type: 'object', __required: false, __child: {
+        requestKey: { __type: 'string', __required: true },
+        status: { __type: 'string', __required: true },
+        attempts: { __type: 'number', __required: true },
+        nextAttemptAt: { __type: 'number', __required: true },
+        leaseToken: { __type: 'string', __required: false },
+        leaseUntil: { __type: 'number', __required: false },
+        lastError: { __type: 'string', __required: false },
+    } },
     slot: { __type: 'string', __required: true },
     name: { __type: 'string', __required: true },
     presetId: { __type: 'string', __required: true },

@@ -7,7 +7,7 @@ import { validateConfig } from '../presets/gateway-client';
 import type { BindingReader, SiteGatewayBinding } from './model';
 
 type BindingRecord = SiteGatewayBinding & MongoDBEntry;
-interface BindingMethods extends BindingReader {
+export interface BindingMethods extends BindingReader {
     persist(binding: SiteGatewayBinding): Promise<SiteGatewayBinding>;
 }
 

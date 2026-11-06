@@ -95,6 +95,9 @@ async function mount({
     view = '/src/views/dashboard/site-onboarding.tsx',
     catalog = [template],
     savedState,
+    sendOverride,
+    exportName = 'default',
+    props,
 } = {}) {
     const data = new Map(),
         requests = [];
@@ -117,12 +120,19 @@ async function mount({
                 siteId: scopeSiteId,
                 admin: true,
             },
-            workspace: { name: 'Workspace' },
+            workspace: { _id: 'workspace-a', name: 'Workspace', members: [] },
             site,
         },
-        accessToken: { payload: { userId: 'user-a' } },
+        accessToken: { payload: { userId: 'user-a', rls: ['ADMIN'] } },
         async send(request) {
             requests.push(request);
+            if (sendOverride) {
+                const result = await sendOverride(request);
+                if (result !== undefined) return result;
+            }
+            if (request.url === '/api/v4/workspaces') return { items: [{ _id: 'workspace-a', name: 'Workspace' }] };
+            if (request.url === '/api/v4/workspaces/current') return { workspace: { _id: 'workspace-a', name: 'Workspace', members: [] } };
+            if (request.url === '/api/v4/workspaces/current/sites') return { items: [] };
             if (request.url === '/api/v4/presets/catalog')
                 return { items: catalog };
             if (request.url === '/api/v4/presets/site')
@@ -136,6 +146,10 @@ async function mount({
                         pages: [],
                     },
                 };
+            if (request.url.endsWith('/provisioning/retry')) {
+                current = { ...current, provisioning: { ...current.provisioning, status: 'pending' } };
+                return { status: 'pending' };
+            }
             if (request.url === '/api/v4/presets/import') {
                 current = {
                     ...current,
@@ -166,7 +180,8 @@ async function mount({
         localStorage,
     };
     globalThis.localStorage = localStorage;
-    const { default: View } = await server.ssrLoadModule(view);
+    globalThis.sessionStorage = localStorage;
+    const View = (await server.ssrLoadModule(view))[exportName];
     const router = createRouter({
         history: createMemoryHistory(),
         routes: [
@@ -175,7 +190,7 @@ async function mount({
     });
     await router.push(`${path}${query}`);
     await router.isReady();
-    const app = renderer.createApp(View);
+    const app = renderer.createApp(View, props);
     app.provide(ssrContextKey, { modules: new Set() });
     app.use(router);
     app.use(
@@ -436,4 +451,107 @@ test('pending-empty imports expose an explicit retry while fresh, importing and 
     } finally {
         fresh.app.unmount();
     }
+});
+
+test('actual wizard reports preparation and disables publication while content remains editable', async () => {
+    for (const status of ['pending', 'running', 'failed']) {
+        const h = await mount({ site: {
+            _id: 'site-a', status: 'ready', presetId: 'market', presetVersion: '1.0.0', name: 'Shop',
+            includeDemo: false, models: [], pages: [], updatedAt: 1, provisioning: { status },
+        }, savedState: { step: 'publish', presetId: 'market', presetVersion: '1.0.0', sourceCommit: '', manifestChecksum: '', siteName: 'Shop', includeDemo: false, importRequested: false } });
+        try {
+            assert.ok(textOf(h.root).includes(status === 'failed' ? '准备失败，重试' : '正在准备发布环境'));
+            const publish = byText(h.root, 'button', '确认发布'); assert.ok(publish); assert.equal(publish.props.disabled, true);
+            assert.equal(textOf(h.root).includes('网站已上线'), false);
+            assert.equal(h.requests.some(r => r.url.includes('/releases/')), false);
+            if (status === 'failed') {
+                const retry = byText(h.root, 'button', '重试准备'); assert.ok(retry);
+                await retry.props.onClick(); await settle();
+                assert.ok(textOf(h.root).includes('正在准备发布环境'));
+                const sent = h.requests.find(r => r.url.endsWith('/provisioning/retry'));
+                assert.equal(sent.method, 'POST'); assert.deepEqual(sent.selectorOverride, { workspaceId: 'workspace-a', siteId: 'site-a' });
+            }
+        } finally { h.app.unmount(); }
+    }
+});
+
+
+test('the actual ready preparation label appears while editable content remains available', async () => {
+    const h = await mount({ site: { _id: 'site-a', status: 'ready', presetId: 'market', presetVersion: '1.0.0', name: 'Shop', includeDemo: false, models: [], pages: [], updatedAt: 1, provisioning: { status: 'ready' } } });
+    try {
+        assert.ok(textOf(h.root).includes('发布环境已就绪'));
+        assert.equal(textOf(h.root).includes('网站已上线'), false);
+        assert.ok(all(h.root).some(n => n.type === 'a' && String(n.props.href).includes('section=content')));
+    } finally { h.app.unmount(); }
+});
+
+
+test('the existing workspace creation form reuses its saved key after a lost response', async () => {
+    let first = true;
+    const h = await mount({ view: '/src/views/dashboard/workspaces.tsx', sendOverride: async request => {
+        if (request.url === '/api/v4/workspaces/current/sites' && request.method === 'POST') {
+            if (first) { first = false; throw new Error('lost response'); }
+            return { _id: 'created-site' };
+        }
+    } });
+    try {
+        const name = all(h.root).find(n => n.type === 'input' && n.props['aria-label'] === 'workspace.siteName');
+        assert.ok(name); name.props.onInput({ target: { value: 'One site' } }); await settle();
+        const form = name.parent;
+        form.props.onSubmit({ preventDefault() {} }); await settle();
+        form.props.onSubmit({ preventDefault() {} }); await settle();
+        const creates = h.requests.filter(r => r.url === '/api/v4/workspaces/current/sites' && r.method === 'POST');
+        assert.equal(creates.length, 2);
+        assert.equal(typeof creates[0].data.requestKey, 'string');
+        assert.equal(creates[1].data.requestKey, creates[0].data.requestKey);
+        assert.equal(creates[1].data.name, 'One site');
+    } finally { h.app.unmount(); }
+});
+
+
+for (const status of ['pending', 'running', 'failed', 'ready']) test(`shared release manager blocks ${status} preparation until an actual binding is available`, async () => {
+    const h = await mount({
+        view: '/src/components/storefront/release-manager.tsx', exportName: 'ReleaseManager', props: { onSaved: async () => {} },
+        sendOverride: async request => {
+            if (request.url.endsWith('/gateway')) return { configured: false, bound: false, siteUrl: '', publishStatus: null, preparation: { status, allowed: false } };
+            if (request.url.endsWith('/releases/')) return { currentReleaseId: 'current', items: [{ _id: 'older', createdAt: 1, createdBy: 'admin', pageCount: 1 }], audit: [] };
+            if (request.url.endsWith('/check')) return { valid: true, expectedReleaseId: 'current', issues: [], pageCount: 1, diff: null };
+        },
+    });
+    try {
+        const notice = status === 'failed' ? '准备失败' : status === 'ready' ? '发布环境暂不可用' : '正在准备发布环境';
+        assert.ok(textOf(h.root).includes(notice));
+        await byText(h.root, 'button', 'presets.checkRelease').props.onClick({ preventDefault() {} });
+        await settle();
+        const publish = byText(h.root, 'button', 'presets.createSnapshot'), rollback = byText(h.root, 'button', 'presets.rollbackRelease');
+        assert.equal(publish.props.disabled, true); assert.equal(rollback.props.disabled, true);
+        await publish.props.onClick({ preventDefault() {} }); await rollback.props.onClick({ preventDefault() {} });
+        await settle();
+        assert.equal(h.requests.filter(r => r.url.endsWith('/publish') || r.url.endsWith('/rollback')).length, 0);
+    } finally { h.app.unmount(); }
+});
+
+
+test('shared release manager refreshes preparation and publishes only through the resolved binding', async () => {
+    let ready = false;
+    const h = await mount({
+        view: '/src/components/storefront/release-manager.tsx', exportName: 'ReleaseManager', props: { onSaved: async () => {} },
+        sendOverride: async request => {
+            if (request.url.endsWith('/gateway')) return { configured: ready, bound: ready, siteUrl: ready ? 'https://site.example.test' : '', publishStatus: null, preparation: { status: ready ? 'ready' : 'pending', allowed: ready } };
+            if (request.url.endsWith('/releases/')) return { currentReleaseId: '', items: [], audit: [] };
+            if (request.url.endsWith('/check')) return { valid: true, expectedReleaseId: '', issues: [], pageCount: 1, diff: null };
+            if (request.url.endsWith('/publish')) return { operationId: 'op', releaseId: 'released', status: 'pending' };
+        },
+    });
+    try {
+        assert.ok(textOf(h.root).includes('正在准备发布环境'));
+        ready = true;
+        await byText(h.root, 'button', 'presets.checkRelease').props.onClick({ preventDefault() {} }); await settle();
+        const publish = byText(h.root, 'button', 'presets.publishRelease'); assert.equal(publish.props.disabled, false);
+        await publish.props.onClick({ preventDefault() {} }); await settle();
+        const calls = h.requests.filter(r => r.url.endsWith('/publish'));
+        assert.equal(calls.length, 1); assert.equal(calls[0].data.target, 'gateway');
+        assert.match(calls[0].data.requestKey, /^[a-f0-9-]{36}$/);
+        assert.equal(textOf(h.root).includes('releaseSnapshotCreated'), false);
+    } finally { h.app.unmount(); }
 });

@@ -1,4 +1,5 @@
 import { workspaceFilter, workspaceContext, ownerWorkspace, workspaceId } from '../workspaces/context';
+import { withWorkspaceCreation } from '../workspaces/lifecycle';
 import { migrateSiteIndex } from '../workspaces/migration';
 import type { DomainPrimaryAudit } from '../site-domains/model';
 import { randomUUID } from 'node:crypto';
@@ -6,10 +7,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 const domainLock = new AsyncLocalStorage<{ siteId: string; token: string }>();
 import { createMongoDBRepository } from '../_server/modules/mongodb';
 import { Config } from '../config';
+import type { ProvisioningCode, ProvisioningStore } from '../site-provisioning/service';
 import { type SiteInstallation, SiteInstallationSchema } from './site-model';
 
 function installationDraft(site: SiteInstallation) {
-    const { currentReleaseId: _release, publishedReleaseIds: _history,
+    const { provisioning: _provisioning, creationRequestKey: _creationKey, creationName: _creationName, currentReleaseId: _release, publishedReleaseIds: _history,
         gatewayCurrentReleaseId: _gatewayRelease, gatewayPublishedReleaseIds: _gatewayHistory, gatewayActiveRevision: _gatewayRevision,
         primaryDomainId: _primary, domainRevision: _revision,
         domainMutationToken: _token, domainMutationUntil: _until, domainAuditOutbox: _outbox, workspaceId: _workspace, slot: _slot, templateNamespace: _namespace, contentGroupId: _group, ...draft } = site;
@@ -17,6 +19,11 @@ function installationDraft(site: SiteInstallation) {
 }
 
 export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
+    createOnce(site: SiteInstallation): Promise<SiteInstallation>;
+    claimProvisioning: ProvisioningStore['claim'];
+    completeProvisioning(siteId: string, token: string): Promise<boolean>;
+    deferProvisioning(siteId: string, token: string, nextAttemptAt: number, code: ProvisioningCode): Promise<boolean>;
+    retryProvisioning(siteId: string): Promise<boolean>;
     listWorkspace(id: string): Promise<SiteInstallation[]>;
     findSelected(): Promise<SiteInstallation | null>;
     findFresh(id: string): Promise<SiteInstallation | null>;
@@ -36,9 +43,75 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
     collection: `${Config.storageScope}_site_installations`,
     schema: SiteInstallationSchema,
     beforeIndexes: migrateSiteIndex,
-    indexes: [{ key: { workspaceId: 1, slot: 1 }, name: 'workspace_site_slot_unique', unique: true }],
+    indexes: [
+        { key: { workspaceId: 1, slot: 1 }, name: 'workspace_site_slot_unique', unique: true },
+        { key: { workspaceId: 1, creationRequestKey: 1 }, name: 'workspace_creation_request_unique', unique: true,
+            partialFilterExpression: { creationRequestKey: { $type: 'string' } } },
+    ],
     methods({ mdb, cache, identityCollection }) {
         return {
+            async createOnce(site) {
+                if (!workspaceContext()?.admin || site.workspaceId !== workspaceId() || !site.creationRequestKey || !site.creationName || site.provisioning?.requestKey !== site.creationRequestKey) throw new Error('Invalid site creation context');
+                const query = { ...workspaceFilter(), creationRequestKey: site.creationRequestKey };
+                const equivalent = (stored: SiteInstallation | null) => {
+                    if (!stored || stored.creationName !== site.creationName) throw Object.assign(new Error('Creation request key already used for different site parameters'), { status: 409 });
+                    return stored;
+                };
+                const prior = await mdb.findOne(query);
+                if (prior) return equivalent(prior);
+                // A duplicate-key response proves that this insert did not commit. Resolve it
+                // inside the reservation so a racing replay cannot strand a deletion guard.
+                const stored = await withWorkspaceCreation({ kind: 'site', resourceId: site._id }, async () => {
+                    try { await identityCollection.insertOne(site); }
+                    catch (cause) { if ((cause as { code?: number })?.code !== 11000) throw cause; }
+                    return identityCollection.findOne(query);
+                });
+                const result = equivalent(stored);
+                cache.remove(result._id);
+                return result;
+            },
+            async claimProvisioning(now) {
+                const site = await identityCollection.findOneAndUpdate({
+                    'provisioning.attempts': { $lt: 8 },
+                    $or: [
+                        { 'provisioning.status': 'pending', 'provisioning.nextAttemptAt': { $lte: now } },
+                        { 'provisioning.status': 'running', 'provisioning.leaseUntil': { $lte: now } },
+                    ],
+                }, { $set: { 'provisioning.status': 'running', 'provisioning.leaseToken': randomUUID(), 'provisioning.leaseUntil': now + 60000 },
+                    $inc: { 'provisioning.attempts': 1 } }, { returnDocument: 'after', sort: { 'provisioning.nextAttemptAt': 1, _id: 1 } });
+                // The eighth worker may die too: terminalize its expired lease rather than strand it forever.
+                if (!site) {
+                    await identityCollection.updateMany({ 'provisioning.status': 'running', 'provisioning.attempts': { $gte: 8 }, 'provisioning.leaseUntil': { $lte: now } }, {
+                        $set: { 'provisioning.status': 'failed', 'provisioning.lastError': 'gateway_unavailable' },
+                        $unset: { 'provisioning.leaseToken': '', 'provisioning.leaseUntil': '' },
+                    });
+                    return null;
+                }
+                cache.remove(site._id);
+                if (!site.provisioning) throw new Error('Claimed site has no preparation state');
+                return { cmsWorkspaceId: ownerWorkspace(site), cmsSiteId: site._id, name: site.creationName || site.name, state: site.provisioning };
+            },
+            async completeProvisioning(siteId, token) {
+                const result = await identityCollection.updateOne({ _id: siteId, 'provisioning.status': 'running', 'provisioning.leaseToken': token, 'provisioning.leaseUntil': { $gt: Date.now() } }, {
+                    $set: { 'provisioning.status': 'ready' }, $unset: { 'provisioning.leaseToken': '', 'provisioning.leaseUntil': '', 'provisioning.lastError': '' },
+                });
+                cache.remove(siteId); return result.matchedCount === 1;
+            },
+            async deferProvisioning(siteId, token, nextAttemptAt, code) {
+                const result = await identityCollection.updateOne({ _id: siteId, 'provisioning.status': 'running', 'provisioning.leaseToken': token }, [
+                    { $set: { 'provisioning.status': code === 'gateway_unavailable' ? { $cond: [{ $gte: ['$provisioning.attempts', 8] }, 'failed', 'pending'] } : 'failed',
+                        'provisioning.nextAttemptAt': nextAttemptAt, 'provisioning.lastError': code } },
+                    { $unset: ['provisioning.leaseToken', 'provisioning.leaseUntil'] },
+                ]);
+                cache.remove(siteId); return result.matchedCount === 1;
+            },
+            async retryProvisioning(siteId) {
+                const result = await mdb.updateOne({ _id: siteId, 'provisioning.status': 'failed' }, {
+                    $set: { 'provisioning.status': 'pending', 'provisioning.attempts': 0, 'provisioning.nextAttemptAt': Date.now() },
+                    $unset: { 'provisioning.leaseToken': '', 'provisioning.leaseUntil': '', 'provisioning.lastError': '' },
+                });
+                cache.remove(siteId); return result.matchedCount === 1;
+            },
             async listWorkspace(id) { return mdb.find(workspaceFilter(id)).toArray(); },
             async findSelected() {
                 const context = workspaceContext();

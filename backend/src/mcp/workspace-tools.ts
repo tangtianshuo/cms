@@ -83,11 +83,11 @@ export function registerWorkspaceTools(server: McpServer, api: McpApi) {
         },
         {
             name: 'workspace_site_create',
-            description: 'Create an empty site in the selected workspace.',
+            description: 'Create an empty site in the selected workspace. Supply one stable requestKey per creation intent and reuse it when retrying.',
             method: 'POST',
             path: () => '/api/v4/workspaces/current/sites',
-            inputSchema: { name: workspaceNameSchema },
-            body: ({ name }) => ({ name }),
+            inputSchema: { name: workspaceNameSchema, requestKey: z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/) },
+            body: ({ name, requestKey }) => ({ name, requestKey }),
         },
     ]);
 }

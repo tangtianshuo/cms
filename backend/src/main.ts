@@ -64,6 +64,7 @@ import { SiteDomainController } from './site-domains/controller';
 import { LeadsController } from './leads/controller';
 import { AnalyticsController } from './analytics/controller';
 import { ReleaseController } from '@bcms/selfhosted-backend/presets/release-controller';
+import { createSiteProvisioningJob } from './site-provisioning/jobs';
 import { createGatewayReconciliationJob } from './presets/gateway-jobs';
 
 async function main() {
@@ -300,6 +301,7 @@ async function main() {
             },
             createBcmsJobs(),
             createGatewayReconciliationJob(),
+            createSiteProvisioningJob(),
 
             createBcmsPlugins(),
         ],

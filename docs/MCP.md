@@ -54,6 +54,34 @@ List/get tools return the API's structured JSON in MCP text content. Binary
 downloads return `{ "contentType": "...", "base64": "..." }`. API errors
 are returned as MCP tool errors with the backend error message.
 
+## Site creation and preparation
+
+`workspace_site_create` and `POST /api/v4/workspaces/current/sites` require
+`{ "name": "My site", "requestKey": "<stable-creation-key>" }`. Generate the key
+once per intentional creation (a UUID is suitable), persist it before sending,
+and reuse it after a timeout or lost response. Name-only clients must update;
+a missing or invalid key returns `400`. Keys contain 1–256 ASCII letters,
+digits, `.`, `_`, `:`, or `-`, starting with a letter or digit.
+
+Concurrent retries with the same workspace/key and original trimmed name return
+the same CMS site. Reusing the key with different creation parameters returns
+`409`. Keep the original key even if the site is later renamed or imported.
+A new intentional site uses a new key.
+
+A new site stores a pending preparation intent alongside its identity. Content
+can be edited while preparation runs. Read preparation with
+`GET /api/v4/workspaces/current/sites/:siteId/provisioning`; workspace members can
+read it, and only workspace administrators can retry a failed preparation with
+`POST /api/v4/workspaces/current/sites/:siteId/provisioning/retry`. Retries retain
+the original key. Preparation readiness permits publication but does not mean
+the website is online. The shared publication UI and direct publish, rollback,
+and preflight endpoints block incomplete preparation with `409`. A prepared site
+requires its persisted provisioned binding and valid publishing configuration;
+there is no local snapshot fallback. Publish requests for these sites must select
+`target: "gateway"` and retain the publication action's stable request key.
+Existing sites without preparation state retain their
+explicit legacy binding and are not automatically provisioned.
+
 ## Important workflows
 
 - **Create an entry:** call `templates_list`, `languages_list`, and

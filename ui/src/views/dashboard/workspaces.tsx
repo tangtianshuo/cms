@@ -222,13 +222,19 @@ export default defineComponent({
                                     onSubmit={(event) => {
                                         event.preventDefault();
                                         run(async () => {
+                                            const intentStorageKey = `cms-workspace-site-create:${JSON.stringify([sdk.context?.context.actorId, sdk.context?.context.workspaceId])}`;
+                                            const previous = localStorage.getItem(intentStorageKey);
+                                            const intent: { name: string; requestKey: string } = previous ? JSON.parse(previous) : { name: siteName.value.trim(), requestKey: crypto.randomUUID() };
+                                            if (intent.name !== siteName.value.trim()) throw new Error('上次创建仍待确认，请使用原网站名称重试，或使用创建向导。');
+                                            localStorage.setItem(intentStorageKey, JSON.stringify(intent));
                                             const site =
                                                 await sdk.send<SiteInstallation>(
                                                     {
                                                         url: '/api/v4/workspaces/current/sites',
                                                         method: 'POST',
                                                         data: {
-                                                            name: siteName.value.trim(),
+                                                            name: intent.name,
+                                                            requestKey: intent.requestKey,
                                                         },
                                                     },
                                                 );
@@ -238,6 +244,7 @@ export default defineComponent({
                                                         .workspaceId,
                                                 siteId: site._id,
                                             });
+                                            localStorage.removeItem(intentStorageKey);
                                         });
                                     }}
                                 >

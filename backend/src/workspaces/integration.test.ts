@@ -61,9 +61,9 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     assert.equal((await request('/api/v4/workspaces/current/sites', stranger, a._id)).statusCode, 403);
     assert.equal((await request('/api/v4/workspaces', member, a._id, undefined, { name: 'forbidden' })).statusCode, 403);
     assert.equal((await request('/api/v4/workspaces/current/sites', viewer, a._id, undefined, { name: 'forbidden' })).statusCode, 403);
-    const one = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'One' });
-    const two = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'Two' });
-    const three = await ok('/api/v4/workspaces/current/sites', admin, b._id, undefined, { name: 'Three' });
+    const one = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'One', requestKey: 'workspace-test-one' });
+    const two = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'Two', requestKey: 'workspace-test-two' });
+    const three = await ok('/api/v4/workspaces/current/sites', admin, b._id, undefined, { name: 'Three', requestKey: 'workspace-test-three' });
     assert.equal((await request('/api/v4/presets/site', member, a._id, three._id)).statusCode, 403);
     assert.equal((await request('/api/v4/presets/site', member, b._id, three._id)).statusCode, 403);
     assert.equal((await request('/api/v4/presets/site', admin, undefined, one._id)).statusCode, 403);
@@ -73,8 +73,17 @@ test('real Mongo and HTTP workspace membership, independent installations, relea
     assert.equal(await app.mongo.db!.collection(Repo.entry.collection).countDocuments({}), 15);
     assert.equal((await ok('/api/v4/presets/import', admin, undefined, undefined, { presetId: 'atelier', siteName: 'Legacy', includeDemo: true }))._id, 'legacy-site');
     assert.equal((await ok('/api/v4/presets/site')).site._id, 'legacy-site');
+    // These are fully imported CMS drafts: preparation must block the otherwise valid local snapshot path.
+    for (const preparation of ['pending', 'running', 'failed', 'ready']) {
+        await sites.updateOne({ _id: one._id }, { $set: { 'provisioning.status': preparation } });
+        assert.equal((await request('/api/v4/presets/releases/publish', member, a._id, one._id, { expectedReleaseId: '' })).statusCode, 409);
+        assert.equal((await request('/api/v4/presets/releases/rollback', member, a._id, one._id, { releaseId: 'older', expectedReleaseId: '' })).statusCode, 409);
+    }
+    assert.equal(await app.mongo.db!.collection(Repo.storefrontRelease.collection).countDocuments({}), 0);
+    // This suite exercises legacy local publication; new provisioned sites publish through their durable binding.
+    await sites.updateMany({ _id: { $in: [one._id, two._id, three._id] } }, { $unset: { provisioning: '' } });
     const publish = (workspace: string, site: string, expectedReleaseId = '') => ok('/api/v4/presets/releases/publish', workspace === a._id ? member : admin, workspace, site, { expectedReleaseId });
-    const concurrentSite = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'Concurrent' });
+    const concurrentSite = await ok('/api/v4/workspaces/current/sites', member, a._id, undefined, { name: 'Concurrent', requestKey: 'workspace-test-concurrent' });
     const races = await Promise.all([install(a._id, concurrentSite._id, 'atelier'), install(a._id, concurrentSite._id, 'atelier')]);
     assert.ok(races.every(site => site._id === concurrentSite._id));
     assert.equal((await Repo.siteInstallation.methods.findFresh(concurrentSite._id))?.status, 'ready');

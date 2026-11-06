@@ -17,6 +17,8 @@ import { MediaFactory } from '../media/factory';
 import { PropType } from '../prop/models/main';
 import type { SiteInstallation } from '../presets/site-model';
 import type { StudioValue } from './business';
+import { keyValueStore } from '../key-value-store';
+test.after(() => keyValueStore.destroy());
 
 test('Studio real HTTP and Mongo authorization, preserving edits, conflicts and idempotent page creation', {
     skip: !process.env.STOREFRONT_TEST_MONGO, timeout: 60000,
@@ -46,7 +48,7 @@ test('Studio real HTTP and Mongo authorization, preserving edits, conflicts and 
     assert.equal((await request('/api/v4/studio/site', '')).statusCode, 403);
     workspaceId = (await ok('/api/v4/workspaces', admin, { name: 'Studio isolated integration' }))._id;
     for (const [id, role] of [['studio-editor', 'editor'], ['studio-viewer', 'viewer'], ['studio-no-grant', 'editor']]) await ok(`/api/v4/workspaces/current/members/${id}`, admin, { role }, 'PUT');
-    siteId = (await ok('/api/v4/workspaces/current/sites', admin, { name: 'Studio test site' }))._id;
+    siteId = (await ok('/api/v4/workspaces/current/sites', admin, { name: 'Studio test site', requestKey: 'studio-test-create' }))._id;
     const installed = await ok('/api/v4/presets/import', admin, { presetId: 'aeroframe', siteName: 'Studio test site', includeDemo: true }) as SiteInstallation;
     const source = { workspace: Repo.workspace.methods.fresh, site: Repo.siteInstallation.methods.findFresh };
     const adminScope = await resolveWorkspaceContext({ userId: 'studio-admin', roles: ['ADMIN'] }, { workspaceId, siteId }, source);
@@ -117,5 +119,5 @@ test('Studio real HTTP and Mongo authorization, preserving edits, conflicts and 
     const created = await runWithWorkspace(adminScope, () => Repo.entry.findById(page.entryId));
     assert.ok(created?.meta[0].props.find(prop => prop.id === mapping.fields.find(field => field.key === 'body')!.propId));
     assert.ok(!JSON.stringify(current).includes('gatewayPublishIntent'));
-    assert.ok(current.models.find((model: any) => model.key === 'content-page').fields.find((field: any) => field.type === PropType.RICH_TEXT && !field.editable));
+    assert.ok(current.models.find((model: any) => model.key === 'content-page').fields.find((field: any) => field.type === PropType.RICH_TEXT && field.editable));
 });

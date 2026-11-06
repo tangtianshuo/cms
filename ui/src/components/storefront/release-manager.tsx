@@ -7,7 +7,7 @@ import { createPublicationAction, normalizePublishStatus, publicationSuccessMess
 import { publishedSiteUrl } from './published-site-url';
 
 interface Publication { requestKey?: string; operationId: string; releaseId: string; status: PublishStatus; failureCode?: string; reason?: string; activeRevision?: number; operation?: 'publish' | 'rollback' }
-interface GatewayInfo { configured: boolean; bound: boolean; siteUrl: string; publicHostname?: string; defaultHost?: string; publishStatus: (Omit<Publication, 'status'> & { status: string }) | null }
+interface GatewayInfo { preparation?: { status: 'pending' | 'running' | 'ready' | 'failed'; allowed: boolean }; configured: boolean; bound: boolean; siteUrl: string; publicHostname?: string; defaultHost?: string; publishStatus: (Omit<Publication, 'status'> & { status: string }) | null }
 
 interface History {
     currentReleaseId: string;
@@ -41,6 +41,8 @@ export const ReleaseManager = defineComponent({
         const action = createPublicationAction(sessionStorage,
             `${encodeURIComponent(sdk.context?.context.workspaceId || '')}/${encodeURIComponent(sdk.context?.context.siteId || '')}`,
             () => crypto.randomUUID());
+        let preparationTimer: ReturnType<typeof setTimeout> | undefined;
+        const preparationBlocked = () => gateway.value?.preparation?.allowed === false;
         let pollTimer: ReturnType<typeof setTimeout> | undefined;
         let disposed = false;
         const origin = new URL(import.meta.env.VITE_STOREFRONT_ORIGIN || 'http://localhost:3000').origin;
@@ -86,6 +88,11 @@ export const ReleaseManager = defineComponent({
         async function refresh() {
             const info = await sdk.send<GatewayInfo>({ url: '/api/v4/presets/releases/gateway', method: 'GET' });
             gateway.value = info;
+            if (preparationTimer) clearTimeout(preparationTimer);
+            if (preparationBlocked()) {
+                preflight.value = null;
+                if (!disposed) preparationTimer = setTimeout(() => run(refresh), 5000);
+            }
             await refreshHistory();
             if (info.bound && info.publishStatus) await acceptPublication({ ...info.publishStatus, status: normalizePublishStatus(info.publishStatus.status, info.publishStatus.operation || 'publish') });
         }
@@ -102,12 +109,13 @@ export const ReleaseManager = defineComponent({
                 phase.value = 'checking';
                 preflight.value = null;
                 await refresh();
+                if (preparationBlocked()) { phase.value = 'draft'; return; }
                 preflight.value = await sdk.send<Preflight>({ url: '/api/v4/presets/releases/check', method: 'POST' });
                 if (!publication.value || publication.value.status !== 'publishing') phase.value = 'draft';
             });
         }
         async function publish() {
-            if (!preflight.value?.valid || !gateway.value || publication.value?.status === 'publishing') return;
+            if (preparationBlocked() || !preflight.value?.valid || !gateway.value || publication.value?.status === 'publishing') return;
             const expectedReleaseId = preflight.value.expectedReleaseId;
             const snapshotHash = preflight.value.snapshotHash;
             await run(async () => {
@@ -136,7 +144,7 @@ export const ReleaseManager = defineComponent({
             });
         }
         async function rollback(releaseId: string) {
-            if (publication.value?.status === 'publishing') return;
+            if (preparationBlocked() || !gateway.value || publication.value?.status === 'publishing') return;
             await run(async () => {
                 const requestKey = gateway.value?.bound ? action.request(`rollback/${releaseId}`) : undefined;
                 try {
@@ -152,11 +160,15 @@ export const ReleaseManager = defineComponent({
             });
         }
         onMounted(() => run(refresh));
-        onBeforeUnmount(() => { disposed = true; if (pollTimer) clearTimeout(pollTimer); });
+        onBeforeUnmount(() => { disposed = true; if (pollTimer) clearTimeout(pollTimer); if (preparationTimer) clearTimeout(preparationTimer); });
         return () => <section id="releases" class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">
             <h2 class="text-lg font-semibold">{t('presets.releasesTitle')}</h2>
             <p class="mt-2 max-w-3xl text-sm opacity-70">{t(gateway.value?.bound ? 'presets.gatewayReleaseHint' : 'presets.releaseHint')}</p>
-            {gateway.value && !gateway.value.bound && <div role="status" class={`mt-3 border-l-4 px-3 py-2 text-sm ${publication.value?.status === 'snapshot-created' ? 'border-yellow bg-yellow/10' : 'border-gray bg-gray/10'}`}>
+            {preparationBlocked() && <div role="status" class="mt-3 border-l-4 border-gray bg-gray/10 px-3 py-2 text-sm">
+                <strong>{gateway.value?.preparation?.status === 'failed' ? '准备失败，请管理员重试。' : gateway.value?.preparation?.status === 'ready' ? '发布环境暂不可用，请稍后重试或联系管理员。' : '正在准备发布环境。'}</strong>
+                <p>你可以继续编辑网站内容，环境就绪后即可发布。</p>
+            </div>}
+            {gateway.value && !preparationBlocked() && !gateway.value.bound && <div role="status" class={`mt-3 border-l-4 px-3 py-2 text-sm ${publication.value?.status === 'snapshot-created' ? 'border-yellow bg-yellow/10' : 'border-gray bg-gray/10'}`}>
                 <strong>{publication.value?.status === 'snapshot-created' ? '发布快照已生成，但独立站尚未上线。' : '当前站点仅编辑 CMS 草稿。'}</strong>
                 <p>{gateway.value.configured
                     ? 'Gateway 控制面已配置，但当前站点尚未绑定到对应 Gateway 站点。请管理员完成站点映射后再发布。'
@@ -178,7 +190,7 @@ export const ReleaseManager = defineComponent({
             }
             <div class="mt-4 flex flex-wrap items-center gap-4">
                 <Button disabled={busy.value || publication.value?.status === 'publishing'} kind="secondary" onClick={check}>{t(gateway.value?.bound ? 'presets.checkGatewayRelease' : 'presets.checkRelease')}</Button>
-                <Button disabled={busy.value || !gateway.value || !preflight.value?.valid || publication.value?.status === 'publishing'} onClick={publish}>{t(gateway.value?.bound ? 'presets.publishRelease' : 'presets.createSnapshot')}</Button>
+                <Button disabled={busy.value || preparationBlocked() || !gateway.value || !preflight.value?.valid || publication.value?.status === 'publishing'} onClick={publish}>{t(gateway.value?.bound ? 'presets.publishRelease' : 'presets.createSnapshot')}</Button>
                 {gateway.value?.bound && history.value.currentReleaseId && siteUrl() && <a href={siteUrl()} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
             </div>
             {busy.value && <p role="status" class="mt-3 text-sm">{t('common.loading')}</p>}
@@ -211,7 +223,7 @@ export const ReleaseManager = defineComponent({
                     <tbody>{history.value.items.map((item) => <tr class="border-t border-gray/40">
                         <td class="py-3">{item._id.slice(0, 8)} {item._id === history.value.currentReleaseId && t('presets.currentRelease')}</td>
                         <td>{new Date(item.createdAt).toLocaleString()}</td><td>{item.createdBy}</td><td>{item.pageCount}</td>
-                        <td>{item._id !== history.value.currentReleaseId && <Button disabled={busy.value || publication.value?.status === 'publishing'}
+                        <td>{item._id !== history.value.currentReleaseId && <Button disabled={busy.value || preparationBlocked() || publication.value?.status === 'publishing'}
                             onClick={() => rollback(item._id)}>{t('presets.rollbackRelease')}</Button>}</td>
                     </tr>)}</tbody>
                 </table>

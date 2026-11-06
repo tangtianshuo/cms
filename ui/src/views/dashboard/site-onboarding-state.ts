@@ -36,7 +36,7 @@ export interface SiteOnboardingState {
     siteName: string;
     includeDemo: boolean;
     importRequested: boolean;
-    creation?: { name: string; baselineIds: string[]; siteId?: string };
+    creation?: { name: string; baselineIds: string[]; requestKey?: string; siteId?: string };
 }
 interface Scope {
     userId: string;
@@ -95,6 +95,20 @@ export function createSiteOnboarding(deps: Dependencies) {
         storageError: false,
         creationUncertain: false,
         creationCandidates: [] as SiteInstallation[],
+        get preparing() { return ['pending', 'running'].includes(controller.site?.provisioning?.status || ''); },
+        get canPublish() { return controller.site?.status === 'ready' && (!controller.site.provisioning || controller.site.provisioning.status === 'ready'); },
+        get provisioningLabel() {
+            const status = controller.site?.provisioning?.status;
+            return status === 'ready' ? '发布环境已就绪' : status === 'failed' ? '准备失败，重试' : status ? '正在准备发布环境' : '';
+        },
+        async retryProvisioning() {
+            if (!deps.scope.admin || !deps.scope.siteId || controller.busy || controller.site?.provisioning?.status !== 'failed') return;
+            controller.busy = true; changed();
+            try {
+                await deps.sdk.send({ url: `/api/v4/workspaces/current/sites/${encodeURIComponent(deps.scope.siteId)}/provisioning/retry`, method: 'POST', data: {}, selectorOverride: selector });
+                await controller.refresh();
+            } finally { controller.busy = false; changed(); }
+        },
         get selected() {
             return currentChoice;
         },
@@ -456,6 +470,7 @@ export function createSiteOnboarding(deps: Dependencies) {
             (saved.creation !== undefined &&
                 (!saved.creation ||
                     typeof saved.creation.name !== 'string' ||
+                    (saved.creation.requestKey !== undefined && (typeof saved.creation.requestKey !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/.test(saved.creation.requestKey))) ||
                     !Array.isArray(saved.creation.baselineIds) ||
                     !saved.creation.baselineIds.every(
                         (id: unknown) => typeof id === 'string',
@@ -523,7 +538,7 @@ export function createSiteOnboarding(deps: Dependencies) {
         controller.busy = true;
         changed();
         try {
-            // Creation has no server idempotency key. Persist intent before sending and never blindly resend it.
+            // Persist the stable key before transport so a lost response replays one server intent.
             const saved = readState(key);
             if (saved?.creation) controller.state = saved;
             const pending = controller.state.creation;
@@ -533,7 +548,14 @@ export function createSiteOnboarding(deps: Dependencies) {
                 selectorOverride: { workspaceId: deps.scope.workspaceId },
             });
             let site: SiteInstallation | undefined;
-            if (pending) {
+            if (pending?.requestKey && !pending.siteId) {
+                site = await deps.sdk.send<SiteInstallation>({
+                    url: '/api/v4/workspaces/current/sites', method: 'POST',
+                    data: { name: pending.name, requestKey: pending.requestKey },
+                    selectorOverride: { workspaceId: deps.scope.workspaceId },
+                });
+                pending.siteId = site._id; save(true);
+            } else if (pending) {
                 const matches = pending.siteId
                     ? result.items.filter((item) => item._id === pending.siteId)
                     : result.items.filter(
@@ -552,13 +574,14 @@ export function createSiteOnboarding(deps: Dependencies) {
                 controller.state.creation = {
                     name: controller.state.siteName.trim(),
                     baselineIds: result.items.map((item) => item._id),
+                    requestKey: crypto.randomUUID(),
                 };
                 save(true);
                 changed();
                 site = await deps.sdk.send<SiteInstallation>({
                     url: '/api/v4/workspaces/current/sites',
                     method: 'POST',
-                    data: { name: controller.state.creation.name },
+                    data: { name: controller.state.creation.name, requestKey: controller.state.creation.requestKey },
                     selectorOverride: { workspaceId: deps.scope.workspaceId },
                 });
                 controller.state.creation.siteId = site._id;

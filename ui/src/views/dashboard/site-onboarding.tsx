@@ -158,7 +158,7 @@ const SiteOnboardingWizard = defineComponent({
             await load();
             if (disposed) return;
             timer = setInterval(() => {
-                if (!working.value && controller.importing) run(refresh);
+                if (!working.value && (controller.importing || controller.preparing)) run(refresh);
             }, 3000);
         });
         onBeforeUnmount(() => {
@@ -884,12 +884,20 @@ const SiteOnboardingWizard = defineComponent({
                                         </p>
                                     </>
                                 )}
+                                {controller.provisioningLabel && (
+                                    <div role="status" aria-live="polite" class="studio-help">
+                                        <p>{controller.provisioningLabel}</p>
+                                        {site?.provisioning?.status === 'failed' && scope.admin && (
+                                            <button type="button" class="min-h-[44px] px-4" disabled={busy} onClick={() => run(() => controller.retryProvisioning())}>重试准备</button>
+                                        )}
+                                    </div>
+                                )}
                                 {state.step === 'publish' && (
                                     <>
                                         <p class="studio-help">
                                             先检查本次修改，再确认发布。发布结果与可访问状态以下方实际检查为准。
                                         </p>
-                                        <ReleaseManager onSaved={refresh} />
+                                        {controller.canPublish ? <ReleaseManager onSaved={refresh} /> : <button type="button" class="min-h-[44px] px-4" disabled>确认发布</button>}
                                     </>
                                 )}
                                 <footer class="site-setup-footer">

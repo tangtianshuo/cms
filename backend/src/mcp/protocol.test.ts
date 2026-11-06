@@ -3,6 +3,8 @@ import test from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from './main';
+import { keyValueStore } from '../key-value-store';
+test.after(() => keyValueStore.destroy());
 
 test('MCP protocol lists domain tools and forwards selected workspace headers', async (context) => {
     let request: any;
@@ -64,6 +66,16 @@ test('MCP protocol lists domain tools and forwards selected workspace headers', 
     assert.equal(request.headers.authorization, 'Bearer test-jwt');
     assert.equal(request.headers['x-bcms-workspace'], 'workspace-a');
     assert.equal(request.headers['x-bcms-site'], 'site-a');
+
+    const creationTool = tools.tools.find(tool => tool.name === 'workspace_site_create');
+    assert.ok(creationTool?.inputSchema.required?.includes('requestKey'));
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const created = await client.callTool({ name: 'workspace_site_create', arguments: { name: 'Stable site', requestKey: 'mcp-create-intent-1' } });
+        assert.equal(created.isError, undefined);
+        assert.equal(request.method, 'POST');
+        assert.equal(request.url, '/api/v4/workspaces/current/sites');
+        assert.deepEqual(request.payload, { name: 'Stable site', requestKey: 'mcp-create-intent-1' });
+    }
 
     await client.callTool({
         name: 'media_file_upload',

@@ -94,8 +94,18 @@ async function fixture(context: { after(action: () => Promise<void>): void }) {
     const headers = { authorization, 'x-bcms-workspace': workspace._id };
     const inWorkspace = <T>(action: () => T) => runWithWorkspace({ workspaceId: workspace._id,
         actorId: 'admin', admin: true, instanceAdmin: true, role: 'admin' }, action);
+    const collection = app.mongo.db?.collection(Repo.siteInstallation.collection); assert.ok(collection);
+    const namespace = collection.namespace;
+    const prototype = Object.getPrototypeOf(collection) as { insertOne: (...args: unknown[]) => Promise<unknown> };
+    function interceptSiteInsert(action: (insert: () => Promise<unknown>) => Promise<unknown>) {
+        const original = prototype.insertOne;
+        prototype.insertOne = function (this: { namespace: string }, ...args: unknown[]) {
+            return this.namespace === namespace ? action(() => original.apply(this, args)) : original.apply(this, args);
+        };
+        return () => { prototype.insertOne = original; };
+    }
     return {
-        app,
+        app, interceptSiteInsert,
         workspace,
         inWorkspace,
         create: () =>
@@ -103,7 +113,7 @@ async function fixture(context: { after(action: () => Promise<void>): void }) {
                 method: 'POST',
                 url: '/api/v4/workspaces/current/sites',
                 headers,
-                payload: { name: 'New site' },
+                payload: { name: 'New site', requestKey: 'lifecycle-test-create' },
             }).then(response => response),
         remove: () =>
             app.inject({
@@ -119,15 +129,14 @@ test(
     'a site creation reserved before insert prevents concurrent workspace deletion',
     options,
     async (context) => {
-        const { workspace, create, remove, inWorkspace } = await fixture(context);
+        const { workspace, create, remove, inWorkspace, interceptSiteInsert } = await fixture(context);
         const reached = barrier();
         const resume = barrier();
-        const add = Repo.siteInstallation.add;
-        Repo.siteInstallation.add = async (...args) => {
+        const restoreInsert = interceptSiteInsert(async insert => {
             reached.resolve();
             await resume.promise;
-            return add.apply(Repo.siteInstallation, args);
-        };
+            return insert();
+        });
         const pending = create();
         try {
             await reached.promise;
@@ -137,7 +146,7 @@ test(
         } finally {
             resume.resolve();
             const creation = await pending;
-            Repo.siteInstallation.add = add;
+            restoreInsert();
             assert.equal(creation.statusCode, 200, creation.body);
         }
         assert.equal(
@@ -224,15 +233,14 @@ test(
     'interrupted creation reservations survive age and restart until explicitly recovered',
     options,
     async (context) => {
-        const { app, workspace, create, remove } = await fixture(context);
-        const add = Repo.siteInstallation.add;
-        Repo.siteInstallation.add = async () => {
+        const { app, workspace, create, remove, interceptSiteInsert } = await fixture(context);
+        const restoreInsert = interceptSiteInsert(async () => {
             throw new Error('simulated interrupted persistence');
-        };
+        });
         try {
             assert.equal((await create()).statusCode, 500);
         } finally {
-            Repo.siteInstallation.add = add;
+            restoreInsert();
         }
         const pending = (await Repo.workspace.methods.fresh(workspace._id))
             ?.pendingCreations;

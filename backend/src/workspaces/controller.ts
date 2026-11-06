@@ -1,5 +1,4 @@
 import { defaultEntryGroupId } from '../entry-groups/repo';
-import { withWorkspaceCreation } from './lifecycle';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -15,6 +14,7 @@ import {
     workspaceId,
 } from './context';
 import type { SiteInstallation } from '../presets/site-model';
+const siteCreationBody = z.object({ name: z.string().trim().min(1).max(80), requestKey: z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/) }).strict();
 const nameBody = z.object({ name: z.string().trim().min(1).max(80) }).strict();
 export const WorkspaceController = createController({
     name: 'Workspaces',
@@ -220,20 +220,47 @@ export const WorkspaceController = createController({
                     };
                 },
             }),
+            provisioningStatus: createControllerMethod({
+                path: '/workspaces/current/sites/:siteId/provisioning',
+                type: 'get',
+                preRequestHandler: RP.createJwtCheck(['USER']),
+                async handler({ request, errorHandler, reply }) {
+                    reply.header('Cache-Control', 'no-store');
+                    const site = await Repo.siteInstallation.methods.findFresh((request.params as { siteId: string }).siteId);
+                    if (!site || (site.workspaceId || DEFAULT_WORKSPACE) !== workspaceId()) throw errorHandler(HttpStatus.NotFound, 'Site not found');
+                    const state = site.provisioning;
+                    return state ? { status: state.status, attempts: state.attempts, nextAttemptAt: state.nextAttemptAt, ...(state.lastError ? { lastError: state.lastError } : {}) } : { status: 'unconfigured' };
+                },
+            }),
+            retryProvisioning: createControllerMethod({
+                path: '/workspaces/current/sites/:siteId/provisioning/retry',
+                type: 'post',
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                async handler({ request, errorHandler }) {
+                    const siteId = (request.params as { siteId: string }).siteId;
+                    const site = await Repo.siteInstallation.methods.findFresh(siteId);
+                    if (!site || (site.workspaceId || DEFAULT_WORKSPACE) !== workspaceId()) throw errorHandler(HttpStatus.NotFound, 'Site not found');
+                    if (!(await Repo.siteInstallation.methods.retryProvisioning(siteId))) throw errorHandler(HttpStatus.Conflict, 'Only failed preparation can be retried');
+                    return { status: 'pending' };
+                },
+            }),
             createSite: createControllerMethod({
                 path: '/workspaces/current/sites',
                 type: 'post',
                 preRequestHandler: RP.createWorkspaceAdminCheck(),
                 async handler({ request, errorHandler }) {
-                    const parsed = nameBody.safeParse(request.body);
+                    const parsed = siteCreationBody.safeParse(request.body);
                     if (!parsed.success)
                         throw errorHandler(
                             HttpStatus.BadRequest,
-                            'Invalid site name',
+                            'A valid site name and requestKey are required',
                         );
                     const id = randomUUID();
                     const site: SiteInstallation = {
                         _id: id,
+                        creationRequestKey: parsed.data.requestKey,
+                        creationName: parsed.data.name,
+                        provisioning: { requestKey: parsed.data.requestKey, status: 'pending', attempts: 0, nextAttemptAt: Date.now() },
                         createdAt: Date.now(),
                         updatedAt: Date.now(),
                         workspaceId: workspaceId(),
@@ -257,10 +284,7 @@ export const WorkspaceController = createController({
                             font: '',
                         },
                     };
-                    return withWorkspaceCreation(
-                        { kind: 'site', resourceId: id },
-                        () => Repo.siteInstallation.add(site),
-                    );
+                    return Repo.siteInstallation.methods.createOnce(site);
                 },
             }),
         };

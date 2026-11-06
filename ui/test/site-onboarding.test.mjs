@@ -260,7 +260,7 @@ test('without a selected site the wizard creates an empty site, persists progres
     );
 });
 
-test('lost site creation responses reconcile a new matching site instead of posting another site', async () => {
+test('legacy keyless lost site creation responses reconcile a new matching site instead of posting another site', async () => {
     const store = storage();
     const h = harness({
         storage: store,
@@ -279,6 +279,11 @@ test('lost site creation responses reconcile a new matching site instead of post
     await h.controller.next();
     h.controller.update({ siteName: 'My shop' });
     await assert.rejects(h.controller.next(), /response lost/);
+    // Simulate progress saved by the previous UI, before server idempotency keys.
+    const pendingKey = onboarding.onboardingStorageKey({ userId: 'user-a', workspaceId: 'workspace-a' });
+    const priorProgress = JSON.parse(h.storage.getItem(pendingKey));
+    delete priorProgress.creation.requestKey;
+    h.storage.setItem(pendingKey, JSON.stringify(priorProgress));
     const resumed = harness({
         storage: store,
         scope: { siteId: undefined },
@@ -297,7 +302,7 @@ test('lost site creation responses reconcile a new matching site instead of post
     assert.equal(resumed.selections[0].selection.siteId, 'created');
 });
 
-test('uncertain creation stays recoverable without a second POST or accidentally using an old site', async () => {
+test('legacy keyless uncertain creation stays recoverable without a second POST or accidentally using an old site', async () => {
     const h = harness({
         scope: { siteId: undefined },
         sites: [empty('old')],
@@ -314,6 +319,11 @@ test('uncertain creation stays recoverable without a second POST or accidentally
     await h.controller.next();
     h.controller.update({ siteName: 'My shop' });
     await assert.rejects(h.controller.next());
+    // Simulate progress saved by the previous UI, before server idempotency keys.
+    const pendingKey = onboarding.onboardingStorageKey({ userId: 'user-a', workspaceId: 'workspace-a' });
+    const priorProgress = JSON.parse(h.storage.getItem(pendingKey));
+    delete priorProgress.creation.requestKey;
+    h.storage.setItem(pendingKey, JSON.stringify(priorProgress));
     const resumed = harness({
         storage: h.storage,
         scope: { siteId: undefined },
@@ -669,4 +679,51 @@ test('explicit pending-empty recovery discovers importing or ready sites before 
         );
         assert.equal(resumed.controller.site.status, status);
     }
+});
+
+test('preparation status permits editing, gates publishing, and retries through the existing scoped SDK', async () => {
+    const h = harness({ site: { ...installation('ready'), provisioning: { status: 'pending' } }, send: async r => r.url.endsWith('/provisioning/retry') ? { status: 'pending' } : undefined });
+    await h.controller.load();
+    assert.equal(h.controller.provisioningLabel, '正在准备发布环境');
+    assert.equal(h.controller.canPublish, false);
+    assert.equal(h.controller.preparing, true);
+    h.setSite({ ...installation('ready'), provisioning: { status: 'failed' } });
+    await h.controller.refresh();
+    assert.equal(h.controller.provisioningLabel, '准备失败，重试');
+    h.requests.length = 0;
+    await h.controller.retryProvisioning();
+    assert.deepEqual(h.requests[0], { url: '/api/v4/workspaces/current/sites/site-a/provisioning/retry', method: 'POST', data: {}, selectorOverride: { workspaceId: 'workspace-a', siteId: 'site-a' } });
+    h.setSite({ ...installation('ready'), provisioning: { status: 'ready' } });
+    await h.controller.refresh();
+    assert.equal(h.controller.canPublish, true);
+    assert.equal(h.controller.provisioningLabel, '发布环境已就绪');
+    assert.equal(h.controller.provisioningLabel.includes('上线'), false);
+});
+
+test('a failed create response replays the durable request key after reopening the wizard', async () => {
+    const store = storage();
+    let original;
+    const first = harness({ storage: store, scope: { siteId: undefined }, send: async r => {
+        if (r.method === 'POST') { original = r.data.requestKey; throw new Error('lost first success'); }
+    } });
+    await first.controller.load(); first.controller.chooseTemplate(template); await first.controller.next(); first.controller.update({ siteName: 'My shop' });
+    await assert.rejects(first.controller.next());
+    assert.equal(typeof original, 'string'); assert.ok(original.length > 10);
+    const second = harness({ storage: store, scope: { siteId: undefined } });
+    await second.controller.load(); await second.controller.next();
+    assert.equal(second.requests.find(r => r.method === 'POST')?.data.requestKey, original);
+    assert.equal(second.selections[0].selection.siteId, 'new-site');
+});
+
+
+test('a completed creation frees the next intentional site to use a new key', async () => {
+    const store = storage();
+    const first = harness({ storage: store, scope: { siteId: undefined } });
+    await first.controller.load(); first.controller.chooseTemplate(template); await first.controller.next(); first.controller.update({ siteName: 'My shop' }); await first.controller.next();
+    const key = first.requests.find(r => r.method === 'POST').data.requestKey;
+    const destination = harness({ storage: store, scope: { siteId: 'new-site' }, site: { ...installation('ready'), _id: 'new-site' } });
+    await destination.controller.load();
+    const second = harness({ storage: store, scope: { siteId: undefined } });
+    await second.controller.load(); second.controller.chooseTemplate(template); await second.controller.next(); second.controller.update({ siteName: 'Another shop' }); await second.controller.next();
+    assert.notEqual(second.requests.find(r => r.method === 'POST').data.requestKey, key);
 });
