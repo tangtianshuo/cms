@@ -5,7 +5,7 @@ import type { NavigationNode } from '../presets/navigation';
 import { normalizeNavigation } from '../presets/navigation';
 import type { SiteOperations } from '../presets/operations';
 import { createPageDraft, pageDraft, updatePageDraft, type PageDraft } from '../presets/pages';
-import { buildRelease, type ReleaseInput, type ReleaseSnapshot } from '../presets/releases';
+import { buildRelease, validateReleaseDraft, type ReleaseInput, type ReleaseSnapshot } from '../presets/releases';
 import { ownerWorkspace } from '../workspaces/context';
 import { pageOperationIds, patchEntry, type StudioValue } from './business';
 export interface EditorSessionKey { sessionId: string; revision: number; workspaceId: string; siteId: string; language: string }
@@ -27,6 +27,12 @@ export function mergeStudioEntry(previous: Entry, body: EntryCreateBody, languag
 }
 /** In-memory projection only. The caller authorizes resources and validates the body before invoking this function. */
 export function buildStudioDraftPreview(input: ReleaseInput, overlay: StudioDraftOverlay): ReleaseSnapshot {
+    return buildRelease(studioDraftInput(input, overlay), { preserveMediaCapabilities: true });
+}
+export function validateStudioDraft(input: ReleaseInput, overlay: StudioDraftOverlay) {
+    return validateReleaseDraft(studioDraftInput(input, overlay));
+}
+function studioDraftInput(input: ReleaseInput, overlay: StudioDraftOverlay): ReleaseInput {
     const draft = structuredClone(input);
     let changedEntry: Entry | undefined;
     if (overlay.entry) {
@@ -59,5 +65,5 @@ export function buildStudioDraftPreview(input: ReleaseInput, overlay: StudioDraf
         const { name, theme, navigation, operations } = structuredClone(overlay.settings);
         draft.site = { ...draft.site, name, theme: { ...draft.site.theme, ...theme }, ...(navigation ? { navigation: normalizeNavigation(navigation) } : {}), ...(operations ? { operations } : {}) };
     }
-    return buildRelease(draft, { preserveMediaCapabilities: true });
+    return draft;
 }

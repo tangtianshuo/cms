@@ -3,7 +3,7 @@ import { withMediaAccess } from '../media/access';
 import { SocketManager } from '../socket/manager';
 import { EventManager } from '../event/manager';
 import { assertSiteCapability } from '../authorization/site-access';
-import { buildStudioDraftPreview, mergeStudioEntry, studioEntryId, type StudioDraftOverlay } from './draft-preview';
+import { buildStudioDraftPreview, validateStudioDraft, mergeStudioEntry, studioEntryId, type StudioDraftOverlay } from './draft-preview';
 import type { ReleaseInput } from '../presets/releases';
 import type { Template } from '../template/models/main';
 import type { Entry } from '../entry/models/main';
@@ -77,7 +77,7 @@ async function validatePage(site: SiteInstallation, candidatePage: PageDraft, in
         }
     } else if (candidatePage.sectionConfigs) validateSectionMediaReferences(candidatePage.layout, candidatePage.sectionConfigs, { media: input.media, site, publishedPaths: new Set(site.pages.filter(page => page.enabled !== false && !page.path.includes(':')).map(page => page.path)) });
 }
-async function validatedOverlay(site: SiteInstallation, raw: unknown, language = site.language || 'en') {
+async function validatedOverlay(site: SiteInstallation, raw: unknown, language = site.language || 'en', mode: 'preview' | 'save' = 'preview') {
     const overlay = overlayBody.parse(raw) as StudioDraftOverlay;
     if (!(await Repo.language.findAll()).some(item => item.code === language)) throw new Error('Language unavailable');
     const input = await releaseInput(site, language);
@@ -109,15 +109,16 @@ async function validatedOverlay(site: SiteInstallation, raw: unknown, language =
         const mediaIds = new Set(input.media.filter(item => ['IMG','SVG','GIF'].includes(item.type) && mediaAuthorizedForSite(item, site, { requireSiteBinding: true })).map(item => item._id));
         overlay.settings.operations = normalizeSiteOperations(overlay.settings.operations, mediaIds, { contactDeliveryConfigured: Boolean(process.env.GATEWAY_BASE_URL && process.env.CMS_SERVICE_SECRET) });
     }
-    return { overlay, payload: buildStudioDraftPreview(input, overlay) };
+    return mode === 'save' ? { overlay, validation: validateStudioDraft(input, overlay) } : { overlay, payload: buildStudioDraftPreview(input, overlay) };
 }
 function validationMessage(cause: unknown) {
     const issues = (cause as { issues?: Array<{ entryId?: string; field?: string; message?: string }> })?.issues;
     return issues?.[0]?.message ? `${issues[0].field || 'content'}: ${issues[0].message}` : cause instanceof Error ? cause.message : 'Draft validation failed';
 }
 function validationFailure(cause: unknown) {
-    const issue = (cause as { issues?: Array<{ field?: string; entryId?: string; modelKey?: string; pageKey?: string }> })?.issues?.[0];
-    return { message: validationMessage(cause), ...(issue ? { code: `studio-validation:${JSON.stringify({ field: issue.field, entryId: issue.entryId, modelKey: issue.modelKey, pageKey: issue.pageKey })}` } : {}) };
+    const issue = (cause as { issues?: Array<{ field?: string; entryId?: string; modelKey?: string; pageKey?: string; code?: string; language?: string; message?: string }> })?.issues?.[0];
+    const issues = (cause as { issues?: Array<{ code?: string; message?: string; modelKey?: string; entryId?: string; pageKey?: string; language?: string }> })?.issues;
+    return { message: validationMessage(cause), ...(issue ? { code: `studio-validation:${JSON.stringify({ field: issue.field, entryId: issue.entryId, modelKey: issue.modelKey, pageKey: issue.pageKey, missingTranslations: issues?.filter(item => item.code === 'missing-translation'), saveAllowed: Boolean(issues?.length && issues.every(item => item.code === 'missing-translation')) })}` } : {}) };
 }
 async function selectedSite() {
     const site = await Repo.siteInstallation.methods.findSelected();
@@ -209,7 +210,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 const language = parsed.data.language || site.language || 'en';
                 const overlay = overlayBody.parse(parsed.data.overlay || {}) as StudioDraftOverlay;
                 if (overlay.entry) throw new Error('Duplicate content overlay');
-                const prepared = await validatedOverlay(site, { ...overlay, entry: { modelKey: key, entryId: parsed.data.entryId, operationId: parsed.data.operationId, ...(parsed.data.entry !== undefined ? { entry: parsed.data.entry } : { fields: parsed.data.fields }) } }, language);
+                const prepared = await validatedOverlay(site, { ...overlay, entry: { modelKey: key, entryId: parsed.data.entryId, operationId: parsed.data.operationId, ...(parsed.data.entry !== undefined ? { entry: parsed.data.entry } : { fields: parsed.data.fields }) } }, language, 'save');
                 const id = studioEntryId(site._id, key, parsed.data.operationId, template.singleEntry);
                 if (!previous && template.singleEntry && (await Repo.entry.methods.findAllByTemplateId(template._id)).some(entry => entry._id !== id)) throw new Error('This model already has content; refresh and edit it');
                 const value = prepared.overlay.entry!;
@@ -262,7 +263,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 }
                 await validateStudioEntry(site, template, entry, true);
                 const blueprintDraft = pageDraft(site, blueprint.key)!;
-                await validatedOverlay(site, { entry: { modelKey: blueprint.modelKey, operationId: parsed.data.operationId, ...(pageDraft(site, ids.pageKey) ? { entryId: ids.entryId } : {}), entry: { meta: entry.meta, content: entry.content, statuses: entry.statuses, groupId: entry.groupId } }, page: { key: pageDraft(site, ids.pageKey) ? ids.pageKey : 'new-page', blueprintKey: blueprint.key, title: parsed.data.title, path: parsed.data.path, seoTitle: parsed.data.title, seoDescription: '', sections: blueprintDraft.sections, sectionConfigs: blueprintDraft.sectionConfigs, layoutDocument: blueprintDraft.layoutDocument, enabled: true, navigation: true, ...parsed.data.page, entryId: pageDraft(site, ids.pageKey) ? ids.entryId : '' } });
+                await validatedOverlay(site, { entry: { modelKey: blueprint.modelKey, operationId: parsed.data.operationId, ...(pageDraft(site, ids.pageKey) ? { entryId: ids.entryId } : {}), entry: { meta: entry.meta, content: entry.content, statuses: entry.statuses, groupId: entry.groupId } }, page: { key: pageDraft(site, ids.pageKey) ? ids.pageKey : 'new-page', blueprintKey: blueprint.key, title: parsed.data.title, path: parsed.data.path, seoTitle: parsed.data.title, seoDescription: '', sections: blueprintDraft.sections, sectionConfigs: blueprintDraft.sectionConfigs, layoutDocument: blueprintDraft.layoutDocument, enabled: true, navigation: true, ...parsed.data.page, entryId: pageDraft(site, ids.pageKey) ? ids.entryId : '' } }, site.language || 'en', 'save');
                 return await createStudioPage(site, parsed.data.operationId, entry, parsed.data, {
                     findEntry: id => Repo.entry.findById(id), addEntry: createdEntry => Repo.entry.add(createdEntry),
                     saveSite: (updated, expected) => Repo.siteInstallation.methods.saveDraft(updated, expected), findSite: () => Repo.siteInstallation.methods.findSelected(),
@@ -311,7 +312,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                     }
 
                 }
-                await validatedOverlay(updated, parsed.data.overlay || {});
+                await validatedOverlay(updated, parsed.data.overlay || {}, site.language || 'en', 'save');
             if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) throw conflict();
                 return { ...pageDraft(updated, key)!, siteUpdatedAt: updated.updatedAt };
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, validationFailure(cause)); }
@@ -334,7 +335,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 catch (cause) { throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Invalid website operations'); }
             }
             const updated = { ...site, name: parsed.data.name, theme: { ...site.theme, ...parsed.data.theme }, navigation, operations };
-            try { buildStudioDraftPreview(await releaseInput(updated), {}); } catch (cause) { throw errorHandler(HttpStatus.BadRequest, validationFailure(cause)); }
+            try { validateStudioDraft(await releaseInput(updated), {}); } catch (cause) { throw errorHandler(HttpStatus.BadRequest, validationFailure(cause)); }
             if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) throw errorHandler(HttpStatus.Conflict, 'Site changed; refresh before saving');
             return { updatedAt: updated.updatedAt };
         } }),

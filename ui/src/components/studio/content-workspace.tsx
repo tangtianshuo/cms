@@ -609,7 +609,13 @@ export const ContentWorkspace = defineComponent({
                 saveFailure.value = undefined;
                 draftPreview.cancel();
                 // Validate the complete fixed snapshot before the first write; later writes carry the remaining overlay.
-                if (target.siteId && activeModel.value && savedPage) await sdk.studio.preview({ sessionId: session.sessionId, revision: session.revision, language: target.language, overlay });
+                if (target.siteId && activeModel.value && savedPage) {
+                    try { await sdk.studio.preview({ sessionId: session.sessionId, revision: session.revision, language: target.language, overlay }); }
+                    catch (cause) {
+                        if (!draftValidation(cause).saveAllowed) throw cause;
+                        previewError.value = validationError(cause); previewStale.value = true;
+                    }
+                }
                 const parts: SavePart[] = [];
                 if (newPage && !session.created && full && savedPage && installed) {
                     parts.push({ key: 'page', confirms: ['content','page'], run: async context => {
@@ -1457,7 +1463,7 @@ export const ContentWorkspace = defineComponent({
                         <p>本地修改仍保留，请检查权限或冲突后重试。</p>
                     </div>
                 )}
-                {previewStale.value && <p role="status" class="studio-warning">预览显示上一次有效内容。{previewError.value}<button type="button" onClick={requestPreview}>重试预览</button>{previewLocation.value?.field && <button type="button" onClick={locateValidation}>定位内容</button>}</p>}
+                {previewStale.value && <div role="status" class="studio-warning">{previewPayload.value ? '预览显示上一次有效内容。' : '当前语言预览不可用。'}{previewLocation.value?.missingTranslations?.length ? <><p>以下内容缺少翻译，当前草稿可以保存。补齐后可查看当前语言预览。</p><ul>{previewLocation.value.missingTranslations.map(issue => <li>{state.value.models.find(model => model.key === issue.modelKey)?.label || issue.modelKey}（{issue.language}{issue.pageKey ? ` / ${issue.pageKey}` : ''}）<button type="button" onClick={() => { previewLocation.value = { ...issue, cause: undefined }; void locateValidation(); }}>编辑缺失翻译</button></li>)}</ul></> : previewError.value}<button type="button" onClick={requestPreview}>重试预览</button>{previewLocation.value?.field && <button type="button" onClick={locateValidation}>定位内容</button>}</div>}
                 {conflictState.value && <div role="status" class="studio-warning">{unknownSaveResult.value ? '未能确认本次保存结果，请核对服务器内容后再重试。' : '服务器版本已改变，本地修改已保留。'}<button type="button" disabled={busy.value} onClick={checkServerVersion}>核对服务器版本</button><button type="button" onClick={() => { if (window.confirm('重新读取会放弃尚未保存的本地修改。确定继续吗？')) window.location.reload(); }}>放弃修改并重新读取</button></div>}
                 {checkedServer.value && <section aria-label="服务器版本核对" class="studio-card"><h2>核对服务器内容</h2><p>以下是本地与服务器的差异。保留本地修改后，再次保存会提交这些本地内容；服务器再次变化时仍会停止保存。</p>{serverChanges.value.length ? <table><thead><tr><th>内容</th><th>本地修改</th><th>服务器内容</th></tr></thead><tbody>{serverChanges.value.map(row => <tr><th>{row.label}</th><td>{row.local}</td><td>{row.server}</td></tr>)}</tbody></table> : <p>服务器当前内容与本地相同。核对后可重试，创建操作会沿用原操作记录。</p>}<button type="button" disabled={busy.value} onClick={keepLocalWithCheckedVersion}>保留本地修改并采用此版本</button></section>}
                 {notice.value && (

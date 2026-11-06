@@ -88,6 +88,7 @@ export interface ReleaseIssue {
     entryId?: string;
     field?: string;
     pageKey?: string;
+    language?: string;
 }
 export class ReleaseValidationError extends Error {
     constructor(readonly issues: ReleaseIssue[]) { super(issues[0]?.message || 'Validation failed'); }
@@ -110,6 +111,19 @@ function entryText(input: ReleaseInput, entry: Entry, key: string): string {
 }
 
 export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions = {}): ReleaseSnapshot {
+    return validatedRelease(input, options, false).snapshot;
+}
+/** Validate an incomplete language without exposing its partial projection as a renderable snapshot. */
+export function validateReleaseDraft(input: ReleaseInput): { missingTranslations: ReleaseIssue[] } {
+    return { missingTranslations: validatedRelease(input, {}, true).missingTranslations };
+}
+function validatedRelease(input: ReleaseInput, options: BuildReleaseOptions, draftValidationOnly: boolean): { snapshot: ReleaseSnapshot; missingTranslations: ReleaseIssue[] } {
+    const missingTranslations: ReleaseIssue[] = [];
+    const missingTranslation = (entry: Entry, modelKey: string, pageKey?: string) => {
+        const existing = missingTranslations.find(issue => issue.entryId === entry._id);
+        if (existing) { if (pageKey && !existing.pageKey) existing.pageKey = pageKey; return; }
+        missingTranslations.push({ code: 'missing-translation', message: `Missing translation for language ${input.language}: ${modelKey}`, modelKey, entryId: entry._id, language: input.language, ...(pageKey ? { pageKey } : {}) });
+    };
     // Public snapshots always contain stable URLs; editor capabilities must never be serialized.
     if (!options.preserveMediaCapabilities) {
         input = { ...input, media: input.media.map(({ accessToken: _accessToken, accessTokenExpiresAt: _expiresAt, ...media }) => media) };
@@ -170,8 +184,10 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
             }
         }
         const modelEntries = entries.filter((entry) => entry.templateId === model.templateId);
-        if (definition.singleEntry && modelEntries.length !== 1) {
-            issues.push({ code: 'single-entry', message: `Exactly one ${definition.key} Entry is required for language ${language}`, modelKey: definition.key });
+        if (definition.singleEntry) {
+            const boundEntries = scopedEntries.filter(entry => entry.templateId === model.templateId);
+            if (boundEntries.length !== 1) issues.push({ code: 'single-entry', message: `Exactly one ${definition.key} Entry is required for language ${language}`, modelKey: definition.key });
+            else if (!boundEntries[0].meta.some(meta => meta.lng === language)) missingTranslation(boundEntries[0], definition.key);
         }
         for (const entry of modelEntries) {
             for (const field of definition.fields) {
@@ -196,10 +212,10 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
                     if (field.type === PropType.ENTRY_POINTER) {
                         const pointer = value as { tid?: string; eid?: string } | null;
                         const target = site.models.find((item) => item.key === field.referenceModel);
-                        if (!pointer || pointer.tid !== target?.templateId ||
-                            !entries.some((item) => item._id === pointer.eid && item.templateId === pointer.tid)) {
+                        const related = pointer && scopedEntries.find(item => item._id === pointer.eid && item.templateId === pointer.tid);
+                        if (!pointer || pointer.tid !== target?.templateId || !related) {
                             issues.push({ code: 'entry-reference', message: `Invalid related Entry: ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
-                        }
+                        } else if (!related.meta.some(meta => meta.lng === language)) missingTranslation(related, target!.key);
                     }
                 }
             }
@@ -207,6 +223,8 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
     }
     if (issues.length) throw new ReleaseValidationError(issues);
     const pages: ReleasePage[] = [];
+    const untranslatedFixedPaths = new Set<string>();
+    const routeEntries = new Set<string>();
     const concreteRoutes = new Map<string, Set<string>>();
     for (const concrete of site.pages.filter(item => item.blueprintKey && !item.path.includes(':') && item.entryId)) {
         const paths = concreteRoutes.get(concrete.entryId!) || new Set<string>();
@@ -216,7 +234,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
     for (const sourcePage of site.pages) {
         const page = pageDraft(site, sourcePage.key)!;
         const model = site.models.find((item) => item.key === page.modelKey);
-        const bound = entries.find((entry) => entry._id === page.entryId);
+        const bound = scopedEntries.find((entry) => entry._id === page.entryId);
         const contractPage = Boolean(preset.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
         // A legacy import may not have saved section data yet. Keep its
         // preset demo publishable until an editor explicitly saves sections.
@@ -225,9 +243,16 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         }
         if (page.enabled === false) continue;
         if (!page.seoTitle.trim()) throw new Error(`SEO title is required: ${page.title}`);
-        const candidates = entries.filter((entry) => entry.templateId === model?.templateId &&
-            (!page.entryId || entry._id === page.entryId));
-        if (!candidates.length) throw new Error(`Missing content for ${page.title} in language ${language}`);
+        const boundCandidates = scopedEntries.filter(entry => entry.templateId === model?.templateId && (!page.entryId || entry._id === page.entryId));
+        if (!boundCandidates.length) throw new Error(`Missing content for ${page.title} in language ${language}`);
+        const candidates = entries.filter(entry => boundCandidates.some(boundEntry => boundEntry._id === entry._id));
+        for (const candidate of boundCandidates) {
+            routeEntries.add(candidate._id);
+            if (!candidate.meta.some(meta => meta.lng === language)) {
+                missingTranslation(candidate, model!.key, page.key);
+                if (!page.path.includes(':')) untranslatedFixedPaths.add(page.path);
+            }
+        }
         for (const entry of page.path.includes(':slug') ? candidates : candidates.slice(0, 1)) {
             const slug = entryText(input, entry, 'slug');
             if (page.path.includes(':slug') && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
@@ -266,15 +291,16 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
                 ? [entry] : entries.filter((item) => item.templateId === collectionModel?.templateId);
             const ids = collections.flatMap((item) => fieldValues(input, item, 'products')
                 .map((value) => (value as { eid: string }).eid));
-            targets = entries.filter((item) => ids.includes(item._id));
+            targets = scopedEntries.filter((item) => ids.includes(item._id));
         } else if (page.content.view === 'home') {
             const ids = fieldValues(input, entry, 'featuredProducts').map((value) => (value as { eid: string }).eid);
-            targets = entries.filter((item) => ids.includes(item._id));
+            targets = scopedEntries.filter((item) => ids.includes(item._id));
         }
-        page.content.items = targets.map((item) => {
+        page.content.items = targets.flatMap((item) => {
+            if (!item.meta.some(meta => meta.lng === language) && routeEntries.has(item._id)) return [];
             const result = card(item);
             if (!result) throw new Error(`Related Entry has no published page: ${item._id}`);
-            return result;
+            return [result];
         });
     }
     const resolveEntryLinks = (value: unknown): void => {
@@ -283,8 +309,9 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         const object = value as Record<string, unknown>;
         if (typeof object.href === 'string' && object.href.startsWith('entry:')) {
             const match = /^entry:([^:]+)@\*_([^:]+):entry$/.exec(object.href);
-            const linked = match && entries.find(entry => entry._id === match[1] && entry.templateId === match[2]);
+            const linked = match && scopedEntries.find(entry => entry._id === match[1] && entry.templateId === match[2]);
             const target = linked && pageForEntry(linked._id);
+            if (!target && linked && routeEntries.has(linked._id) && !linked.meta.some(meta => meta.lng === language)) return;
             if (!target) throw new ReleaseValidationError([{ code: 'internal-link', message: 'Linked content has no website page', field: 'content' }]);
             object.href = target.path;
         }
@@ -296,9 +323,10 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         return draft.navigation && !draft.path.includes(':');
     }).map((page) => ({ path: page.path, label: site.pages.find((item) => item.key === page.pageKey)!.title }));
     const settings = entries.find((entry) => entry.templateId === site.models.find((model) => model.key === 'site-settings')?.templateId)!;
-    for (const value of fieldValues(input, settings, 'navigationPages')) {
+    for (const value of settings ? fieldValues(input, settings, 'navigationPages') : []) {
         const id = (value as { eid: string }).eid;
         const target = pageForEntry(id);
+        if (!target && routeEntries.has(id) && !availableEntries.some(entry => entry._id === id)) continue;
         if (!target) throw new Error(`Navigation Entry has no published page: ${id}`);
         if (!legacyNavigation.some((link) => link.path === target.path)) {
             legacyNavigation.push({ label: entryText(input, entries.find((entry) => entry._id === id)!, 'title'), path: target.path });
@@ -318,7 +346,7 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         const target = destination(old);
         if (target && target.path !== old.path && !pages.some((page) => page.path === old.path)) redirects.set(old.path, target.path);
     }
-    const publishedPaths = new Set([...pages.map(page => page.path), ...redirects.keys()]);
+    const publishedPaths = new Set([...pages.map(page => page.path), ...untranslatedFixedPaths, ...redirects.keys()]);
     for (const page of site.pages) {
         if (page.sectionConfigs) {
             const contractPage = Boolean(preset.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
@@ -340,6 +368,12 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
         if (Array.isArray(value)) { value.forEach(child => validateLinks(child, location)); return; }
         if (!value || typeof value !== 'object') return;
         const object = value as Record<string, unknown>;
+        if (typeof object.href === 'string' && object.href.startsWith('entry:')) {
+            const match = /^entry:([^:]+)@\*_([^:]+):entry$/.exec(object.href);
+            const linked = match && scopedEntries.find(entry => entry._id === match[1] && entry.templateId === match[2]);
+            if (!linked || !routeEntries.has(linked._id)) linkIssues.push({ ...location, code: 'internal-link', message: 'Linked content has no website page' });
+            else if (!linked.meta.some(meta => meta.lng === language)) missingTranslation(linked, site.models.find(model => model.templateId === linked.templateId)!.key);
+        }
         if (typeof object.href === 'string' && object.href.startsWith('/') && !object.href.startsWith('//')) {
             const path = object.href.split(/[?#]/)[0];
             if (!publishedPaths.has(path)) linkIssues.push({ ...location, code: 'internal-link', message: `Broken internal link: ${path}` });
@@ -356,10 +390,16 @@ export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions =
     for (const page of pages) {
         for (const node of page.content.layoutDocument?.root || []) for (const [key, value] of Object.entries(node.props)) validateLinks(value, { entryId: page.entryId, pageKey: page.pageKey, field: `section.${node.id}.${key}` });
     }
+    // Shared layout properties remain writable even while their page language is incomplete.
+    for (const sourcePage of site.pages) {
+        const page = pageDraft(site, sourcePage.key)!;
+        for (const node of page.layoutDocument?.root || []) for (const [key, value] of Object.entries(node.props)) validateLinks(value, { pageKey: page.key, field: `section.${node.id}.${key}` });
+    }
     if (linkIssues.length) throw new ReleaseValidationError(linkIssues);
-    return structuredClone({ schemaVersion: 1 as const, workspaceId: ownerWorkspace(site), siteId: site._id, language,
+    if (!draftValidationOnly && missingTranslations.length) throw new ReleaseValidationError(missingTranslations);
+    return { missingTranslations, snapshot: structuredClone({ schemaVersion: 1 as const, workspaceId: ownerWorkspace(site), siteId: site._id, language,
         templateVersion: site.presetVersion, mediaIds: input.media.map((media) => media._id).sort(), pages, navigation: releaseNavigation,
-        redirects: [...redirects].map(([from, to]) => ({ from, to })), operations: site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false } });
+        redirects: [...redirects].map(([from, to]) => ({ from, to })), operations: site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false } }) };
 }
 
 export function releaseDiff(previous: ReleaseSnapshot | undefined, next: ReleaseSnapshot) {

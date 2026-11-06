@@ -34,10 +34,14 @@ export function createDraftPreview<T>(options: { key: () => EditorSessionKey; de
 /** Preserve the server's authorized location while letting the UI translate the reason. */
 export function draftValidation(error: unknown) {
     const details = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown; status?: number } : {};
-    const location: { field?: string; entryId?: string; modelKey?: string; pageKey?: string } = {};
+    const location: { field?: string; entryId?: string; modelKey?: string; pageKey?: string; saveAllowed?: boolean; missingTranslations?: Array<{ code: string; entryId: string; modelKey: string; language: string; pageKey?: string }> } = {};
     if (typeof details.code === 'string' && details.code.startsWith('studio-validation:')) {
         try {
             const parsed = JSON.parse(details.code.slice('studio-validation:'.length));
+            if (Array.isArray(parsed.missingTranslations) && parsed.missingTranslations.length && parsed.missingTranslations.every((issue: any) => issue?.code === 'missing-translation' && ['entryId','modelKey','language'].every(key => typeof issue[key] === 'string'))) {
+                location.missingTranslations = parsed.missingTranslations;
+                location.saveAllowed = parsed.saveAllowed === true;
+            }
             for (const key of ['field', 'entryId', 'modelKey', 'pageKey'] as const) if (typeof parsed[key] === 'string') location[key] = parsed[key];
         } catch { /* An unrecognized location never authorizes navigation. */ }
     }

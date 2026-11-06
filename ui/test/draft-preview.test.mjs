@@ -39,3 +39,11 @@ test('a scheduled request preserves the exact overlay revision even if caller da
  const received=[];const preview=createDraftPreview({key:()=>key,debounceMs:1,request:async body=>{received.push(body);return {...key,payload:'ok'};},accept:()=>{},fail:error=>assert.fail(String(error))});
  const overlay={entry:{fields:{headline:['Scheduled']}}};preview.update(overlay);overlay.entry.fields.headline[0]='Later';await new Promise(resolve=>setTimeout(resolve,8));assert.equal(received[0].overlay.entry.fields.headline[0],'Scheduled');preview.dispose();
 });
+
+test('only explicit missing-translation diagnostics allow the pre-save check to continue',()=>{
+ const issue={code:'missing-translation',entryId:'e',modelKey:'home',language:'fr'};
+ const error=value=>({status:400,code:'studio-validation:'+JSON.stringify(value),message:'Missing translation'});
+ assert.equal(draftValidation(error({missingTranslations:[issue],saveAllowed:true})).saveAllowed,true);
+ assert.equal(draftValidation(error({missingTranslations:[issue]})).saveAllowed,false);
+ assert.equal(draftValidation(error({missingTranslations:[{...issue,code:'model-binding'}],saveAllowed:true})).saveAllowed,undefined);
+});

@@ -5,7 +5,7 @@ import type { Template } from '../template/models/main';
 import type { Entry } from '../entry/models/main';
 import { getPreset } from '../presets/catalog';
 import { createPageDraft, pageDraft } from '../presets/pages';
-import { buildStudioDraftPreview, mergeStudioEntry } from './draft-preview';
+import { buildStudioDraftPreview, validateStudioDraft, mergeStudioEntry } from './draft-preview';
 function fixture(): ReleaseInput {
     const preset = getPreset('atelier')!;
     const values: Record<string, Record<string, unknown[]>> = {
@@ -27,8 +27,8 @@ function fixture(): ReleaseInput {
         templates: preset.models.map((model) => ({ _id: model.key, props: model.fields.map((field) => ({
             id: field.key, name: field.key, type: field.type, array: field.array, required: field.required,
         })) } as Template)),
-        entries: preset.models.map((model) => ({ _id: `${model.key}-entry`, templateId: model.key,
-            meta: [{ lng: 'en', props: Object.entries(values[model.key]).map(([id, data]) => ({ id, data })) }],
+        entries: preset.models.map((model) => ({ _id: `${model.key}-entry`, templateId: model.key, userId: '', createdAt: 1, updatedAt: 1,
+            meta: [{ lng: 'en', props: Object.entries(values[model.key]).map(([id, data]) => ({ id, data })) }], content: [{lng:'en',nodes:[],plainText:''}], statuses: [],
         } as Entry)),
         media: [], language: 'en', mediaOrigin: 'https://cms.test', currency: 'USD',
     };
@@ -69,4 +69,29 @@ test('content links use the final same-session page path and related page remova
  assert.throws(()=>buildStudioDraftPreview(input,{entry:overlay.entry}),/Broken internal link/);
  input.entries.find(entry=>entry.templateId==='home')!.content=[{lng:'en',nodes:[{type:'paragraph',content:[{type:'text',text:'Related',marks:[{type:'link',attrs:{href:'/pages/about'}}]}]}],plainText:''}] as any;
  assert.throws(()=>buildStudioDraftPreview(input,{page:overlay.page}), (cause:any)=>cause.issues?.some((issue:any)=>issue.field==='content' && issue.entryId==='home-entry'));
+});
+
+test('incremental translation saves only explicit missing-language cases and preview stays strict', () => {
+ const input=fixture(); input.language='fr';
+ const source=input.entries.find(entry=>entry.templateId==='content-page')!;
+ const overlay={entry:{modelKey:'content-page',entryId:source._id,operationId:'op',entry:{meta:[{lng:'fr',props:[{id:'title',data:['Bonjour']},{id:'slug',data:['bonjour']},{id:'summary',data:['Texte']}]}],content:[{lng:'fr',nodes:[],plainText:''}],statuses:[]}}};
+ const before=JSON.stringify(input);
+ const result=validateStudioDraft(input,overlay);
+ assert.ok(result.missingTranslations.some(issue=>issue.code==='missing-translation' && issue.modelKey==='home' && issue.entryId==='home-entry' && issue.language==='fr'));
+ assert.ok(result.missingTranslations.some(issue=>issue.modelKey==='site-settings'));
+ assert.equal('pages' in result,false); assert.equal(JSON.stringify(input),before);
+ assert.throws(()=>buildStudioDraftPreview(input,overlay),(cause:any)=>cause.issues?.every((issue:any)=>issue.code==='missing-translation'));
+ const rich=(href:string):any=>({...overlay,entry:{...overlay.entry,entry:{...overlay.entry.entry,content:[{lng:'fr',plainText:'Lien',nodes:[{type:'paragraph',content:[{type:'text',text:'Lien',marks:[{type:'link',attrs:{href}}]}]}]}]}}});
+ assert.doesNotThrow(()=>validateStudioDraft(input,rich('/')));
+ assert.throws(()=>validateStudioDraft(input,rich('/missing')),/Broken internal link/);
+ assert.throws(()=>validateStudioDraft(input,rich('/products/bag')),/Broken internal link/);
+ const duplicate=structuredClone(input); duplicate.entries.push({...structuredClone(input.entries.find(entry=>entry.templateId==='home')!),_id:'duplicate-home'});
+ assert.throws(()=>validateStudioDraft(duplicate,overlay),(cause:any)=>cause.issues?.some((issue:any)=>issue.code==='single-entry'));
+ const absent=structuredClone(input); absent.entries=absent.entries.filter(entry=>entry.templateId!=='home');
+ assert.throws(()=>validateStudioDraft(absent,overlay),(cause:any)=>cause.issues?.some((issue:any)=>issue.code==='single-entry'));
+ const broken=structuredClone(input); broken.site.models[0].fields=[];
+ assert.throws(()=>validateStudioDraft(broken,overlay),(cause:any)=>cause.issues?.some((issue:any)=>issue.code==='field-binding'));
+ for(const entry of input.entries) entry.meta.push({...structuredClone(entry.meta[0]),lng:'fr'});
+ assert.equal(validateStudioDraft(input,overlay).missingTranslations.length,0);
+ assert.ok(buildStudioDraftPreview(input,overlay).pages.length);
 });
