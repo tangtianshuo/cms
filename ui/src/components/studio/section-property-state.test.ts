@@ -38,3 +38,10 @@ test('clearing optional scalar and reference inputs removes the value without di
         assert.deepEqual(result.values, { value: undefined, other: false });
     }
 });
+
+test('number constraints are declaration-specific and preserve unconstrained zero and fractions', () => {
+    const constrained = { ...field('number'), minimum: 1, integer: true };
+    for (const value of ['0', '-1', '1.5']) assert.ok(updateSectionField({ value: 3 }, constrained, value).error);
+    assert.equal(updateSectionField({ value: 3 }, constrained, '4').values.value, 4);
+    for (const value of [0, -1, 1.5]) assert.equal(updateSectionField({ value: 3 }, field('number'), value).error, null);
+});

@@ -162,7 +162,8 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 }
                 const updated = updatePageDraft(site, key, parsed.data, bound);
                 // Validate the normalized winning layout, never the duplicate client sectionConfigs.
-                const savedPage = pageDraft(updated, key)!;
+                const savedPage = pageDraft(updated, key);
+                if (!savedPage) throw new Error('Page not found');
                 const definitions = resolveInstalledPreset(site).editor?.sections || [];
                 if (savedPage.layoutDocument && definitions.length) {
                     const media = await Repo.media.findAll();

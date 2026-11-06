@@ -63,6 +63,7 @@ test('declared properties validate finite scalars, required visible values and m
     const valid = { title: '标题', count: 0, showButton: false, image: { _id: 'own' }, body: { content: [{ text: '结构化保留' }] } };
     const validate = (props: Record<string, unknown>) => validateDeclaredSectionProperties([{ type: 'hero', enabled: true, data: props }], sections, { media, site });
     assert.doesNotThrow(() => validate(valid));
+    for (const count of [-1, 1.5]) assert.doesNotThrow(() => validate({ ...valid, count }));
     for (const patch of [{ title: ' ' }, { count: Infinity }, { count: '1' }, { showButton: true }, { date: '2026-02-30' }, { tone: 'bad' }, { image: { _id: 'foreign' } }, { image: { _id: 'unknown' } }, { image: { _id: 'own', extra: true } }]) assert.throws(() => validate({ ...valid, ...patch }), /内容|数字|日期|选项|图片|title|count|href|image/);
     assert.deepEqual(valid.body, { content: [{ text: '结构化保留' }] });
 });

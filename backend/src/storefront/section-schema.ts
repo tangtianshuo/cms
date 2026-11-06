@@ -148,6 +148,8 @@ export function validateDeclaredSectionValues(props: Record<string, unknown>, de
         if (empty) continue;
         if (field.control === 'text' && /href$/i.test(key) && (typeof value !== 'string' || !/^(?:https?:\/\/|\/(?!\/))/.test(value) || value.includes('\\'))) throw new Error(`${label}: 请输入有效的网站路径或网址`);
         if (field.control === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) throw new Error(`${label}: 请输入有效数字`);
+        if (field.control === 'number' && typeof value === 'number' && field.minimum !== undefined && value < field.minimum) throw new Error(`${label}: 请输入不小于${field.minimum}的数字`);
+        if (field.control === 'number' && field.integer && !Number.isInteger(value)) throw new Error(`${label}: 请输入整数`);
         if (field.control === 'boolean' && typeof value !== 'boolean' || field.control === 'text' && typeof value !== 'string') throw new Error(`${label}: 内容格式无效`);
         if (field.control === 'enum' && !field.options?.includes(value as string)) throw new Error(`${label}: 请选择列表中的选项`);
         if (field.control === 'date' && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) throw new Error(`${label}: 请选择有效日期`);

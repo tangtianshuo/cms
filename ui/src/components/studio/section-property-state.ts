@@ -7,6 +7,8 @@ export interface SectionPropertyField {
     required: boolean;
     description?: string;
     options?: string[];
+    minimum?: number;
+    integer?: boolean;
     default?: unknown;
     visibleWhen?: { field: string; equals: unknown };
 }
@@ -24,6 +26,8 @@ export function sectionFieldError(field: SectionPropertyField, value: unknown): 
     const empty = value === undefined || value === null || typeof value === 'string' && !value.trim();
     if (empty) return field.required ? `请填写${field.label}。` : null;
     if (field.control === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) return '请输入有效数字。';
+    if (field.control === 'number' && typeof value === 'number' && field.minimum !== undefined && value < field.minimum) return `请输入不小于${field.minimum}的数字。`;
+    if (field.control === 'number' && field.integer && !Number.isInteger(value)) return '请输入整数。';
     if (field.control === 'boolean' && typeof value !== 'boolean') return '请选择开关状态。';
     if (field.control === 'text' && /href$/i.test(field.key) && (typeof value !== 'string' || !/^(https?:\/\/|\/(?!\/))/.test(value) || value.includes('\\'))) return '请输入有效的网站路径或网址。';
     if (field.control === 'text' && typeof value !== 'string') return '请输入文字。';

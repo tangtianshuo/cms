@@ -48,3 +48,10 @@ test('generates a legacy editor adapter and records its source', () => {
     assert.equal(result.contract.schemaVersion, 1);
     assert.equal(result.contract.models[0].fields[0].key, 'title');
 });
+
+test('section number constraint declarations require finite numeric minimum and boolean integer on number controls', () => {
+    const validate = (prop: Record<string, unknown>) => readTemplateContract(manifest({ editor: { ...editor, sections: [{ ...editor.sections[0], props: { count: prop } }] } }), { id: 'custom', version: '1.1.0', manifestChecksum: 'sha256:manifest', sourceCommit: 'a'.repeat(40) });
+    assert.doesNotThrow(() => validate({ control: 'number', minimum: 1, integer: true }));
+    assert.doesNotThrow(() => validate({ control: 'number', minimum: -2.5, integer: false }));
+    for (const prop of [{ control: 'number', minimum: '1' }, { control: 'number', minimum: Infinity }, { control: 'number', integer: 1 }, { control: 'text', minimum: 1 }, { control: 'text', integer: false }]) assert.throws(() => validate(prop), /section property/i);
+});

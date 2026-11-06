@@ -30,7 +30,7 @@ export const SectionPropertyFields = defineComponent({
         return () => <div class="studio-section-fields">{props.fields.filter(field => sectionFieldVisible(field, { ...Object.fromEntries(props.fields.filter(item => item.default !== undefined).map(item => [item.key, item.default])), ...props.values })).map(field => {
             const fieldId = `section-${props.nodeId}-${field.key}`;
             const value = field.key in inputs.value ? inputs.value[field.key] : props.values[field.key] ?? field.default;
-            const error = errors.value[field.key] || sectionFieldError(field, value);
+            const error = field.key in inputs.value ? errors.value[field.key] || null : sectionFieldError(field, value);
             const common = { id: fieldId, disabled: props.disabled, 'aria-invalid': Boolean(error), 'aria-describedby': error ? `${fieldId}-error` : field.description ? `${fieldId}-help` : undefined };
             return <div class="studio-field" key={field.key}><label for={fieldId}>{field.label}{field.required ? ' *' : ''}</label>
                 {field.description && <p id={`${fieldId}-help`} class="studio-help">{field.description}</p>}
@@ -39,7 +39,7 @@ export const SectionPropertyFields = defineComponent({
                     : field.control === 'enum' ? <select {...common} value={String(value ?? '')} onChange={event => change(field, (event.target as HTMLSelectElement).value)}><option value="">未选择</option>{field.options?.map(option => <option value={option}>{option}</option>)}</select>
                     : field.control === 'media' ? <StudioMediaPicker fieldId={fieldId} fieldKey={field.key} invalid={Boolean(error)} describedBy={error ? `${fieldId}-error` : undefined} value={value && typeof value === 'object' && '_id' in value ? [value as { _id: string }] : []} media={props.media} disabled={props.disabled} onUpload={props.onUpload} onChange={items => change(field, items[0] || '')} />
                     : field.control === 'reference' ? <select {...common} value={typeof value === 'string' ? value : (value as { eid?: string })?.eid || ''} onChange={event => change(field, (event.target as HTMLSelectElement).value)}><option value="">未选择</option>{props.models.flatMap(model => model.entries.map(entry => <option value={entry.id}>{String((entry.fields.title as string[] | undefined)?.[0] || entry.id)}</option>))}</select>
-                    : <input {...common} type={field.control === 'number' ? 'number' : field.control === 'date' ? 'date' : 'text'} step={field.control === 'number' ? 'any' : undefined} value={String(value ?? '')} onInput={event => change(field, (event.target as HTMLInputElement).value)} />}
+                    : <input {...common} type={field.control === 'number' ? 'number' : field.control === 'date' ? 'date' : 'text'} min={field.control === 'number' ? field.minimum : undefined} step={field.control === 'number' ? field.integer ? 1 : 'any' : undefined} value={String(value ?? '')} onInput={event => change(field, (event.target as HTMLInputElement).value)} />}
                 {error && sectionFieldSupported(field) && <p id={`${fieldId}-error`} role="alert" class="studio-field-error">{error}</p>}
             </div>;
         })}{props.fields.length === 0 && <p class="studio-help">这个区块没有可编辑的内容。</p>}</div>;

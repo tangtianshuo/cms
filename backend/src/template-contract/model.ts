@@ -15,6 +15,7 @@ export interface TemplateEditorField {
 export interface TemplateSectionProperty {
     control: EditorControl; required?: boolean; label?: string; description?: string; default?: unknown; options?: string[];
     visibleWhen?: { field: string; equals: unknown };
+    minimum?: number; integer?: boolean;
 }
 
 export interface TemplateEditorContract {
@@ -75,6 +76,8 @@ export function validateTemplateContract(value: unknown, identity: { id: string;
             if (!prop || !['text', 'number', 'boolean', 'date', 'enum', 'media', 'reference', 'rich-text', 'array', 'widget'].includes(prop.control) ||
                 prop.label !== undefined && (typeof prop.label !== 'string' || !prop.label.trim()) ||
                 prop.visibleWhen !== undefined && (!prop.visibleWhen || typeof prop.visibleWhen.field !== 'string' || !(prop.visibleWhen.field in section.props) || !Object.prototype.hasOwnProperty.call(prop.visibleWhen, 'equals')) ||
+                prop.minimum !== undefined && (prop.control !== 'number' || typeof prop.minimum !== 'number' || !Number.isFinite(prop.minimum)) ||
+                prop.integer !== undefined && (prop.control !== 'number' || typeof prop.integer !== 'boolean') ||
                 prop.options !== undefined && (!Array.isArray(prop.options) || prop.options.some(option => typeof option !== 'string'))) throw new Error('Template section property is invalid');
         }
     }

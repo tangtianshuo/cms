@@ -115,3 +115,55 @@ test('a real viewer sees read-only controls and cannot save through the API', as
         expect(denied).toBe(true);
     } finally { await context.close().catch(() => {}); }
 });
+
+
+test('collection number constraints keep a valid draft and the real heading canvas selects its controls', async ({ page }, info) => {
+    await page.goto('/d/studio?section=pages&pageKey=collections', { waitUntil: 'domcontentloaded' });
+    await page.locator('.studio-visual-node-button').filter({ hasText: '商品列表' }).click();
+    const count = page.getByLabel('每行数量', { exact: true });
+    await expect(count).toBeVisible();
+    const frame = page.frameLocator('.studio-visual-preview iframe');
+    await expect(frame.locator('[data-section-type="heading"]')).toBeVisible();
+    await expect(count).toHaveAttribute('min', '1');
+    await expect(count).toHaveAttribute('step', '1');
+    await keyboardText(page, count, '3');
+    for (const value of ['0', '-1', '1.5']) {
+        await keyboardText(page, count, value);
+        await expect(count).toHaveAttribute('aria-invalid', 'true');
+        await expect(frame.locator('[data-section-type="grid"]')).toHaveAttribute('style', /--catalog-columns: [1-9]\d*;/);
+    }
+    const editedColumns = info.project.name === 'mobile' ? 5 : 4;
+    await keyboardText(page, count, String(editedColumns));
+    await expect(count).toHaveAttribute('aria-invalid', 'false');
+    await expect(frame.locator('[data-section-type="grid"]')).toHaveAttribute('style', `--catalog-columns: ${editedColumns};`);
+    const rejected = await page.evaluate(async () => {
+        const sdk = window.bcms.sdk;
+        const before = (await sdk.studio.getSite()).site;
+        const original = before.pages.find(page => page.key === 'collections');
+        const results = [];
+        for (const columns of [0, -1, 1.5]) {
+            const draft = structuredClone(original);
+            draft.layoutDocument.root.find(node => node.type === 'grid').props.columns = columns;
+            try { await sdk.studio.savePage('collections', { expectedUpdatedAt: before.updatedAt, title: draft.title, path: draft.path, seoTitle: draft.seoTitle, seoDescription: draft.seoDescription, sections: draft.sections, sectionConfigs: draft.sectionConfigs, layoutDocument: draft.layoutDocument, entryId: draft.entryId, enabled: draft.enabled, navigation: draft.navigation }); results.push(200); }
+            catch (error) { results.push(error.response?.status || error.status || 0); }
+        }
+        const after = (await sdk.studio.getSite()).site;
+        return { results, unchanged: before.updatedAt === after.updatedAt && JSON.stringify(original.layoutDocument) === JSON.stringify(after.pages.find(page => page.key === 'collections').layoutDocument) };
+    });
+    expect(rejected).toEqual({ results: [400, 400, 400], unchanged: true });
+    const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v4/studio/pages/collections' && response.request().method() === 'POST');
+    await page.getByRole('button', { name: '保存页面设置', exact: true }).focus(); await page.keyboard.press('Enter');
+    expect((await saved).status()).toBe(200);
+    await page.reload();
+    await expect(frame.locator('[data-section-type="grid"]')).toHaveAttribute('style', `--catalog-columns: ${editedColumns};`);
+    await page.locator('.studio-visual-node-button').filter({ hasText: '商品列表' }).click();
+    await frame.locator('[data-section-type="heading"]').click();
+    await expect(page.getByLabel('标题', { exact: true })).toBeVisible();
+    await expect(frame.locator('[data-section-type="heading"]')).toHaveAttribute('data-studio-selected', '');
+    const layout = await page.evaluate(async () => (await window.bcms.sdk.studio.getSite()).site.pages.find(page => page.key === 'collections').layoutDocument);
+    expect(layout.root.find(node => node.type === 'grid').props.columns).toBe(editedColumns);
+    expect(layout.root.map(node => node.id)).toEqual(['section-heading-1', 'section-grid-2']);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.getByLabel('标题', { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('collection-controls.png'), mask: [page.getByText(process.env.STOREFRONT_E2E_EMAIL, { exact: false })] });
+});

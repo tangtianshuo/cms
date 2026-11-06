@@ -51,6 +51,8 @@ export async function provisionSectionSite({ templatesRoot, root, runRoot, db, s
     const pages = normalized.pages.map(page => ({ ...page, enabled: true, navigation: !page.path.includes(':'), sections: normalized.editor.pages.find(item => item.pageKey === page.key).sections }));
     const home = pages.find(page => page.key === 'home');
     home.layoutDocument = { version: 1, mode: 'template', root: home.sections.map((type, index) => ({ id: `section-${type}-${index + 1}`, kind: 'section', type, enabled: true, props: type === 'hero' ? { title: normalized.demo.hero.title, showButton: true, buttonHref: '/collections' } : { eyebrow: normalized.showcase.eyebrow }, children: [] })) };
+    const collection = pages.find(page => page.key === 'collections');
+    collection.layoutDocument = { version: 1, mode: 'template', root: collection.sections.map((type, index) => ({ id: `section-${type}-${index + 1}`, kind: 'section', type, enabled: true, props: type === 'heading' ? { title: normalized.demo.collection.title } : { columns: 3 }, children: [] })) };
     await db.collection('bcms_site_installations').updateOne({ _id: site._id }, { $set: { name: `Local B4 ${id}`, presetId: id, presetVersion: version, presetManifestSnapshot: JSON.stringify(normalized), theme: normalized.theme, pages }, $unset: { publishedTemplateRecord: '' } });
     // Upload through the actual selected-site permission/provenance boundary.
     async function upload(selection, name) {
