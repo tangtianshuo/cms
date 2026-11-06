@@ -299,6 +299,9 @@ export const EntryContentEditor = defineComponent({
                     allowedWidgets: props.allowedWidgets,
                 }),
                 EntryContentNodeWidgetNodeConfig.configure({
+                    getBasePath: () => props.propPath,
+                    getEntryId: () => props.entryId,
+                    isDisabled: () => props.disabled,
                     HTMLAttributes: {
                         entryId: props.entryId,
                     },
@@ -457,14 +460,17 @@ export const EntryContentEditor = defineComponent({
                     const json = event.editor.getJSON();
                     if (json.content) {
                         selfUpdate = true;
-                        for (let i = 0; i < json.content.length; i++) {
-                            const node = json.content[i];
-                            if (node.type === 'widget') {
-                                (
-                                    node.attrs as any
-                                ).propPath = `entry.content.${props.lngIdx}.nodes.${i}.attrs.data`;
-                            }
-                        }
+                        const locateWidgets = (nodes: typeof json.content, path: string) => {
+                            nodes?.forEach((node, index) => {
+                                const at = `${path}.${index}`;
+                                if (node.type === 'widget' && node.attrs) {
+                                    node.attrs.propPath = `${at}.attrs.data`;
+                                    node.attrs.entryId = props.entryId;
+                                }
+                                if (node.content) locateWidgets(node.content, `${at}.content`);
+                            });
+                        };
+                        locateWidgets(json.content, props.propPath);
                         ctx.emit('input', json.content as EntryContentNode[]);
                     }
                 });

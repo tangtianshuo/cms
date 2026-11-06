@@ -22,8 +22,6 @@ import { entryEditorMetaOnAddPropValue } from '@bcms/selfhosted-ui/components/en
 import { MediaPreview } from '@bcms/selfhosted-ui/components/media-preview';
 import { useI18n } from 'vue-i18n';
 
-const SLICE_PROP_PATH_INDEX = 8;
-
 export const EntryContentNodeWidgetComponent = defineComponent({
     props: nodeViewProps,
     setup(props) {
@@ -43,9 +41,46 @@ export const EntryContentNodeWidgetComponent = defineComponent({
                     : attrs.value.data._id,
             ),
         );
-        if (typeof attrs.value.data === 'string') {
-            attrs.value.data = JSON.parse(attrs.value.data);
-        }
+        const readData = (value: unknown): PropValueWidgetData =>
+            JSON.parse(
+                typeof value === 'string' ? value : JSON.stringify(value),
+            );
+        attrs.value.data = readData(props.node.attrs.data);
+        const disabled = computed(
+            () =>
+                props.extension.options.isDisabled() ||
+                !props.editor.isEditable,
+        );
+        // Node positions are authoritative after insertion, movement and remote transactions.
+        const widgetPath = () => {
+            const pos = props.getPos();
+            if (typeof pos !== 'number') return attrs.value.propPath;
+            const resolved = props.editor.state.doc.resolve(pos);
+            let path = props.extension.options.getBasePath();
+            for (let depth = 0; depth <= resolved.depth; depth++)
+                path += `${depth ? '.content' : ''}.${resolved.index(depth)}`;
+            return `${path}.attrs.data`;
+        };
+        const relativePath = (path: string) =>
+            propPathToArray(path.slice((widgetPath() + '.props.').length));
+        const commit = (data: PropValueWidgetData) => {
+            if (
+                disabled.value ||
+                props.editor.isDestroyed ||
+                typeof props.getPos() !== 'number'
+            )
+                return;
+            attrs.value.data = data;
+            attrs.value.propPath = widgetPath();
+            props.updateAttributes({
+                data:
+                    typeof props.node.attrs.data === 'string'
+                        ? JSON.stringify(data)
+                        : data,
+                propPath: attrs.value.propPath,
+                entryId: props.extension.options.getEntryId(),
+            });
+        };
         const image = ref<Media | null>(null);
         const showImage = ref(true);
 
@@ -66,11 +101,9 @@ export const EntryContentNodeWidgetComponent = defineComponent({
                 if (attrs.value.propPath !== props.node.attrs.propPath) {
                     attrs.value.propPath = props.node.attrs.propPath;
                 }
-                if (
-                    JSON.stringify(attrs.value.data) !== props.node.attrs.data
-                ) {
-                    attrs.value.data = JSON.parse(props.node.attrs.data);
-                }
+                const data = readData(props.node.attrs.data);
+                if (JSON.stringify(attrs.value.data) !== JSON.stringify(data))
+                    attrs.value.data = data;
             }
         });
 
@@ -110,9 +143,11 @@ export const EntryContentNodeWidgetComponent = defineComponent({
                             class={`h-[1px] bg-green dark:bg-yellow w-full mr-2`}
                         />
                         <button
+                            type="button"
+                            disabled={disabled.value}
                             class={`mr-4`}
                             onClick={() => {
-                                if (props.deleteNode) {
+                                if (!disabled.value && props.deleteNode) {
                                     props.deleteNode();
                                 }
                             }}
@@ -123,6 +158,7 @@ export const EntryContentNodeWidgetComponent = defineComponent({
                             />
                         </button>
                         <button
+                            type="button"
                             class={`mr-2 text-dark dark:text-white hover:text-green dark:hover:text-yellow fill-current`}
                             onClick={() => {
                                 extended.value = !extended.value;
@@ -138,11 +174,14 @@ export const EntryContentNodeWidgetComponent = defineComponent({
                             class={`relative top-[4px] w-2.5 h-2.5 border-t border-r border-green dark:border-yellow rounded-tr-2.5`}
                         ></div>
                     </div>
-                    <div>
+                    <fieldset
+                        disabled={disabled.value}
+                        inert={disabled.value || undefined}
+                    >
                         {widget.value && extended.value && (
                             <div>
                                 <EntryMetaEditor
-                                    propPath={attrs.value.propPath + '.props'}
+                                    propPath={widgetPath() + '.props'}
                                     props={widget.value.props}
                                     values={
                                         (
@@ -152,59 +191,60 @@ export const EntryContentNodeWidgetComponent = defineComponent({
                                     }
                                     lngCode={language.value}
                                     lngIdx={0}
-                                    entryId={props.node.attrs.entryId}
+                                    entryId={props.extension.options.getEntryId()}
                                     propValidator={
                                         window.bcms.entryPropValidator
                                     }
-                                    onEditProp={(propPath, value) => {
-                                        const pathParts = propPathToArray(
-                                            propPath,
-                                        ).slice(SLICE_PROP_PATH_INDEX);
+                                    onEditProp={(path, value) => {
+                                        if (disabled.value) return;
+                                        const data = readData(attrs.value.data);
                                         propApplyValueChangeFromPath(
-                                            pathParts,
-                                            attrs.value.data.props,
+                                            relativePath(path),
+                                            data.props,
                                             value,
                                         );
-                                        props.updateAttributes({
-                                            data: JSON.stringify(
-                                                attrs.value.data,
-                                            ),
-                                            propPath: attrs.value.propPath,
-                                        });
+                                        commit(data);
                                     }}
-                                    onAddValue={async (propPath, prop) => {
-                                        const pathParts = propPathToArray(
-                                            propPath,
-                                        ).slice(SLICE_PROP_PATH_INDEX);
+                                    onAddValue={async (path, prop) => {
+                                        if (disabled.value) return;
+                                        const source = JSON.stringify(
+                                            attrs.value.data,
+                                        );
+                                        const data = readData(attrs.value.data);
                                         await entryEditorMetaOnAddPropValue(
-                                            attrs.value.data.props,
-                                            pathParts,
+                                            data.props,
+                                            relativePath(path),
                                             prop,
                                         );
+                                        if (
+                                            source ===
+                                            JSON.stringify(attrs.value.data)
+                                        )
+                                            commit(data);
                                     }}
-                                    onRemoveArrayItem={(propPath) => {
-                                        const pathParts = propPathToArray(
-                                            propPath,
-                                        ).slice(SLICE_PROP_PATH_INDEX);
+                                    onRemoveArrayItem={(path) => {
+                                        if (disabled.value) return;
+                                        const data = readData(attrs.value.data);
                                         propValueRemoveArrayItem(
-                                            pathParts,
-                                            attrs.value.data.props,
+                                            relativePath(path),
+                                            data.props,
                                         );
+                                        commit(data);
                                     }}
-                                    onMoveArrayItem={(propPath, direction) => {
-                                        const pathParts = propPathToArray(
-                                            propPath,
-                                        ).slice(SLICE_PROP_PATH_INDEX);
+                                    onMoveArrayItem={(path, direction) => {
+                                        if (disabled.value) return;
+                                        const data = readData(attrs.value.data);
                                         propValueMoveArrayItem(
-                                            pathParts,
-                                            attrs.value.data.props,
+                                            relativePath(path),
+                                            data.props,
                                             direction,
                                         );
+                                        commit(data);
                                     }}
                                 />
                             </div>
                         )}
-                    </div>
+                    </fieldset>
                 </div>
                 {image.value ? (
                     <div

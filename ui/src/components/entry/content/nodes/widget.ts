@@ -23,6 +23,14 @@ export const EntryContentNodeWidgetNodeConfig: Node = Node.create({
     defining: true,
     draggable: true,
     isolating: true,
+    addOptions() {
+        return {
+            HTMLAttributes: {},
+            getBasePath: () => '',
+            getEntryId: () => '',
+            isDisabled: () => false,
+        };
+    },
 
     addCommands() {
         return {

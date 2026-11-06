@@ -31,6 +31,19 @@ export async function validatePropDefinitions(props: Prop[]) {
 }
 export async function validateContentNodes(nodes: EntryContentNode[]) {
     for (const node of nodes || []) {
+        for (const mark of node.marks || []) if (mark.type === 'link') {
+            const href = mark.attrs?.href || '';
+            if (/^media:/i.test(href)) {
+                const match = /^media:([^:]+)@\*_@\*_:media$/.exec(href);
+                if (!match || !await Repo.media.findById(match[1])) throw denied('Media');
+            }
+            if (/^entry:/i.test(href)) {
+                const match = /^entry:([^:]+)@\*_([^:]+):entry$/.exec(href);
+                const template = match && await Repo.template.findById(match[2]);
+                const entry = match && await Repo.entry.findById(match[1]);
+                if (!template || !entry || entry.templateId !== template._id) throw denied('Entry');
+            }
+        }
         if (node.type === 'widget') {
             const data = (node.attrs as any)?.data;
             const widget = data?._id && await Repo.widget.findById(data._id);

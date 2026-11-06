@@ -118,6 +118,7 @@ export async function entryEditorMetaOnAddPropValue(
 export const EntryEditor = defineComponent({
     props: {
         ...DefaultComponentProps,
+        disabled: Boolean,
         entry: {
             type: Object as PropType<Entry>,
             required: true,
@@ -299,6 +300,7 @@ export const EntryEditor = defineComponent({
                         </div>
                         <div>
                             <EntryContentEditor
+                                disabled={props.disabled}
                                 nodes={props.entry.content[lngIdx.value].nodes}
                                 placeholder={t('editor.contentPlaceholder')}
                                 propPath={`entry.content.${lngIdx.value}.nodes`}

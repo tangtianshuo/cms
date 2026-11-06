@@ -995,6 +995,7 @@ export const ContentWorkspace = defineComponent({
                             }
                         >
                             <EntryEditor
+                                disabled={busy.value || !canEdit.value}
                                 v-slots={{ metadata: () => template.value?.props.slice(2).map((prop, index) => {
                                     const value = entry.value?.meta[lngIdx.value]?.props.find(item => item.id === prop.id);
                                     return value ? <StructuredField key={prop.id} prop={prop} value={value} propIndex={index + 2} entryId={entry.value?._id || ""} languageIndex={lngIdx.value} disabled={busy.value || !canEdit.value} validator={validator} onChange={data => {

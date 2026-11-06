@@ -159,7 +159,13 @@ test('empty optional rich body is accepted; required, unknown fields and malform
 });
 test('rich node depth is bounded and plain replacement of existing rich content stays rejected', () => {
     let node: any = { type: 'paragraph' };
-    for (let i = 0; i < 40; i++) node = { type: 'bulletList', content: [node] };
+    for (let i = 0; i < 40; i++)
+        node = {
+            type: 'bulletList',
+            content: [
+                { type: 'listItem', content: [{ type: 'paragraph' }, node] },
+            ],
+        };
     const values = structuredClone(entry.meta[0].props);
     values[1].data = [{ nodes: [node] }] as never;
     assert.throws(
@@ -196,4 +202,92 @@ test('structured validation preserves existing field cardinality without a new i
         validateStructuredFields(template, values, resources),
     );
     assert.equal((values[2].data as string[]).length, 201);
+});
+
+test('known nodes obey the installed block, inline, list, leaf and mark grammar', () => {
+    const text = { type: 'text', text: 'Retained' };
+    const paragraph = { type: 'paragraph', content: [text] };
+    const invalid = [
+        [text],
+        [{ type: 'paragraph', content: [paragraph] }],
+        [{ type: 'bulletList', content: [paragraph] }],
+        [{ type: 'paragraph', content: [{ type: 'text', text: '' }] }],
+        [{ type: 'listItem', content: [paragraph] }],
+        [{ type: 'bulletList', content: [] }],
+        [{ type: 'orderedList', content: [{ type: 'listItem', content: [] }] }],
+        [
+            {
+                type: 'codeBlock',
+                content: [{ ...text, marks: [{ type: 'bold' }] }],
+            },
+        ],
+        [{ type: 'codeBlock', content: [{ type: 'hardBreak' }] }],
+        [{ ...paragraph, marks: [{ type: 'bold' }] }],
+        [
+            {
+                type: 'paragraph',
+                content: [
+                    { ...text, marks: [{ type: 'bold' }, { type: 'bold' }] },
+                ],
+            },
+        ],
+        [
+            {
+                type: 'paragraph',
+                content: [{ type: 'hardBreak', content: [text] }],
+            },
+        ],
+    ];
+    for (const nodes of invalid)
+        assert.throws(
+            () => validateStructuredNodes(nodes, resources),
+            /studio.content\.0/,
+        );
+    const widget = { _id: 'widget', props: [] };
+    const valid = [
+        paragraph,
+        {
+            type: 'bulletList',
+            content: [
+                {
+                    type: 'listItem',
+                    content: [
+                        paragraph,
+                        {
+                            type: 'orderedList',
+                            content: [
+                                {
+                                    type: 'listItem',
+                                    content: [
+                                        paragraph,
+                                        {
+                                            type: 'widget',
+                                            attrs: {
+                                                data: {
+                                                    _id: widget._id,
+                                                    props: [],
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+        { type: 'codeBlock', content: [text] },
+        {
+            type: 'paragraph',
+            content: [{ type: 'hardBreak', marks: [{ type: 'bold' }] }],
+        },
+    ];
+    assert.doesNotThrow(() => validateStructuredNodes([], resources));
+    assert.doesNotThrow(() =>
+        validateStructuredNodes(valid, {
+            ...resources,
+            widgets: [widget as never],
+        }),
+    );
 });

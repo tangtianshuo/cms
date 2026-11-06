@@ -161,28 +161,55 @@ export function validateStructuredNodes(
     resources: StructuredResources,
     path = 'studio.content',
     depth = 0,
+    parent = 'doc',
 ): void {
     if (depth > 32) throw new Error(`${path}: maximum depth exceeded`);
     if (!Array.isArray(nodes) || nodes.length > 10000)
         throw new Error(`${path}: invalid nodes`);
-    for (const node of nodes) {
+    const block = [
+        'paragraph',
+        'heading',
+        'bulletList',
+        'orderedList',
+        'codeBlock',
+        'horizontalRule',
+        'widget',
+    ];
+    const allowed =
+        parent === 'paragraph' || parent === 'heading'
+            ? ['text', 'hardBreak']
+            : parent === 'codeBlock'
+              ? ['text']
+              : parent === 'bulletList' || parent === 'orderedList'
+                ? ['listItem']
+                : block;
+    if ((parent === 'bulletList' || parent === 'orderedList') && !nodes.length)
+        throw new Error(`${path}: list requires items`);
+    if (parent === 'listItem' && nodes[0]?.type !== 'paragraph')
+        throw new Error(`${path}: list item requires a leading paragraph`);
+    for (const [index, node] of nodes.entries()) {
+        const nodePath = `${path}.${index}`;
+        if (!allowed.includes(node?.type))
+            throw new Error(`${nodePath}: invalid child of ${parent}`);
         if (
             !object(node) ||
             !Object.values(EntryContentNodeType).includes(node.type)
         )
-            throw new Error(`${path}: invalid node type`);
+            throw new Error(`${nodePath}: invalid node type`);
         if (
             node.type === 'horizontalRule' &&
             (node.text !== undefined ||
                 node.content !== undefined ||
                 node.marks !== undefined)
         )
-            throw new Error(`${path}: invalid horizontal rule`);
+            throw new Error(`${nodePath}: invalid horizontal rule`);
         if (
             (node.text !== undefined && typeof node.text !== 'string') ||
-            (node.type === 'text' && typeof node.text !== 'string')
+            (node.type === 'text' &&
+                (typeof node.text !== 'string' || !node.text.length)) ||
+            (node.type !== 'text' && node.text !== undefined)
         )
-            throw new Error(`${path}: invalid text`);
+            throw new Error(`${nodePath}: invalid text`);
         if (
             node.type === 'heading' &&
             (!object(node.attrs) ||
@@ -190,10 +217,26 @@ export function validateStructuredNodes(
                 node.attrs.level < 1 ||
                 node.attrs.level > 6)
         )
-            throw new Error(`${path}: invalid heading`);
+            throw new Error(`${nodePath}: invalid heading`);
+        if (
+            ['text', 'hardBreak', 'widget'].includes(node.type) &&
+            node.content !== undefined
+        )
+            throw new Error(`${nodePath}: leaf cannot contain children`);
         if (node.marks !== undefined) {
             if (!Array.isArray(node.marks))
-                throw new Error(`${path}: invalid marks`);
+                throw new Error(`${nodePath}: invalid marks`);
+            if (
+                node.marks.length &&
+                (!['text', 'hardBreak'].includes(node.type) ||
+                    parent === 'codeBlock')
+            )
+                throw new Error(`${nodePath}: marks are not allowed here`);
+            if (
+                new Set(node.marks.map((mark: any) => mark?.type)).size !==
+                node.marks.length
+            )
+                throw new Error(`${nodePath}: duplicate marks`);
             for (const mark of node.marks) {
                 if (
                     !object(mark) ||
@@ -201,7 +244,7 @@ export function validateStructuredNodes(
                         mark.type,
                     )
                 )
-                    throw new Error(`${path}: invalid mark`);
+                    throw new Error(`${nodePath}: invalid mark`);
                 if (
                     mark.type === 'link' &&
                     (!object(mark.attrs) ||
@@ -222,7 +265,7 @@ export function validateStructuredNodes(
                                 mark.attrs.href,
                             )))
                 )
-                    throw new Error(`${path}: invalid link`);
+                    throw new Error(`${nodePath}: invalid link`);
             }
         }
         if (node.type === 'widget') {
@@ -231,18 +274,20 @@ export function validateStructuredNodes(
                 object(data) &&
                 resources.widgets.find((item) => item._id === data._id);
             if (!widget)
-                throw new Error(`${path}: widget not found or not permitted`);
+                throw new Error(
+                    `${nodePath}: widget not found or not permitted`,
+                );
             validateValues(
                 widget.props,
                 data.props,
                 resources,
-                path,
+                nodePath,
                 depth + 1,
             );
             const invalid = propsValueCheck(
                 widget.props,
                 data.props,
-                path,
+                nodePath,
                 resources.widgets,
                 resources.groups,
                 resources.templates,
@@ -250,7 +295,17 @@ export function validateStructuredNodes(
             );
             if (invalid) throw invalid;
         }
-        if (node.content !== undefined)
-            validateStructuredNodes(node.content, resources, path, depth + 1);
+        if (
+            !['text', 'hardBreak', 'widget', 'horizontalRule'].includes(
+                node.type,
+            )
+        )
+            validateStructuredNodes(
+                node.content ?? [],
+                resources,
+                `${nodePath}.content`,
+                depth + 1,
+                node.type,
+            );
     }
 }
