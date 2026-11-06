@@ -194,7 +194,7 @@ Controller inspected review/report, source binding, matrix/media and cleanup pro
 
 ## Next task
 
-C1 Gateway idempotent provisioning and source identity authorization, followed by C2–C4. A4 final public-chain acceptance remains dependent on authentic external artifacts. D1 retains settings/translation regressions and defines mandatory cases before F1 finalization.
+D1 two-template acceptance follows the accepted local C4 stage. Formal public-chain acceptance remains dependent on authentic external artifacts. D1 retains settings/translation regressions and defines mandatory cases before F1 finalization.
 
 ## C1 — Idempotent provisioning and management identity accepted
 
@@ -225,3 +225,14 @@ Independent review found expired eighth-attempt leases could remain running unde
 Real production main.ts processes42268→42273 ran the registered five-second job against isolated Mongo and actual Gateway authentication/provisioning SQL. After one lost SQL-success response and one deliberately expired running lease, process restart recovered both with identical keys and Gateway IDs. An extra interval made no additional request. Counts remain1workspace/2sites/2domains/2bindings and0active deployments. Executed production file hashes match the final fix commit. Cleanup audit confirms zero owned databases/connections/processes/listeners. The Gateway adapter is not a deployed Next route; that and public domain/runtime acceptance remain C4/D1.
 
 Scoped independent re-review approved I1/V1 with no new blocking issue. Deferred Minors: validate provisioning base URLs before credential-bearing fetch (currently later publishing validation rejects some unusable configurations), and test/lint warning noise. Final hook has0errors/286warnings; earlier standalone285 preceded the final fixture assertion. Human10minute UAT, browser layout and production activation are not claimed.
+
+
+## C4 - Local domain lifecycle and recovery accepted
+
+CMS `9ad35ef307e3309d10052b332baceb69ccfbae75`; Gateway implementation `7096951a2add23943a6bab3c25efef01142a3703`, committed-host correction `23f7dd41b7d1396f4071dbb4e591dcbdb5924b28`, reviewed fixes `4a2a69ba0ac873ab23cc76be9b21d7a6c9e8a46d` and `4033e64219231fa5f7af1daffdc6babee0e88cbb`. Reserved-host challenge uses a durable local snapshot before deployment; content routing still returns404. Gateway verifies exact platform ownership or custom TXT, DNS and normally validated HTTPS. CMS dynamic mutations use persisted source bindings without legacy fallback. Durable worker-owned DomainChange operations preserve immutable defaultDomainId and exclude same-site publication.
+
+Independent review found crash recovery could retain an uncommitted route and alias operations could silently change primary. Fix1 preserves committed-host identity and durable recovery, with actual SQL/router/file/public-traffic regressions. Its scoped review found recovery starvation; fix2 adds durable five-second retry eligibility and scoped recovery, preserving unresolved routes while another site updates. The production scheduling regression proves A remains pending with same-site publishing blocked, B publication is claimed and its domain operation succeeds, and later A recovery leaves B's newer route intact. Both scoped reviews now close all Important findings.
+
+Final affected tests: SQL7/7, runtime14/14, worker build/typecheck and control typecheck pass. CMS domain25/25 and historical Gateway248passed/1Linux-onlyskip retain their earlier source scopes; no final-tree full-suite rerun is claimed. Actual main.ts scheduled provisioning, real Mongo/SQL source bindings, TLS/SNI/HMAC with per-run CA trust, two distinct worker Docker publications, custom primary/path-query301 and TLS failure protection passed in local-fix2-final. No bindings or ready flags were seeded. All13 CMS and21 Gateway changed-file hashes match executed bytes. Owned databases/processes/containers/listeners were cleaned; protected original-source files remain unchanged.
+
+The browser fixture mounts the real Vue component with a deterministic SDK adapter; it is not full-app UI acceptance. Gateway production handlers run through a local adapter, while Next compilation is separately verified. Local image-ID pinning is not CMS publicRecord/preset to public OCI proof. Formal script execution, genuine public artifacts/complete PlatformLock, Internet wildcard DNS/TLS, human10minute UAT and production activation remain unaccepted. Overall C4 remains unchecked. Existing UI/build warnings are deferred for final review; one route-state owner remains required. Apply both new domain migrations before updated worker/control code.

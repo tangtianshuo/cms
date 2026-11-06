@@ -149,7 +149,7 @@ interface AcceptanceEvidence {
 - [x] C1 Gateway 幂等站点开通与身份映射（Gateway `815b1e3`；15 项真实 PostgreSQL 用例及十一类管理接口授权通过，全仓 243 项通过、1 项 Linux 限定跳过；独立审查通过。CMS 传输与恢复交接 C2/C3，域名就绪交接 C4）。
 - [x] C2 CMS 持久绑定和异步配置读取（CMS `e0e1b71`；真实 Mongo 唯一索引/并发持久化、双站点 CMS→Gateway HTTP/SQL 授权通过，最终定向 27 项及修正回归通过；B3 两种绑定模式零写入验证与独立审查通过。完整部署验收仍由后续任务完成）。
 - [x] C3 创建向导、后台恢复和状态反馈（CMS `6117b70`、`09b9ec9`；真实创建幂等/租约/权限、全局发布限制、后端 13 项/发布 6 项/UI 35 项通过，繁忙队列修复及实际 main.ts 进程重启恢复通过独立复审。新创建接口要求稳定 requestKey，域名和部署验收交接 C4/D1）。
-- [ ] C4 域名接入与首次发布闭环。
+- [ ] C4 域名接入与首次发布闭环。 Local stage and two fix reviews accepted: CMS `9ad35ef`, Gateway `4033e64`. Automatic provisioning, TLS challenge, two-site Docker publication and recovery verified; formal public-chain/PlatformLock/Internet DNS-TLS acceptance pending.
 - [ ] D1 可重复的跨仓浏览器验收。
 - [ ] D2 生产试运营验收与证据归档。
 - [ ] E1 非商品型第三模板验证。

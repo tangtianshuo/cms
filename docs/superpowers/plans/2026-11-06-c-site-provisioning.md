@@ -255,7 +255,7 @@ git commit -m "feat: recover automatic site provisioning and show progress"
 - Consumes: C1 default siteUrl、Gateway Domain 状态、已有 CMS `challengeSignature(host, nonce, secret)` 协议。
 - Produces: `challengeResponse(host:string, nonce:string, allowedHosts:ReadonlySet<string>, secret:string): string|null`；traffic 本地域名快照 `domains.json` 含已保留但未发布的 hostname；此快照只用于 challenge，不赋予公开内容路由。
 
-- [ ] **Step 1：加入首发前 challenge 测试。**
+- [x] **Step 1：加入首发前 challenge 测试。**
 
 ```ts
 import assert from 'node:assert/strict';
@@ -268,12 +268,12 @@ test('reserved hosts can verify without an active deployment; unknown hosts cann
 ```
 
 再将返回值与 CMS 已有 challengeSignature 同输入结果比对；nonce 超长/非法返回 400；未保留 host 返回 404；没有 active 的 `/` 仍 404，不能通过 challenge 绕过站点路由。
-- [ ] **Step 2：运行 Gateway traffic 测试，预期导出缺失失败。**
-- [ ] **Step 3：实现独立 challenge 与状态投影。** 域名任务原子落地本地保留域名快照，traffic 在主域名重定向前处理固定 challenge 路径；secret 仅本地服务端。证书有效、HTTPS challenge 通过、域名已归属才允许 ready；平台保留域名使用平台权属，用户自有域名保留 TXT 验证。状态探测不需要先存在 active deployment，避免首发死循环。
+- [x] **Step 2：运行 Gateway traffic 测试，预期导出缺失失败。**
+- [x] **Step 3：实现独立 challenge 与状态投影。** 域名任务原子落地本地保留域名快照，traffic 在主域名重定向前处理固定 challenge 路径；secret 仅本地服务端。证书有效、HTTPS challenge 通过、域名已归属才允许 ready；平台保留域名使用平台权属，用户自有域名保留 TXT 验证。状态探测不需要先存在 active deployment，避免首发死循环。
 
 Nginx 平台后缀转发到 traffic，未知 Host 仍由 traffic 404；自有域名按明确配置进入同一入口。前端给出实际 A/CNAME 和 TXT 值，证书未准备明确列为接入未完成，不显示空的“向运维索取”作为成功配置。
 - [ ] **Step 4：运行 `node ops/e2e/site-provisioning.mjs`。** 创建两个工作区各一个站点，不改环境变量：自动开通 → 默认域名 challenge → 首次发布 → 两站公开内容不同；自有域名绑定 → 归属/HTTPS ready → 切 primary → 旧域名 301 保留 path/query → 失败回滚。未知 Host、外站域名、并发抢占必须拒绝。生产 wildcard DNS/TLS 是一次性平台前置条件，在证据中记录是否已满足。
-- [ ] **Step 5：提交。** `feat: complete first-publish domain onboarding`；将测试及部署要求交给 D1/D2，不在该任务自动切换现有生产主域名。
+- [x] **Step 5：提交。** `feat: complete first-publish domain onboarding`；将测试及部署要求交给 D1/D2，不在该任务自动切换现有生产主域名。
 
 执行提交前先核对 staging 只包含本任务；下面命令在各自目标工作树根执行。若列出的规划文件没有生成，先核对任务实现，不用 `git add -A` 绕过。跨仓提交分别记录 SHA。
 
@@ -294,3 +294,8 @@ git add -- backend/src/site-domains/gateway.ts ui/src/views/dashboard/domains.ts
 git diff --cached --check
 git commit -m "feat: complete first-publish domain onboarding"
 ```
+
+
+C4 execution record: local implementation and two independent fix re-reviews accepted. CMS `9ad35ef307e3309d10052b332baceb69ccfbae75`; Gateway final `4033e64219231fa5f7af1daffdc6babee0e88cbb` includes implementation and both reviewed recovery fixes. Explicit local Step4 ran two-workspace automatic provisioning, predeployment TLS/HMAC, distinct Docker content, redirects and failure protection without seeded bindings/ready flags. Final affected SQL7/runtime14 passed; two-site recovery preserves unrelated publication progress. Source correspondence and owned cleanup verified. Historical broad Gateway248pass/1Linux-onlyskip retains its original source boundary.
+
+Step4 formal acceptance remains unchecked: the production-handler adapter and local image-ID pin do not establish deployed Next HTTP or CMS publicRecord/preset to genuine public OCI publication. Public wildcard DNS/TLS and complete PlatformLock remain missing. D1/D2 continue those gates. One worker/router owner per persistent route directory is required. Apply both domain_lifecycle and domain_retry migrations before updated worker/control code.
