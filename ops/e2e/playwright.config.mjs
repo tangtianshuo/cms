@@ -17,9 +17,17 @@ export default defineConfig({
     outputDir: path.resolve(
         process.env.STOREFRONT_E2E_RESULTS_DIR || '.e2e/results',
     ),
-    reporter: [['line']],
+    reporter: [['line'], ['./preview-reporter.mjs']],
     use: {
         browserName: 'chromium',
+        launchOptions: {
+            args: process.env.STOREFRONT_E2E_MEDIA_SPKI
+                ? [
+                      '--ignore-certificate-errors-spki-list=' +
+                          process.env.STOREFRONT_E2E_MEDIA_SPKI,
+                  ]
+                : [],
+        },
         baseURL: process.env.STOREFRONT_E2E_CMS,
         locale: 'zh-CN',
         viewport: { width: 1440, height: 900 },

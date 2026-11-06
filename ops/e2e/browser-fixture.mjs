@@ -1,6 +1,8 @@
 import { test as base, expect } from '@playwright/test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { interactionTrace } from './interaction-trace.mjs';
+const timelines = new WeakMap();
 
 export function browserEnvironment(env = process.env) {
     let cms;
@@ -153,16 +155,32 @@ export const test = base.extend({
             throw new Error('Invalid published site URL');
         await use(url.href);
     },
+    traceSteps: async ({ page }, use) => use(timelines.get(page)),
     page: async ({ page }, use, testInfo) => {
+        const timeline = interactionTrace(page);
+        timelines.set(page, timeline);
         await use(page);
+        const trace = timeline.finish();
         if (testInfo.status !== testInfo.expectedStatus && !page.isClosed()) {
-            // No trace/HAR/video: each can retain Authorization, cookies or tokens.
+            const tracePath = testInfo.outputPath(
+                'failure-interaction-timeline.json',
+            );
+            await writeFile(tracePath, JSON.stringify(trace, null, 2), {
+                mode: 0o600,
+            });
+            await testInfo.attach('failure-interaction-timeline', {
+                path: tracePath,
+                contentType: 'application/json',
+            });
+            // Native trace/HAR/video each retain credentials; this timeline is not a replay trace.
             const screenshot = testInfo.outputPath('failure-sanitized.png');
             await page.screenshot({
                 path: screenshot,
                 fullPage: true,
                 mask: [
-                    page.locator('input[type="password"], input[type="email"]'),
+                    page.locator(
+                        'input[type="password"], input[type="email"], [data-e2e-private]',
+                    ),
                     page.getByText(process.env.STOREFRONT_E2E_EMAIL, {
                         exact: false,
                     }),
@@ -174,7 +192,7 @@ export const test = base.extend({
                 contentType: 'image/png',
             });
             await testInfo.attach('diagnostic', {
-                body: 'Authenticated product interaction failed. Login recording and network traces are disabled.',
+                body: 'Authenticated product interaction failed. Private login and native network recording are disabled. A fixed-schema interaction timeline is attached.',
                 contentType: 'text/plain',
             });
         }

@@ -227,3 +227,101 @@ test('rejects a partial site selector instead of silently using another selectio
         /Inject both STOREFRONT_E2E_WORKSPACE_ID and STOREFRONT_E2E_SITE_ID/,
     );
 });
+
+test(
+    'authenticated controlled failure retains only a safe timeline and masks private DOM canaries',
+    { skip: !hasRuntime, timeout: 45000 },
+    async () => {
+        const { spawnSync } = await import('node:child_process');
+        const { mkdir, readdir, readFile, rm, writeFile } = await import(
+            'node:fs/promises'
+        );
+        const { randomBytes } = await import('node:crypto');
+        const path = await import('node:path');
+        const canary = 'B3_PRIVATE_' + randomBytes(18).toString('hex');
+        const probe = path.resolve('ops/e2e/b3-trace-canary.spec.mjs');
+        const outputDir = path.resolve('.e2e/security/b3-safe-timeline');
+        await rm(outputDir, { recursive: true, force: true });
+        await mkdir(outputDir, { recursive: true, mode: 0o700 });
+        await writeFile(
+            probe,
+            `import {test} from './browser-fixture.mjs';\ntest('controlled trace canary failure',async({page,traceSteps})=>{await page.goto('/d/studio');traceSteps.step('controlled-failure');const secret=process.env.STOREFRONT_E2E_CANARY;await page.context().addCookies([{name:'b3-session-canary',value:secret,url:process.env.STOREFRONT_E2E_CMS}]);await page.evaluate(async secret=>{localStorage.setItem('b3-canary',secret);const el=document.createElement('div');el.dataset.e2ePrivate='';el.style.cssText='position:fixed;left:160px;top:100px;width:500px;height:80px;z-index:99999;background:white;color:black';el.textContent=secret;document.body.append(el);console.error(secret);await fetch('/api/v4/health-check?canary='+secret,{headers:{Authorization:'Bearer '+secret,'X-B3-Private':secret}});await fetch('/api/v4/auth/login?probe='+secret,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:secret,password:secret})});},secret);throw new Error('Controlled authenticated failure');});\n`,
+            { mode: 0o600, flag: 'wx' },
+        );
+        try {
+            const result = spawnSync(
+                process.execPath,
+                [
+                    'node_modules/@playwright/test/cli.js',
+                    'test',
+                    '--config',
+                    'ops/e2e/playwright.config.mjs',
+                    probe,
+                    '--project=desktop',
+                ],
+                {
+                    encoding: 'utf8',
+                    timeout: 40000,
+                    env: {
+                        ...process.env,
+                        STOREFRONT_E2E_CANARY: canary,
+                        STOREFRONT_E2E_RESULTS_DIR: outputDir,
+                    },
+                },
+            );
+            assert.equal(result.status, 1);
+            assert.equal(
+                (result.stdout + result.stderr).includes(canary),
+                false,
+            );
+            const files = await readdir(outputDir, { recursive: true });
+            const timelines = files.filter((file) =>
+                file.endsWith('failure-interaction-timeline.json'),
+            );
+            assert.equal(timelines.length, 1);
+            assert.equal(
+                files.some((file) => file.endsWith('failure-sanitized.png')),
+                true,
+            );
+            assert.equal(
+                files.some((file) => /\.(zip|har|webm)$/.test(file)),
+                false,
+            );
+            for (const file of files.filter((file) =>
+                /\.(json|md|txt)$/.test(file),
+            )) {
+                const value = await readFile(
+                    path.join(outputDir, file),
+                    'utf8',
+                );
+                for (const secret of [
+                    canary,
+                    process.env.STOREFRONT_E2E_EMAIL,
+                    process.env.STOREFRONT_E2E_PASSWORD,
+                ])
+                    assert.equal(value.includes(secret), false);
+                assert.equal(value.includes('# Page snapshot'), false);
+                assert.equal(
+                    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(
+                        value,
+                    ),
+                    false,
+                );
+            }
+            const trace = JSON.parse(
+                await readFile(path.join(outputDir, timelines[0]), 'utf8'),
+            );
+            assert.ok(
+                trace.events.some(
+                    (item) =>
+                        item.kind === 'step' &&
+                        item.id === 'controlled-failure',
+                ),
+            );
+            assert.ok(trace.events.some((item) => item.kind === 'console'));
+            assert.ok(trace.events.some((item) => item.kind === 'response'));
+        } finally {
+            await rm(probe, { force: true });
+        }
+    },
+);

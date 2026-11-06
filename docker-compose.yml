@@ -132,6 +132,9 @@ services:
             - backend
             - ui
         hostname: proxy
+        environment:
+            STOREFRONT_PREVIEW_PUBLIC_ORIGIN: ${STOREFRONT_PREVIEW_PUBLIC_ORIGIN:-}
+            STOREFRONT_PREVIEW_SERVICE_URL: ${STOREFRONT_PREVIEW_SERVICE_URL:-}
         build:
             context: ./proxy
             dockerfile: Dockerfile

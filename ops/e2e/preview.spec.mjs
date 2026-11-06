@@ -15,7 +15,19 @@ test('injected unavailable runtime keeps its explanation without an iframe', asy
     page,
     installation,
 }) => {
-    await page.route('**/api/v4/storefront/preview-runtime**', route => route.fulfill({status:200,headers:{'cache-control':'no-store'},json:{status:'unavailable',configured:true,runtime:null,templateId:installation.templateId,templateVersion:installation.templateVersion}}));
+    await page.route('**/api/v4/storefront/preview-runtime**', (route) =>
+        route.fulfill({
+            status: 200,
+            headers: { 'cache-control': 'no-store' },
+            json: {
+                status: 'unavailable',
+                configured: true,
+                runtime: null,
+                templateId: installation.templateId,
+                templateVersion: installation.templateVersion,
+            },
+        }),
+    );
     const descriptor = page.waitForResponse(
         (response) =>
             new URL(response.url()).pathname ===
@@ -36,9 +48,29 @@ test('injected unavailable runtime keeps its explanation without an iframe', asy
     await expect(page.locator('iframe')).toHaveCount(0);
 });
 
-test('actual installed runtime identity opens a read-only complete-site preview', async ({page,installation}) => {
-    const descriptor=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/v4/storefront/preview-runtime');
-    await page.goto('/d/presets/site-preview');const response=await descriptor;const data=await response.json();
-    expect(response.headers()['cache-control']).toBe('no-store');expect(data.runtime.templateId).toBe(installation.templateId);expect(data.runtime.templateVersion).toBe(installation.templateVersion);expect(data.status).toBe('ready');
-    await expect(page.locator('iframe')).toHaveCount(1);await expect(page.frameLocator('iframe').locator('[data-section-type]').first()).toBeVisible();
+test('actual installed runtime identity opens a read-only complete-site preview', async ({
+    page,
+    installation,
+}) => {
+    test.skip(
+        !process.env.E2E_SECTION_TEMPLATES_ROOT &&
+            !process.env.STOREFRONT_E2E_B3_INSTALLED,
+        'Installed artifact runtime required',
+    );
+    const descriptor = page.waitForResponse(
+        (response) =>
+            new URL(response.url()).pathname ===
+            '/api/v4/storefront/preview-runtime',
+    );
+    await page.goto('/d/presets/site-preview');
+    const response = await descriptor;
+    const data = await response.json();
+    expect(response.headers()['cache-control']).toBe('no-store');
+    expect(data.runtime.templateId).toBe(installation.templateId);
+    expect(data.runtime.templateVersion).toBe(installation.templateVersion);
+    expect(data.status).toBe('ready');
+    await expect(page.locator('iframe')).toHaveCount(1);
+    await expect(
+        page.frameLocator('iframe').locator('[data-section-type]').first(),
+    ).toBeVisible();
 });

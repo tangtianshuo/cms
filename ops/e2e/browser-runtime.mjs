@@ -1,12 +1,27 @@
 // Disposable current-source CMS + actual Preview source, for early local browser work.
 // This is intentionally not a PlatformLock, release deployment or published site.
 import { execFileSync } from 'node:child_process';
-import { localSectionBundles, provisionSectionSite } from './section-fixture.mjs';
+import {
+    localSectionBundles,
+    provisionSectionSite,
+} from './section-fixture.mjs';
+import { installPreviewFixtures } from './installed-preview-fixture.mjs';
+import { savedContractFixture } from './saved-snapshot-fixture.mjs';
+import { httpsMediaFixture } from './https-media-fixture.mjs';
 import { BrowserProcesses } from './browser-processes.mjs';
+import { readFileSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { mkdir, chmod, open, readFile, writeFile, rm } from 'node:fs/promises';
+import {
+    mkdir,
+    chmod,
+    open,
+    readFile,
+    writeFile,
+    rm,
+    cp,
+} from 'node:fs/promises';
 import path from 'node:path';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -38,16 +53,39 @@ const preview = 'http://127.0.0.1:18089';
 const processes = new BrowserProcesses();
 const logs = [];
 let mongo;
+let mediaFixture;
+const artifactTemplatesRoot = process.env.E2E_B3_TEMPLATES_ROOT;
 for (const signal of ['SIGINT', 'SIGTERM'])
     process.once(signal, () => processes.interrupt());
 function sourceIdentity(directory) {
     const git = (args) => execFileSync('git', args, { cwd: directory });
     const diff = git(['diff', 'HEAD', '--']);
+    const files = git([
+        'ls-files',
+        '-z',
+        '--cached',
+        '--others',
+        '--exclude-standard',
+    ])
+        .toString()
+        .split('\0')
+        .filter(Boolean)
+        .sort()
+        .map((relative) => ({
+            path: relative,
+            sha256: createHash('sha256')
+                .update(readFileSync(path.join(directory, relative)))
+                .digest('hex'),
+        }));
     return {
         commit: git(['rev-parse', 'HEAD']).toString().trim(),
         sourceMode: 'current-working-tree',
         trackedChanges: diff.length !== 0,
         trackedDiffSha256: createHash('sha256').update(diff).digest('hex'),
+        sourceFiles: files,
+        sourceFilesSha256: createHash('sha256')
+            .update(JSON.stringify(files))
+            .digest('hex'),
     };
 }
 async function available(port) {
@@ -102,6 +140,7 @@ async function ready(url, child, method = 'GET') {
 try {
     await available(18088);
     await available(18089);
+    if (artifactTemplatesRoot) await available(18090);
     processes.throwIfInterrupted();
     const owned = Object.fromEntries(
         (await readFile(reference, 'utf8'))
@@ -158,7 +197,35 @@ try {
         JSON.stringify({ schemaVersion: 1, records: [] }),
         { mode: 0o600 },
     );
-    if (process.env.E2E_SECTION_TEMPLATES_ROOT) await localSectionBundles({ templatesRoot: path.resolve(process.env.E2E_SECTION_TEMPLATES_ROOT), runRoot, root });
+    if (artifactTemplatesRoot) {
+        mediaFixture = await httpsMediaFixture({
+            privateRoot: path.join(runRoot, 'private'),
+            cms,
+        });
+        await installPreviewFixtures({
+            templatesRoot: path.resolve(artifactTemplatesRoot),
+            previewRoot,
+            runRoot,
+            root,
+            cms,
+            build: async (id, cwd, env) => {
+                const child = await start(
+                    'preview-build-' + id,
+                    'npm',
+                    ['run', 'build:preview'],
+                    { cwd, env },
+                );
+                if ((await processes.exit(child)) !== 0)
+                    throw new Error('Local preview artifact build failed');
+            },
+        });
+    }
+    if (!artifactTemplatesRoot && process.env.E2E_SECTION_TEMPLATES_ROOT)
+        await localSectionBundles({
+            templatesRoot: path.resolve(process.env.E2E_SECTION_TEMPLATES_ROOT),
+            runRoot,
+            root,
+        });
     const previewChild = await start(
         'preview',
         process.execPath,
@@ -204,7 +271,7 @@ try {
                 JWT_EXP_IN: '3600000',
                 STOREFRONT_ENABLED: 'true',
                 STOREFRONT_PREVIEW_SERVICE_URL: preview,
-                STOREFRONT_MEDIA_ORIGIN: cms,
+                STOREFRONT_MEDIA_ORIGIN: mediaFixture?.origin || cms,
                 // Explicitly prevent inherited production/control integrations in this local fixture.
                 GATEWAY_BASE_URL: '',
                 GATEWAY_SITE_BINDINGS: '[]',
@@ -270,20 +337,111 @@ try {
         auth.accessToken,
         selector,
     );
-    const sectionEnvironment = process.env.E2E_SECTION_TEMPLATES_ROOT ? await provisionSectionSite({ templatesRoot: path.resolve(process.env.E2E_SECTION_TEMPLATES_ROOT), root, runRoot, db: mongo.db(database), site, workspace, api, token: auth.accessToken, selector, cms }) : {};
+    const sectionEnvironment =
+        artifactTemplatesRoot || process.env.E2E_SECTION_TEMPLATES_ROOT
+            ? await provisionSectionSite({
+                  templatesRoot: path.resolve(
+                      artifactTemplatesRoot ||
+                          process.env.E2E_SECTION_TEMPLATES_ROOT,
+                  ),
+                  root,
+                  runRoot,
+                  db: mongo.db(database),
+                  site,
+                  workspace,
+                  api,
+                  token: auth.accessToken,
+                  selector,
+                  cms,
+              })
+            : {};
     const actual = (
         await api('/presets/site', undefined, auth.accessToken, selector)
     ).site;
+    let localSnapshotPath;
+    if (artifactTemplatesRoot) {
+        await available(18091);
+        const storefront = path.join(
+            artifactTemplatesRoot,
+            'templates',
+            actual.presetId,
+            actual.presetVersion,
+            'storefront',
+        );
+        const child = await start('published-build', 'npm', ['run', 'build'], {
+            cwd: storefront,
+            env: {
+                ...process.env,
+                PREVIEW_APP_BASE_URL: '',
+                NUXT_PUBLIC_PREVIEW_ADMIN_ORIGIN: '',
+            },
+        });
+        if ((await processes.exit(child)) !== 0)
+            throw new Error('Local saved-snapshot runtime build failed');
+        await cp(
+            path.join(storefront, '.output'),
+            path.join(runRoot, 'published'),
+            { recursive: true },
+        );
+        localSnapshotPath = path.join(runRoot, 'private/published.json');
+        const snapshot = await api(
+            '/storefront/site-preview',
+            undefined,
+            auth.accessToken,
+            selector,
+        );
+        await writeFile(
+            localSnapshotPath,
+            JSON.stringify(await savedContractFixture(snapshot, { root, cms })),
+            { mode: 0o600 },
+        );
+        const published = await start(
+            'published',
+            process.execPath,
+            [path.join(runRoot, 'published/server/index.mjs')],
+            {
+                cwd: runRoot,
+                env: {
+                    ...process.env,
+                    HOST: '127.0.0.1',
+                    PORT: '18091',
+                    NUXT_WORKSPACE_ID: workspace._id,
+                    NUXT_SITE_ID: site._id,
+                    PUBLISHED_SNAPSHOT_PATH: localSnapshotPath,
+                    NUXT_PUBLISHED_SNAPSHOT_PATH: localSnapshotPath,
+                },
+            },
+        );
+        await ready('http://127.0.0.1:18091/healthz', published);
+    }
     const testEnv = {
         ...process.env,
         ...sectionEnvironment,
+        ...(localSnapshotPath
+            ? {
+                  STOREFRONT_E2E_LOCAL_SNAPSHOT_PATH: localSnapshotPath,
+                  STOREFRONT_E2E_LOCAL_RUNTIME_URL: 'http://127.0.0.1:18091',
+              }
+            : {}),
         STOREFRONT_E2E_CMS: cms,
+        ...(mediaFixture
+            ? {
+                  STOREFRONT_E2E_MEDIA_SPKI: mediaFixture.spki,
+                  STOREFRONT_E2E_MEDIA_ORIGIN: mediaFixture.origin,
+                  STOREFRONT_E2E_B3_INSTALLED: path.join(
+                      runRoot,
+                      'b3-installed-records.json',
+                  ),
+              }
+            : {}),
         STOREFRONT_E2E_EMAIL: email,
         STOREFRONT_E2E_PASSWORD: password,
         STOREFRONT_E2E_WORKSPACE_ID: workspace._id,
         STOREFRONT_E2E_SITE_ID: site._id,
         STOREFRONT_E2E_PRIVATE_DIR: path.join(runRoot, 'private'),
-        STOREFRONT_E2E_RESULTS_DIR: path.join(runRoot, 'results'),
+        STOREFRONT_E2E_RESULTS_DIR:
+            process.env.STOREFRONT_E2E_RESULTS_DIR ||
+            path.join(runRoot, 'results'),
     };
     await writeFile(
         path.join(runRoot, 'runtime.env'),
@@ -303,13 +461,32 @@ try {
                 database,
                 templateId: actual.presetId,
                 templateVersion: actual.presetVersion,
-                rendererRegistry: process.env.E2E_SECTION_TEMPLATES_ROOT ? 'actual-local-bundles-not-public' : 'empty',
+                rendererRegistry: artifactTemplatesRoot
+                    ? 'production-B2-installer-local-OCI-artifacts'
+                    : process.env.E2E_SECTION_TEMPLATES_ROOT
+                      ? 'actual-local-bundles-not-public'
+                      : 'empty',
                 overallB3Complete: false,
             },
             null,
             2,
         ) + '\n',
     );
+    if (process.env.STOREFRONT_E2E_RESULTS_DIR) {
+        await mkdir(process.env.STOREFRONT_E2E_RESULTS_DIR, {
+            recursive: true,
+        });
+        await cp(
+            path.join(runRoot, 'source-baseline.json'),
+            process.env.STOREFRONT_E2E_RESULTS_DIR + '-source-baseline.json',
+        );
+        if (artifactTemplatesRoot)
+            await cp(
+                path.join(runRoot, 'b3-installed-records.json'),
+                process.env.STOREFRONT_E2E_RESULTS_DIR +
+                    '-installed-records.json',
+            );
+    }
     processes.throwIfInterrupted();
     console.log(
         `Current-source CMS ready at ${cms}; actual ${actual.presetId}@${actual.presetVersion}; private injection in .e2e/runtime/runtime.env`,
@@ -351,6 +528,20 @@ try {
         for (const log of logs) await log.close();
         throw error;
     }
+    if (mediaFixture) {
+        await mediaFixture.close();
+        await writeFile(
+            path.join(runRoot, 'b3-https-media-proof.json'),
+            JSON.stringify(
+                {
+                    scope: 'local-authorized-CMS-capability-bytes-not-public-TLS',
+                    requests: mediaFixture.requests,
+                },
+                null,
+                2,
+            ),
+        );
+    }
     for (const log of logs) await log.close();
     if (mongo) {
         try {
@@ -361,13 +552,28 @@ try {
             await mongo.close();
         }
     }
-    for (const directory of ['backend', 'ui', 'preview', 'private'])
+    for (const directory of [
+        'backend',
+        'ui',
+        'preview',
+        'preview-artifacts',
+        'published',
+        'private',
+    ])
         await rm(path.join(runRoot, directory), {
             recursive: true,
             force: true,
         });
     await rm(path.join(runRoot, 'runtime.env'), { force: true });
-    for (const name of ['cms', 'preview', 'ui-build'])
+    for (const name of [
+        'cms',
+        'preview',
+        'ui-build',
+        'preview-build-aeroframe',
+        'preview-build-fireguard',
+        'published-build',
+        'published',
+    ])
         await rm(path.join(runRoot, `${name}.private.log`), { force: true });
     await lease.close();
     await rm(leasePath, { force: true });

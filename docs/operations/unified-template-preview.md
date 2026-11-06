@@ -21,10 +21,11 @@ host.
 
 ## CMS configuration
 
-Set only one server-side URL:
+Configure the resolver and the exact public iframe origin together:
 
 ```dotenv
 STOREFRONT_PREVIEW_SERVICE_URL=https://preview.novaintelligent.com
+STOREFRONT_PREVIEW_PUBLIC_ORIGIN=https://preview.novaintelligent.com
 ```
 
 The legacy build-time variables remain during migration:
@@ -44,13 +45,13 @@ The authenticated `GET /api/v4/storefront/preview-runtime` endpoint derives the 
 identity from the selected, authorized SiteInstallation. Browser query identity must
 match that installation. Responses use `Cache-Control: no-store`:
 
-- `status: ready` includes the validated runtime descriptor and `configured: true`.
-- A resolver 404 returns `status: unavailable`, the installed template identity,
-  `runtime: null`, and `configured: true`. The UI displays “该模板版本尚未提供预览”.
-- Service failure, timeout, redirect or invalid descriptor returns HTTP 503 with
-  “预览服务暂时不可用，可重试”. Internal URLs and transport errors stay out of responses.
-- Only an unset server URL returns `status: legacy`, `configured: false`, and
-  `runtime: null`, allowing explicit migration via the existing exact renderer map.
+-   `status: ready` includes the validated runtime descriptor and `configured: true`.
+-   A resolver 404 returns `status: unavailable`, the installed template identity,
+    `runtime: null`, and `configured: true`. The UI displays “该模板版本尚未提供预览”.
+-   Service failure, timeout, redirect or invalid descriptor returns HTTP 503 with
+    “预览服务暂时不可用，可重试”. Internal URLs and transport errors stay out of responses.
+-   Only an unset server URL returns `status: legacy`, `configured: false`, and
+    `runtime: null`, allowing explicit migration via the existing exact renderer map.
 
 Once the unified service is configured, a missing or failing renderer never falls
 back to a per-template mapping or another version. Remove per-template origins after
@@ -73,8 +74,13 @@ PREVIEW_REGISTRY_PATH=/opt/novaintelligent/preview/registry/preview/index.json
 PREVIEW_BUNDLES_ROOT=/opt/novaintelligent/preview/bundles
 ```
 
-The CMS reverse proxy must allow the exact preview origin in `frame-src`. The preview
-host independently sets `frame-ancestors` to the exact CMS origin.
+The CMS reverse proxy renders `frame-src 'self'` when preview is unconfigured. If the
+service URL is set, `STOREFRONT_PREVIEW_PUBLIC_ORIGIN` must be an explicit canonical
+HTTP(S) origin. Missing or malformed required origins stop nginx startup. Wildcards,
+credentials, paths, line breaks and header injection are rejected. Development and
+production Compose forward both values; production mounts the stock nginx startup
+renderer and config template. The preview host independently sets `frame-ancestors`
+to the exact CMS origin. This changes neither DNS nor certificates.
 
 ## Bundle layout
 
@@ -93,10 +99,10 @@ template, production image and preview bundle identity aligned.
 
 Registry records keep both digests:
 
-- `artifactDigest` identifies the immutable OCI artifact pulled by the deployment host.
-- `bundleDigest` identifies the unpacked bundle content verified by the preview service.
+-   `artifactDigest` identifies the immutable OCI artifact pulled by the deployment host.
+-   `bundleDigest` identifies the unpacked bundle content verified by the preview service.
 
-## Early B3 browser foundation (local only)
+## Disposable local browser runtime
 
 `ops/e2e/browser-fixture.mjs` exports `login(page)` and Playwright `test`, `expect`.
 The actual CMS login route is `/`; the controls are the accessible 邮箱/Email,
@@ -150,32 +156,59 @@ invocations. After an uncatchable process kill, inspect the owned processes and
 source-baseline database identity before removing a stale lease; do not stop shared
 services. Evidence and source metadata stay under ignored `.e2e/`.
 
-For a later selected unpublished candidate, import the exported `test` in another
-`ops/e2e/*.spec.mjs` and inject the actual `STOREFRONT_E2E_CMS`,
-`STOREFRONT_E2E_EMAIL`, `STOREFRONT_E2E_PASSWORD`, plus both
-`STOREFRONT_E2E_WORKSPACE_ID` and `STOREFRONT_E2E_SITE_ID`. An omitted selector uses
-the account's actual current selection. `installation` reads the selected site
-identity; `siteUrl` requires a real `STOREFRONT_E2E_SITE_URL` and has no invented
-published fallback. The baseline `preview.spec.mjs` deliberately requires an empty
-registry; ready-renderer interaction tests belong to B4–B7 and must select their
-actual candidate installations. Private/result directories can be set with
-`STOREFRONT_E2E_PRIVATE_DIR` and `STOREFRONT_E2E_RESULTS_DIR`; use ignored private
-paths and keep the existing evidence policy.
+The ready-renderer matrix uses the actual installer, approved format and freshly built
+AeroFrame1.0.4/FireGuard1.0.1 template sources. These local bundles are compiled for
+`http://127.0.0.1:18088`; their digests differ from release bundles compiled for another
+CMS origin. The runner archives the actual bundle, writes an OCI layout, then calls
+the real archive extractor and installer. Source inventories include tracked and
+nonignored untracked files and are retained next to the result directory.
 
-Controller security ruling for this early stage: trace/HAR/video would retain
-Authorization, cookies or session tokens, so they are disabled. Automatic raw DOM
-error snapshots are disabled with the pinned runner's `PLAYWRIGHT_NO_COPY_PROMPT`;
-the real security checks verify that retained diagnostics omit the account email,
-password and JWTs. Product failures attach a screenshot masking email text and
-password/email inputs, plus a fixed diagnostic. Login failures attach no screenshot
-or recording and replace potentially credential-bearing locator errors with a
-fixed message. Do not enable trace or attach raw storage state to replay this stage.
-A credential-safe retained trace remains a final B3 requirement.
+```sh
+E2E_DATABASE_ENV_FILE=.superpowers/sdd/2026-11-06-platform-delivery-master/a1-runtime/runtime.env \
+E2E_PREVIEW_ROOT=/absolute/path/to/assigned/Independent-Website-Preview \
+E2E_B3_TEMPLATES_ROOT=/absolute/path/to/assigned/Independent-Website-Templates \
+node ops/e2e/preview-roundtrip.mjs --local
+```
 
-`preview-roundtrip.mjs --foundation` propagates browser failures and, on success,
-reports only `local-browser-foundation-not-acceptance` with
-`overallB3Complete:false`. Without `--foundation`, the acceptance entrypoint stays
-nonzero even when the local foundation passes. Neither mode creates passing formal
-AcceptanceEvidence. The full two-template/new-version matrix, B7 unsaved live
-canvas, page/image/rich-text interactions, save/publish equality, complete version
-lock and edge/deployment checks remain incomplete.
+Both 1440×900 and 390×844 projects exercise exact renderer/bundle identity,
+complete-site navigation, unsaved live edits, authorized real media, formatted rich
+text, explicit save/reload and template mode. Media uses an owned throwaway HTTPS
+proxy for actual authorized CMS capability bytes, with an explicit certificate SPKI
+browser exception. The test decodes the image and checks dimensions and pixels; it
+does not weaken CSP or use global certificate bypass. The saved snapshot check uses
+the production contract/media projection and the actual built template runtime in
+an isolated local process. It is separate from Gateway publication/public-site
+acceptance. Local results explicitly block PUBLISH when no real release identity and
+public-site marker are supplied. `--local` succeeds only when every feasible local
+cell passes; it always reports `overallB3Complete:false`.
+
+Native Playwright trace, HAR, video and raw DOM error snapshots remain disabled.
+Authenticated failures retain a masked screenshot and fixed-schema JSON interaction
+timeline: whitelisted step/lifecycle IDs and method/route enums, status and timing
+only. It contains no URLs, headers, bodies, text, DOM or storage. The controlled
+failure test injects actual canaries into each sensitive surface and checks retained
+files and output. Login failures retain no recording or screenshot. Never attach
+runtime credentials, storage state, certificate private keys or raw request dumps.
+
+`--foundation` runs the unavailable-renderer baseline only. With neither an explicit
+local mode nor the formal inputs, the entrypoint remains nonzero after a green
+foundation. Formal mode requires `STOREFRONT_E2E_PLATFORM_LOCK`,
+`STOREFRONT_E2E_MATRIX`, `STOREFRONT_E2E_APPROVED_PREVIEW_REGISTRY`, and exact repository roots
+(the runner validates each required input and Git identity). The matrix JSON contains
+`templateId`, `templateVersion`, `cms`, `previewOrigin`, `siteUrl`, `siteId`,
+`workspaceId`, plus `expectedReleaseId` and `publishedMarker` for PUBLISH. Supply
+actual authenticated credentials through the environment. Formal origins must use
+HTTPS and real trust; local certificate/fixture overrides are cleared.
+
+Formal evidence uses the master `AcceptanceEvidence` shape and emits only the B3
+required subset. Each case binds template/version, actual viewport dimensions and
+the exact lock checksum. Missing, duplicate, stale, failed, blocked or unrun required
+cells make the command nonzero. PUBLISH reads actual Gateway state/history, saved
+content and the real public site; it never invents a release or performs a production
+write. D1 composes this subset with the other platform cases. No local invocation
+creates a full passing PlatformLock acceptance result.
+
+Preview deployment assets and the opt-in actual TLS edge test are documented in the
+Preview repository README. Run `B3_EDGE_DOCKER=1 node --test
+proxy/preview-origin.test.mjs` for stock-nginx startup/CSP checks. Normal unit runs do
+not count skipped Docker or runtime checks as passes.

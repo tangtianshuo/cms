@@ -83,6 +83,9 @@ services:
         depends_on:
             - backend
         hostname: proxy
+        environment:
+            STOREFRONT_PREVIEW_PUBLIC_ORIGIN: ${STOREFRONT_PREVIEW_PUBLIC_ORIGIN:-}
+            STOREFRONT_PREVIEW_SERVICE_URL: ${STOREFRONT_PREVIEW_SERVICE_URL:-}
         image: nginx
         restart: unless-stopped
         ports:
@@ -90,7 +93,11 @@ services:
         volumes:
             - type: bind
               source: ./proxy/nginx.prod.conf
-              target: /etc/nginx/nginx.conf
+              target: /etc/nginx/nginx.conf.template
+              read_only: true
+            - type: bind
+              source: ./proxy/19-preview-origin.sh
+              target: /docker-entrypoint.d/19-preview-origin.sh
               read_only: true
 
 volumes:
