@@ -40,6 +40,12 @@ export const zhCN: typeof en = {
         "selectBeforeInstall": "安装模板前，请在「工作区与站点」中创建或选择站点。"
     },
     "domains": {
+        "entryUnavailable": "尚未配置，接入未完成",
+        "certificatePending": "HTTPS 证书尚未准备好，接入未完成。",
+        "changepending": "正在验证域名变更，当前地址继续生效。",
+        "changesucceeded": "域名变更已生效。",
+        "changefailed": "域名变更失败，已保留原地址。请检查接入后重试。",
+
         "scopeHint": "以下域名属于当前已授权站点。域名变更无需重新发布即可生效。",
         "hostname": "域名",
         "add": "添加域名",

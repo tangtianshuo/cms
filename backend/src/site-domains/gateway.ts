@@ -4,7 +4,9 @@ import { gatewayManagementRequest, validateConfig } from '../presets/gateway-cli
 export interface GatewayDomainProjection {
     status: 'ready';
     route: { status: string; revision: number; releaseId: string | null; host: string | null; health: string };
-    domains: Array<{ id: string; hostname: string; ownershipStatus: string; dnsStatus: string; certificateStatus: string; enabled: boolean; role: 'primary' | 'alias'; lastCheckedAt: string | null; redirectTo: string | null }>;
+    operation?: {id: string; status: string; error: string | null; operation: string; domainId: string} | null;
+    guidance?: {entryHost: string; entryIp: string; txtPrefix: string; challengePath: string};
+    domains: Array<{ platformOwned?: boolean; lastError?: string | null; id: string; hostname: string; ownershipStatus: string; dnsStatus: string; certificateStatus: string; enabled: boolean; role: 'primary' | 'alias'; lastCheckedAt: string | null; redirectTo: string | null }>;
 }
 
 export interface GatewayDomainUnavailable { status: 'unconfigured' }
@@ -32,5 +34,35 @@ export async function readGatewayDomainState(siteId: string, env: NodeJS.Process
     const { base } = validateConfig(config);
     const value = await gatewayManagementRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/domains`, config);
     if (!valid(value)) throw new Error('Gateway returned invalid domain state');
-    return { status: 'ready', route: value.route, domains: value.domains };
+    return { ...value, status: 'ready', route: value.route, domains: value.domains };
+}
+
+/** Returns null only for deliberately legacy-only sites. Errors never fall back. */
+export async function gatewayDomainMutation(siteId: string, domainId: string, operation: 'add' | 'check' | 'primary' | 'state' | 'remove', body?: unknown,
+    env: NodeJS.ProcessEnv = process.env, fetcher: typeof fetch = fetch, resolveConfig = resolveGatewayPublishConfig): Promise<unknown | null> {
+    const config = await resolveConfig(env);
+    if (!config.sourceHeaders) return null;
+    if (config.cmsSiteId !== siteId) throw new Error('Gateway site binding mismatch');
+    const { base } = validateConfig(config);
+    const suffix = operation === 'add' ? '' : `/${encodeURIComponent(domainId)}/${operation}`;
+    return gatewayManagementRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/domains${suffix}`, config, { method: 'POST', body: JSON.stringify(body || {}) });
+}
+
+export async function readDynamicDomainList(siteId: string) {
+    const config = await resolveGatewayPublishConfig();
+    if (!config.sourceHeaders) return null;
+    const gateway = await readGatewayDomainState(siteId);
+    if (gateway.status !== 'ready') throw new Error('Gateway domain state unavailable');
+    return {
+        items: gateway.domains.map(domain => {
+            const ready = domain.ownershipStatus === 'verified' && domain.dnsStatus === 'ready' && domain.certificateStatus === 'ready';
+            const checked = domain.lastCheckedAt ? Date.parse(domain.lastCheckedAt) : 0;
+            return { _id: domain.id, siteId, hostname: domain.hostname, enabled: domain.enabled, isPrimary: domain.role === 'primary',
+                platformOwned: domain.platformOwned, ownershipStatus: domain.ownershipStatus, connectionStatus: ready ? 'ready' : checked ? 'error' : 'unchecked',
+                certificateStatus: domain.certificateStatus, dnsReady: domain.dnsStatus === 'ready', lastCheckedAt: checked, lastSuccessAt: ready ? checked : 0,
+                lastError: domain.lastError || '', createdAt: 0, updatedAt: checked, verifiedAt: 0, verificationExpiresAt: 0 };
+        }),
+        primaryDomainId: gateway.domains.find(domain => domain.role === 'primary')?.id || '', bindingRevision: gateway.route.revision,
+        guidance: gateway.guidance || { entryHost: '', entryIp: '', txtPrefix: '_cms-verify.', challengePath: '/.well-known/cms-domain-challenge' }, gateway,
+    };
 }

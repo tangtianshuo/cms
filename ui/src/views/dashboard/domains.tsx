@@ -1,6 +1,7 @@
-import { defineComponent, onMounted, ref } from 'vue';
+import { defineComponent, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { SiteDomain } from '@bcms/selfhosted-backend/site-domains/model';
+import { domainActions, connectionRecords } from './domain-state';
 import { Button } from '@bcms/selfhosted-ui/components/button';
 import {
     errorMessage,
@@ -9,6 +10,8 @@ import {
 } from '@bcms/selfhosted-ui/components/workspace/common';
 type Domain = Omit<SiteDomain, 'verificationTokenHash'> & {
     isPrimary: boolean;
+    platformOwned?: boolean;
+    certificateStatus?: string;
 };
 interface DomainList {
     items: Domain[];
@@ -23,6 +26,7 @@ interface DomainList {
     gateway?:
         | {
               status: 'ready';
+              operation?: { status: string; error: string | null } | null;
               route: {
                   status: string;
                   revision: number;
@@ -60,12 +64,24 @@ export default defineComponent({
         const error = ref('');
         const busy = ref(false);
         const copied = ref(false);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const pending = () =>
+            data.value?.gateway?.status === 'ready' &&
+            data.value.gateway.operation?.status === 'pending';
+        onUnmounted(() => clearTimeout(timer));
         const selectedSite = !!sdk.context?.context.siteId;
         const admin = !!sdk.context?.context.admin && selectedSite;
         async function refresh() {
             data.value = await sdk.send<DomainList>({
                 url: '/api/v4/site-domains',
             });
+            clearTimeout(timer);
+            if (pending())
+                timer = setTimeout(() => {
+                    void refresh().catch((cause) => {
+                        error.value = errorMessage(cause);
+                    });
+                }, 1500);
         }
         async function run(operation: () => Promise<unknown>) {
             if (busy.value) return;
@@ -79,8 +95,8 @@ export default defineComponent({
                     value.status === 409
                         ? ` ${t('domains.conflict')}`
                         : value.status === 429
-                        ? ` ${t('domains.throttled')}`
-                        : ''
+                          ? ` ${t('domains.throttled')}`
+                          : ''
                 }`;
             } finally {
                 try {
@@ -227,6 +243,18 @@ export default defineComponent({
                                 </Button>
                             </section>
                         )}
+                        {data.value?.gateway?.status === 'ready' &&
+                            data.value.gateway.operation && (
+                                <p
+                                    role="status"
+                                    aria-atomic="true"
+                                    class="mt-4 text-sm"
+                                >
+                                    {t(
+                                        `domains.change${data.value.gateway.operation.status}`,
+                                    )}
+                                </p>
+                            )}
                         {data.value?.gateway && (
                             <section class={panelClass}>
                                 <h2 class="font-semibold">
@@ -239,9 +267,13 @@ export default defineComponent({
                                             'ready'
                                                 ? t('domains.gatewayReady')
                                                 : data.value.gateway.status ===
-                                                  'unconfigured'
-                                                ? t('domains.gatewayUnconfigured')
-                                                : t('domains.gatewayUnavailable'),
+                                                    'unconfigured'
+                                                  ? t(
+                                                        'domains.gatewayUnconfigured',
+                                                    )
+                                                  : t(
+                                                        'domains.gatewayUnavailable',
+                                                    ),
                                     })}
                                 </p>
                                 {data.value.gateway.status === 'ready' && (
@@ -271,9 +303,8 @@ export default defineComponent({
                                             <dt>{t('domains.connection')}</dt>
                                             <dd>
                                                 {t('domains.gatewayHealth', {
-                                                    health:
-                                                        data.value.gateway.route
-                                                            .health,
+                                                    health: data.value.gateway
+                                                        .route.health,
                                                 })}
                                             </dd>
                                         </div>
@@ -294,14 +325,14 @@ export default defineComponent({
                                         <dt>CNAME</dt>
                                         <dd class="break-all font-mono">
                                             {data.value.guidance.entryHost ||
-                                                t('domains.operatorRequired')}
+                                                t('domains.entryUnavailable')}
                                         </dd>
                                     </div>
                                     <div>
                                         <dt>A</dt>
                                         <dd class="break-all font-mono">
                                             {data.value.guidance.entryIp ||
-                                                t('domains.operatorRequired')}
+                                                t('domains.entryUnavailable')}
                                         </dd>
                                     </div>
                                     <div class="sm:col-span-2">
@@ -316,16 +347,14 @@ export default defineComponent({
                                 </p>
                                 <Button
                                     class="mt-4"
+                                    disabled={
+                                        !connectionRecords(data.value.guidance)
+                                    }
                                     onClick={() =>
                                         copy(
-                                            `CNAME ${
-                                                data.value!.guidance.entryHost
-                                            }\nA ${
-                                                data.value!.guidance.entryIp
-                                            }\nHTTPS ${
-                                                data.value!.guidance
-                                                    .challengePath
-                                            }`,
+                                            connectionRecords(
+                                                data.value!.guidance,
+                                            ),
                                         )
                                     }
                                 >
@@ -384,6 +413,12 @@ export default defineComponent({
                                         </dd>
                                     </div>
                                 </dl>
+                                {item.certificateStatus &&
+                                    item.certificateStatus !== 'ready' && (
+                                        <p role="status" class="mt-3 text-sm">
+                                            {t('domains.certificatePending')}
+                                        </p>
+                                    )}
                                 {!!item.lastCheckedAt && (
                                     <p class="mt-2 text-xs opacity-70">
                                         {t('domains.checkedAt', {
@@ -419,11 +454,8 @@ export default defineComponent({
                                     <Button
                                         disabled={
                                             busy.value ||
-                                            item.isPrimary ||
-                                            !item.enabled ||
-                                            item.ownershipStatus !==
-                                                'verified' ||
-                                            !item.lastSuccessAt
+                                            !domainActions(item, !!pending())
+                                                .primary
                                         }
                                         onClick={() =>
                                             action(item._id, 'primary')
@@ -432,7 +464,11 @@ export default defineComponent({
                                         {t('domains.makePrimary')}
                                     </Button>
                                     <Button
-                                        disabled={busy.value}
+                                        disabled={
+                                            busy.value ||
+                                            !domainActions(item, !!pending())
+                                                .disable
+                                        }
                                         onClick={() =>
                                             action(item._id, 'state', {
                                                 enabled: !item.enabled,
@@ -446,7 +482,11 @@ export default defineComponent({
                                         )}
                                     </Button>
                                     <Button
-                                        disabled={busy.value}
+                                        disabled={
+                                            busy.value ||
+                                            !domainActions(item, !!pending())
+                                                .remove
+                                        }
                                         kind="danger"
                                         onClick={async () => {
                                             if (

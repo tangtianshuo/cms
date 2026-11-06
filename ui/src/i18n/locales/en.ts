@@ -38,6 +38,12 @@ export const en = {
         "selectBeforeInstall": "Create or select a site in Workspaces and sites before installing a preset."
     },
     "domains": {
+        "entryUnavailable": "Not configured — connection is incomplete",
+        "certificatePending": "HTTPS certificate is not ready. Connection is incomplete.",
+        "changepending": "Domain change is being verified. The current address remains active.",
+        "changesucceeded": "Domain change is active.",
+        "changefailed": "Domain change failed. The previous address is retained; check the connection and retry.",
+
         "scopeHint": "These bindings belong to the current authorized site. Domain changes take effect independently of publishing.",
         "hostname": "Domain hostname",
         "add": "Add domain",

@@ -1,6 +1,36 @@
 # Storefront domain setup (D1)
 
-CMS maintains domain bindings and immutable publication pointers. Your DNS provider, CDN or hosting platform maintains DNS records, TLS certificates and renewal. CMS never edits DNS or requests certificates. Domain changes and content rollback are independent.
+For dynamically provisioned sites, Gateway owns domain verification, active routes and publication state. CMS resolves the persisted source binding and forwards authenticated operations. The legacy-only flow below continues to use CMS domain bindings. Your DNS provider, CDN or hosting platform maintains DNS records, TLS certificates and renewal. CMS never edits DNS or requests certificates. Domain changes and content rollback are independent.
+
+
+## Dynamically provisioned sites (C4)
+
+Configure `PLATFORM_DOMAIN` once on Gateway control. C1 reserves an immutable exact `SourceSiteBinding.defaultDomainId`; its HTTPS URL survives primary changes and configuration drift. Do not delete, repurpose, rename or infer the default row from a hostname prefix. Default-domain ownership comes from that exact binding; custom domains require the one-time TXT proof.
+
+Gateway control and traffic receive the same server-only `STOREFRONT_DOMAIN_SECRET`. Configure `STOREFRONT_DOMAIN_ENTRY_HOST` and/or `STOREFRONT_DOMAIN_ENTRY_IP` on control with the **actual** ingress DNS values. Empty values mean configuration is incomplete; they do not imply a working connection. Both services remain private behind the HTTPS edge. The worker projects enabled reserved hosts atomically into `domains.json` beside `GATEWAY_ROUTE_STATE_PATH` (override writer with `GATEWAY_DOMAIN_STATE_PATH`; configure the traffic snapshot path consistently). Share the same persistent directory with traffic. This file grants only `/.well-known/cms-domain-challenge`, never public content. An unpublished site's `/` remains 404.
+
+Provision wildcard DNS and valid HTTPS for the platform suffix externally before first publication. `nova-relay.conf` contains a deployment example for `sites.novaintelligent.cn`, forwarding its wildcard and explicitly listed custom hosts to traffic on port 18180; align this example with the actual platform suffix and traffic listener. Unknown hosts remain 404. Add custom-host TLS and an explicit edge/relay host entry before checking it. No ACME, domain purchase, production migration or certificate issuance is performed by this code.
+
+The same CMS `/site-domains` actions now use Gateway for provisioned sites, with trusted source headers from the stored binding. Pending provisioning and control outages fail closed; they never mutate legacy Mongo domain rows. Legacy-only sites retain the historical flow below. Gateway's GET exposes independent ownership/DNS/certificate state, actual ingress guidance, and a durable `operation` result. Every check requires current positive ownership, DNS and HTTPS proof. TLS uses hostname validation and a pinned globally routable DNS address, port 443, no redirect, and bounded response/time. TXT digests are stored; raw values are shown only on reservation and expire after 24 hours if still unverified.
+
+Primary/state/remove return **pending**, not active success. A small `DomainChange` row is durable per site. Under the same Site serialization boundary used by publication creation, a pending publish excludes domain changes and a pending domain change excludes publication. The worker alone updates the durable route file; it verifies the existing runtime at the new host before and after route apply and then commits primary flags and Deployment host. Failure restores the committed route and leaves the old primary. Crash replay uses the committed Domain rows to reconstruct rollback, and replays pending intent even when its route was written before SQL commit. An ambiguous COMMIT retains the verified route and retries/converges rather than falsely reporting failure. Keep one worker/router owner per route-state directory, as required by the existing local-router architecture; the Site SQL exclusion also fences competing same-site domain workers.
+
+The exact reserved default and current primary cannot be removed or disabled. Switching primary does not change the immutable content release or publication revision. Ready aliases redirect 301 preserving path/query; challenge runs before this redirect. The UI polls pending changes, reports failure without changing the primary, and prevents promotion while the certificate is unready.
+
+### C4 disposable local proof and formal gate
+
+Build the current Templates aeroframe source image with its exact `SOURCE_COMMIT` revision label as `local/c4-aeroframe:source`, build current Gateway traffic/worker, then run from the CMS worktree:
+
+```sh
+E2E_C4_MODE=local \
+E2E_GATEWAY_ROOT=/absolute/managed/Gateway \
+E2E_TEMPLATES_ROOT=/absolute/managed/Templates \
+E2E_DATABASE_ENV_FILE=/absolute/owned/runtime.env \
+E2E_RUNTIME_DIR=/absolute/new/private/c4-run \
+node ops/e2e/site-provisioning.mjs
+```
+
+The fixture uses the explicitly owned PostgreSQL15432 and Mongo27029 endpoints, fresh random databases, random application ports, production CMS main/jobs and persistent C3 source bindings, production Gateway handlers over a local HTTP adapter, real worker/Docker candidates, a per-run local CA and normal certificate/SNI verification. Loopback DNS/TXT are explicit fixture adapters. The one local TemplatePin uses the genuine Docker image ID; release/publish intake is through scoped Gateway handlers. This does **not** prove CMS publicRecord/preset→public OCI, deployed Next HTTP routing, Internet wildcard DNS/TLS or an accepted immutable public platform lock. Those external/formal gates remain blocked until independently supplied and verified; local success cannot satisfy them. No per-site binding environment variables are used. Evidence records source hashes, TLS negatives, two distinct first publications, domain switch/redirects and cleanup.
 
 ## Private origin and configuration
 

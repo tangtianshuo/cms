@@ -14,7 +14,7 @@ export interface SiteDomain extends MongoDBEntry {
     dnsReady: boolean;
     lastError: string;
 }
-export interface DomainSite { workspaceId?: string; _id: string; primaryDomainId?: string; domainRevision?: number }
+export interface DomainSite { provisioning?: { status: string }; workspaceId?: string; _id: string; primaryDomainId?: string; domainRevision?: number }
 export interface DomainAudit extends MongoDBEntry { siteId: string; actorId: string; domainId: string; operation: string; error: string }
 export interface DomainPrimaryAudit extends DomainAudit { operation: 'primary'; outcome: 'committed'; bindingRevision: number }
 export interface DomainResolution { workspaceId?: string; siteId: string; hostname: string; primaryHostname: string; bindingRevision: number }
