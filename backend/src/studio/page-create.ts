@@ -9,6 +9,7 @@ export interface PageCreateSource {
     findSite(): Promise<SiteInstallation | null>;
 }
 export type PageCreateInput = { title: string; path: string; blueprintKey: string; page?: Omit<PageDraftUpdate, 'title' | 'path' | 'entryId'> };
+export type PageCreateReceipt = PageDraft & { siteUpdatedAt: number; entryUpdatedAt: number };
 function canonical(value: unknown): string {
     const sort = (item: unknown): unknown => Array.isArray(item) ? item.map(sort) : item && typeof item === 'object' ? Object.fromEntries(Object.entries(item).filter(([, child]) => child !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => [key, sort(child)])) : item;
     return JSON.stringify(sort(value));
@@ -21,7 +22,7 @@ function sameContent(a: Entry, b: Entry) {
     return a.templateId === b.templateId && a.siteId === b.siteId && a.groupId === b.groupId && JSON.stringify(a.meta) === JSON.stringify(b.meta) && JSON.stringify(a.content) === JSON.stringify(b.content) && JSON.stringify(a.statuses) === JSON.stringify(b.statuses);
 }
 export async function createStudioPage(site: SiteInstallation, operationId: string, entry: Entry,
-    input: PageCreateInput, source: PageCreateSource, expectedUpdatedAt = site.updatedAt): Promise<PageDraft & { siteUpdatedAt: number }> {
+    input: PageCreateInput, source: PageCreateSource, expectedUpdatedAt = site.updatedAt): Promise<PageCreateReceipt> {
     const ids = pageOperationIds(site._id, operationId);
     if (entry._id !== ids.entryId) throw new Error('Invalid page operation identity');
     const oldPage = pageDraft(site, ids.pageKey);
@@ -38,19 +39,22 @@ export async function createStudioPage(site: SiteInstallation, operationId: stri
         const existing = await source.findEntry(ids.entryId);
         if (!existing || !sameContent(existing, entry)) throw Object.assign(new Error('Operation Entry changed; start a new page'), { status: 409 });
         const receipt = site.pages.find(page => page.key === ids.pageKey)?.creationReceipt;
-        if (!receipt || receipt.expectedUpdatedAt !== expectedUpdatedAt || receipt.siteUpdatedAt !== site.updatedAt) throw Object.assign(new Error('Site changed after page creation; review the saved page before continuing'), { status: 409 });
-        return { ...oldPage, siteUpdatedAt: receipt.siteUpdatedAt };
+        if (!receipt || receipt.expectedUpdatedAt !== expectedUpdatedAt || receipt.siteUpdatedAt !== site.updatedAt || receipt.entryUpdatedAt === undefined || receipt.entryUpdatedAt !== existing.updatedAt) throw Object.assign(new Error('Site or Entry changed after page creation; review the saved page before continuing'), { status: 409 });
+        return { ...oldPage, siteUpdatedAt: receipt.siteUpdatedAt, entryUpdatedAt: receipt.entryUpdatedAt };
     }
     if (site.updatedAt !== expectedUpdatedAt) throw Object.assign(new Error('Site changed before page creation; check the server version'), { status: 409 });
-    updated.pages.find(page => page.key === ids.pageKey)!.creationReceipt = { expectedUpdatedAt, siteUpdatedAt: 0 };
     let existing = await source.findEntry(ids.entryId);
     if (!existing) {
         try { existing = await source.addEntry(entry); }
         catch (cause) { existing = await source.findEntry(ids.entryId); if (!existing) throw cause; }
     }
     if (!sameContent(existing, entry)) throw Object.assign(new Error('Operation Entry changed; use its advanced editor or start a new page'), { status: 409 });
+    // A fresh insertion owns its write receipt. Orphan recovery confirms only this
+    // exact matching observed version; later Entry edits must still pass content CAS.
+    const entryUpdatedAt = existing.updatedAt;
+    updated.pages.find(page => page.key === ids.pageKey)!.creationReceipt = { expectedUpdatedAt, siteUpdatedAt: 0, entryUpdatedAt };
     if (!await source.saveSite(updated, site.updatedAt)) {
         throw Object.assign(new Error(`Page content saved as Entry ${ids.entryId}, but routes changed. Refresh and retry the same operation to bind it.`), { status: 409 });
     }
-    return { ...pageDraft(updated, ids.pageKey)!, siteUpdatedAt: updated.updatedAt };
+    return { ...pageDraft(updated, ids.pageKey)!, siteUpdatedAt: updated.updatedAt, entryUpdatedAt };
 }

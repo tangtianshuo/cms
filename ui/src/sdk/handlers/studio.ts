@@ -31,7 +31,7 @@ export class StudioHandler {
         return this.sdk.send<{ id: string; updatedAt: number }>({ url: `/api/v4/studio/entries/${encodeURIComponent(modelKey)}`, method: 'POST', data });
     }
     createPage(data: { operationId: string; expectedUpdatedAt: number; title: string; path: string; blueprintKey: string; page?: Omit<import('@bcms/selfhosted-backend/presets/pages').PageDraftUpdate, 'title' | 'path' | 'entryId'>; fields?: Record<string, StudioValue>; entry?: import('@bcms/selfhosted-backend/entry/models/controller').EntryCreateBody }) {
-        return this.sdk.send<PageDraft & { siteUpdatedAt: number }>({ url: '/api/v4/studio/pages', method: 'POST', data });
+        return this.sdk.send<import('@bcms/selfhosted-backend/studio/page-create').PageCreateReceipt>({ url: '/api/v4/studio/pages', method: 'POST', data });
     }
     savePage(pageKey: string, data: { expectedUpdatedAt: number; title: string; path: string; seoTitle: string; seoDescription: string; sections: string[]; sectionConfigs?: Array<{ type: string; enabled: boolean; data: Record<string, unknown> }>; layoutDocument?: unknown; entryId: string; enabled: boolean; navigation: boolean; overlay?: StudioDraftOverlay }) {
         return this.sdk.send<PageDraft & { siteUpdatedAt: number }>({ url: `/api/v4/studio/pages/${encodeURIComponent(pageKey)}`, method: 'POST', data });

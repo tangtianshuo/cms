@@ -483,6 +483,14 @@ export const ContentWorkspace = defineComponent({
                 },
             });
         }
+        function confirmPage(page: PageDraft) {
+            pageEditor.value = JSON.parse(JSON.stringify(page));
+            if (!site.value) return;
+            const index = site.value.pages.findIndex(item => item.key === page.key);
+            const cached = JSON.parse(JSON.stringify(page));
+            if (index === -1) site.value.pages.push(cached);
+            else site.value.pages.splice(index, 1, cached);
+        }
         async function selectPage(key: string) {
             const page = site.value?.pages.find((item) => item.key === key);
             if (
@@ -621,8 +629,10 @@ export const ContentWorkspace = defineComponent({
                     parts.push({ key: 'page', confirms: ['content','page'], run: async context => {
                         const receipt = await sdk.studio.createPage({ operationId, expectedUpdatedAt: context.siteUpdatedAt, blueprintKey: newPage, title: savedPage.title, path: savedPage.path, page: { seoTitle: savedPage.seoTitle, seoDescription: savedPage.seoDescription, sections: savedPage.sections, sectionConfigs: savedPage.sectionConfigs, layoutDocument: savedPage.layoutDocument, enabled: savedPage.enabled !== false, navigation: savedPage.navigation !== false }, entry: { ...buildEntryCreateBody(full), groupId: full.groupId } });
                         if (!isCurrent()) throw new Error('编辑会话已结束。');
-                        entry.value!._id = receipt.entryId; pageEditor.value = receipt;
-                        return { ...context, entryId: receipt.entryId, siteUpdatedAt: receipt.siteUpdatedAt };
+                        const { siteUpdatedAt, entryUpdatedAt, ...confirmed } = receipt;
+                        entry.value!._id = confirmed.entryId; entry.value!.updatedAt = entryUpdatedAt;
+                        confirmPage(confirmed);
+                        return { ...context, entryId: confirmed.entryId, entryUpdatedAt, siteUpdatedAt };
                     } });
                 } else {
                     if (changed.content && full && canEdit.value) parts.push({ key: 'content', confirms: ['content'], run: async context => {
@@ -643,7 +653,10 @@ export const ContentWorkspace = defineComponent({
                         const { key, ...fields } = pageOverlay(savedPage);
                         delete fields.blueprintKey;
                         const receipt = await sdk.studio.savePage(key, { ...fields, expectedUpdatedAt: context.siteUpdatedAt, enabled: savedPage.enabled !== false, navigation: savedPage.navigation !== false, overlay: overlay.settings ? { settings: overlay.settings } : undefined });
-                        return { ...context, siteUpdatedAt: receipt.siteUpdatedAt };
+                        if (!isCurrent()) throw new Error('编辑会话已结束。');
+                        const { siteUpdatedAt, ...confirmed } = receipt;
+                        confirmPage(confirmed);
+                        return { ...context, siteUpdatedAt };
                     } });
                 }
                 if (changed.settings && installed?.canManage) parts.push({ key: 'settings', confirms: ['settings'], run: async context => {

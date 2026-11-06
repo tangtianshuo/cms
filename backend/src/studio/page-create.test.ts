@@ -8,7 +8,7 @@ import { pageOperationIds } from './business';
 const preset = getPreset('aeroframe', '1.0.0')!;
 const site = { _id: 'site', presetId: preset.id, presetVersion: preset.version, updatedAt: 1, models: [{ key: 'content-page', templateId: 'content' }], pages: preset.pages.map(page => ({ ...page, status: 'draft' })) } as SiteInstallation;
 const input = { title: 'Policy', path: '/policy', blueprintKey: 'content' };
-const entry = { _id: pageOperationIds('site', 'op').entryId, templateId: 'content', meta: [] } as unknown as Entry;
+const entry = { _id: pageOperationIds('site', 'op').entryId, templateId: 'content', meta: [], updatedAt: 5 } as unknown as Entry;
 test('route conflict fails before content write', async () => {
     let adds = 0;
     await assert.rejects(() => createStudioPage(site, 'op', entry, { ...input, path: '/collections' }, { findEntry: async () => null, addEntry: async e => { adds++; return e; }, saveSite: async () => true, findSite: async () => site }), /conflicts/);
@@ -62,7 +62,7 @@ test('same operation rejects changed full content, status and group after a lost
 test('creation returns the exact CAS receipt and rejects replay after another site edit', async () => {
     let current = structuredClone(site); let saved: Entry | null = null;
     const source = { findEntry: async () => saved, addEntry: async (e: Entry) => saved = e,
-        saveSite: async (s: SiteInstallation) => { s.updatedAt = 42; const page = s.pages.find(page => page.entryId === entry._id)!; page.creationReceipt = { expectedUpdatedAt: 1, siteUpdatedAt: 42 }; s.pages.find(candidate => candidate.entryId === entry._id)!.creationReceipt!.siteUpdatedAt = s.updatedAt; current = s; return true; }, findSite: async () => current };
+        saveSite: async (s: SiteInstallation) => { s.updatedAt = 42; const page = s.pages.find(page => page.entryId === entry._id)!; page.creationReceipt = { ...page.creationReceipt!, siteUpdatedAt: 42 }; current = s; return true; }, findSite: async () => current };
     const first = await createStudioPage(current, 'op', entry, input, source, 1);
     assert.equal(first.siteUpdatedAt, 42);
     assert.equal('creationReceipt' in first, false);
@@ -83,4 +83,27 @@ test('first creation confirms complete writable page semantics and rejects any c
     assert.equal(first.seoTitle, page.seoTitle); assert.equal(first.seoDescription, page.seoDescription); assert.equal(first.enabled, false); assert.equal(first.navigation, false);
     assert.equal((await createStudioPage(current, 'op', entry, { ...input, page }, source, 1)).key, first.key);
     for (const patch of [{ seoTitle: 'Changed' }, { seoDescription: 'Changed' }, { enabled: true }, { navigation: true }, { sectionConfigs: [{ type: 'info-grid', enabled: true, data: { items: [{ title: 'Changed' }] } }] }]) await assert.rejects(() => createStudioPage(current, 'op', entry, { ...input, page: { ...page, ...patch } }, source, 1), (error: any) => error.status === 409);
+});
+
+test('creation returns actual insertion version and replay rejects an intervening same-content edit', async () => {
+    let current = structuredClone(site); let saved: Entry | null = null;
+    const source = { findEntry: async () => saved, addEntry: async (value: Entry) => saved = { ...value, updatedAt: 47 }, saveSite: async (value: SiteInstallation) => { value.updatedAt = 42; const receipt = value.pages.find(page => page.entryId === entry._id)?.creationReceipt; assert.ok(receipt); receipt.siteUpdatedAt = 42; current = value; return true; }, findSite: async () => current };
+    const first = await createStudioPage(current, 'op', entry, input, source, 1);
+    assert.equal(first.entryUpdatedAt, 47);
+    assert.equal((await createStudioPage(current, 'op', entry, input, source, 1)).entryUpdatedAt, 47);
+    const inserted = await source.findEntry(); assert.ok(inserted); saved = { ...inserted, updatedAt: 48 };
+    await assert.rejects(() => createStudioPage(current, 'op', entry, input, source, 1), (error: { status?: number }) => error.status === 409);
+    const storedReceipt = current.pages.find(page => page.entryId === entry._id)?.creationReceipt; assert.ok(storedReceipt); delete storedReceipt.entryUpdatedAt;
+    await assert.rejects(() => createStudioPage(current, 'op', entry, input, source, 1), (error: { status?: number }) => error.status === 409);
+});
+
+test('orphan recovery binds only the exact observed content version and rejects changed content', async () => {
+    let saved = { ...entry, updatedAt: 71 }; let bound: SiteInstallation | undefined;
+    const source = { findEntry: async () => saved, addEntry: async () => { throw new Error('must reuse orphan'); }, saveSite: async (value: SiteInstallation) => { const receipt = value.pages.find(page => page.entryId === entry._id)?.creationReceipt; assert.ok(receipt); receipt.siteUpdatedAt = value.updatedAt; bound = value; saved = { ...saved, updatedAt: 72 }; return true; }, findSite: async () => bound || site };
+    const receipt = await createStudioPage(site, 'op', entry, input, source, 1);
+    assert.equal(receipt.entryUpdatedAt, 71);
+    const binding = await source.findSite(); assert.equal(binding.pages.find(page => page.entryId === entry._id)?.creationReceipt?.entryUpdatedAt, 71);
+    await assert.rejects(() => createStudioPage(binding, 'op', entry, input, source, 1), (error: { status?: number }) => error.status === 409);
+    saved = { ...saved, groupId: 'another-writer' };
+    await assert.rejects(() => createStudioPage(site, 'op', entry, input, source, 1), (error: { status?: number }) => error.status === 409);
 });

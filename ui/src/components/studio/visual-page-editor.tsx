@@ -1,4 +1,4 @@
-import { defineComponent, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
+import { defineComponent, nextTick, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 import type { StudioModel } from '../../sdk/handlers/studio';
 import type { TemplateEditorContract } from '@bcms/selfhosted-backend/template-contract/model';
@@ -39,6 +39,35 @@ export const VisualPageEditor = defineComponent({
     setup(props, { emit, slots, expose }) {
         const surface = ref<'properties' | 'canvas'>('properties');
         expose({ showProperties: () => { surface.value = 'properties'; } });
+        const propertiesPanel = ref<HTMLElement>();
+        let editingSelection: { owner: HTMLElement; start?: number; end?: number; direction?: 'forward' | 'backward' | 'none'; range?: Range } | undefined;
+        const rememberEditingSelection = (target: EventTarget | null) => {
+            if (surface.value !== 'properties' || !(target instanceof HTMLElement)) return;
+            const owner = target.closest<HTMLElement>('input, textarea, [contenteditable="true"]');
+            if (!owner || !propertiesPanel.value?.contains(owner)) return;
+            if (owner instanceof HTMLInputElement || owner instanceof HTMLTextAreaElement) {
+                editingSelection = owner.selectionStart === null ? undefined : { owner, start: owner.selectionStart, end: owner.selectionEnd ?? owner.selectionStart, direction: owner.selectionDirection || 'none' };
+            } else {
+                const selection = window.getSelection();
+                const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+                editingSelection = { owner, range: range && owner.contains(range.startContainer) && owner.contains(range.endContainer) ? range.cloneRange() : undefined };
+            }
+        };
+        const showEditingSurface = async (event: MouseEvent) => {
+            const tab = event.currentTarget;
+            const saved = editingSelection;
+            const returning = surface.value === 'canvas';
+            surface.value = 'properties';
+            await nextTick();
+            // Restore only for an explicit return, while that tab still owns focus.
+            // Preview renders, validation navigation and alternate field choices never restore it.
+            if (!returning || !saved || surface.value !== 'properties' || (document.activeElement !== tab && document.activeElement !== document.body) || !saved.owner.isConnected || !saved.owner.getClientRects().length || saved.owner.matches(':disabled, [contenteditable="false"]')) return;
+            saved.owner.focus({ preventScroll: true });
+            if ((saved.owner instanceof HTMLInputElement || saved.owner instanceof HTMLTextAreaElement) && saved.start !== undefined) saved.owner.setSelectionRange(saved.start, saved.end ?? saved.start, saved.direction);
+            else if (saved.range && saved.owner.contains(saved.range.startContainer) && saved.owner.contains(saved.range.endContainer)) {
+                const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(saved.range);
+            }
+        };
         const localSelectedNodeId = ref(props.selectedNodeId || props.modelValue.root[0]?.id || '');
         const previewFrame = ref<HTMLIFrameElement>();
         const previewReady = ref(false);
@@ -97,7 +126,7 @@ export const VisualPageEditor = defineComponent({
             return props.sectionLabels[type] || (type ? '不支持的区块类型' : '未配置区块类型');
         };
         return () => <section class={["studio-visual-page-editor", `studio-surface-${surface.value}`]} aria-label="可视化页面编辑器">
-            <div class="studio-mobile-surfaces" role="tablist" aria-label="工作区面板"><button type="button" role="tab" aria-selected={surface.value === 'properties'} onClick={() => { surface.value = 'properties'; }}>编辑内容</button><button type="button" role="tab" aria-selected={surface.value === 'canvas'} onClick={() => { surface.value = 'canvas'; }}>查看画布</button></div>
+            <div class="studio-mobile-surfaces" role="tablist" aria-label="工作区面板"><button type="button" role="tab" aria-selected={surface.value === 'properties'} onClick={showEditingSurface}>编辑内容</button><button type="button" role="tab" aria-selected={surface.value === 'canvas'} onPointerdown={() => rememberEditingSelection(document.activeElement)} onClick={() => { surface.value = 'canvas'; }}>查看画布</button></div>
             <aside class="studio-visual-sidebar studio-visual-sidebar--left">
                 <div class="studio-visual-panel-heading"><h3>页面</h3><span>当前页面</span></div>
                 <div class="studio-visual-page-tree" aria-label="当前页面"><strong>{props.pageTitle || '未命名页面'}</strong><small>{props.pagePath || '/'}</small></div>
@@ -106,7 +135,7 @@ export const VisualPageEditor = defineComponent({
                 <div class="studio-visual-panel-heading studio-visual-panel-heading--navigation"><h3>导航</h3><span>{props.navigation.length} 项</span></div><ul class="studio-visual-tree studio-visual-navigation">{props.navigation.map(node => <li key={node.id} class={{ disabled: node.enabled === false }}><span class="studio-visual-navigation-label">{node.label}</span><span class="studio-visual-row-actions"><button type="button" aria-label={`上移 ${node.label}`} disabled={props.disabled} onClick={() => navigationMove(node.id, 'before')}>↑</button><button type="button" aria-label={`下移 ${node.label}`} disabled={props.disabled} onClick={() => navigationMove(node.id, 'after')}>↓</button></span></li>)}</ul>
             </aside>
             <div class="studio-visual-preview" aria-label="草稿预览">{props.previewUrl ? <iframe key={`${props.previewUrl}:${previewSiteId()}`} ref={previewFrame} title="草稿预览" src={props.previewUrl} onLoad={deliverPreview} sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer" /> : <div class="studio-visual-preview-placeholder"><strong>草稿预览</strong><p>{props.previewNotice || (props.previewPayload ? '当前网站尚未提供预览。' : '保存后可在这里打开网站预览。')}</p></div>}</div>
-            <aside class="studio-visual-sidebar studio-visual-sidebar--right">
+            <aside ref={propertiesPanel} class="studio-visual-sidebar studio-visual-sidebar--right" onFocusout={event => rememberEditingSelection(event.target)}>
                 <div class="studio-editor-tabs" role="tablist" aria-label="页面编辑">{(['content', 'sections', 'page'] as const).filter(key => key === 'sections' || slots[key]).map(key => <button type="button" role="tab" aria-selected={props.panel === key} onClick={() => emit('update:panel', key)}>{({ content: '页面内容', sections: '区块', page: '页面信息' })[key]}</button>)}</div>
                 <div v-show={props.panel === 'content'}>{slots.content?.()}</div>
                 <div v-show={props.panel === 'page'}>{slots.page?.()}</div>
