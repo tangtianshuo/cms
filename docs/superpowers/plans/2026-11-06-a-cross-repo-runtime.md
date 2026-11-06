@@ -159,7 +159,7 @@ git commit -m "feat: deliver contract-based immutable template versions"
 - Consumes: 来源已有 `ingestLead(pool, workspaceId, input, options)`、`ingestEvent(pool, workspaceId, input, now)`；数据库 Site/Domain 归属，不能从请求 body 信任 workspaceId。
 - Produces: `createIngestHandler(pool: Pool): (request: Request) => Promise<Response>`，`POST /api/v1/sites/:siteId/leads|events`；新模板 `NUXT_PUBLIC_INGEST_ORIGIN`。公众入口不接收管理 Bearer 凭据，CMS 管理查询继续走 control。
 
-- [ ] **Step 1：加入实际 HTTP 行为测试。** `http.test.ts` 使用 Vitest 和临时 PostgreSQL fixture（沿用 control integration 的随机 workspace/site 清理方式）。核心用例：
+- [x] **Step 1：加入实际 HTTP 行为测试。** `http.test.ts` 使用 Vitest 和临时 PostgreSQL fixture（沿用 control integration 的随机 workspace/site 清理方式）。核心用例：
 
 ```ts
 it('rejects a foreign origin before writing a lead', async () => {
@@ -174,8 +174,8 @@ it('rejects a foreign origin before writing a lead', async () => {
 ```
 
 fixture 中 `siteId` 属于已启用域名 `owned.example`；补充该域名提交 202、同幂等键再次提交 200、停 control 后仍 202、限制体积 64 KiB 返回 413、限流返回 429、DB 不可用返回 503、未知 site 返回 404。事件重复不重复计数。无 Origin 请求返回 403，不把 CORS 当认证；OPTIONS 不写库。
-- [ ] **Step 2：运行 Gateway `npx vitest run apps/ingest/http.test.ts`。** 预期未提供 handler 时失败。
-- [ ] **Step 3：实现 handler 和运行入口。** URL 提取 siteId；从数据库查询其 workspaceId 和所有启用域名，校验 HTTPS Origin 属于任一允许域名；本地仅允许明确配置的测试 origin。限制 body 后调用已有校验/写入函数。`server.ts` 用 Node HTTP 转换为 Web Request，传递代理信任规则下的来源 IP，禁用任意 `X-Forwarded-For` 信任。ingest package scripts 定义 `build: tsc --project tsconfig.json`、`start: node dist/server.js`、`test: vitest run`；tsconfig 排除 `*.test.ts` 的生产编译，依赖沿用 Gateway 已有 pg/TypeScript 版本并更新根 lock。独立进程只依赖 PostgreSQL，不请求 control；事件错误不影响页面，询盘错误在表单显示可重试且保留输入。
+- [x] **Step 2：运行 Gateway `npx vitest run apps/ingest/http.test.ts`。** 预期未提供 handler 时失败。
+- [x] **Step 3：实现 handler 和运行入口。** URL 提取 siteId；从数据库查询其 workspaceId 和所有启用域名，校验 HTTPS Origin 属于任一允许域名；本地仅允许明确配置的测试 origin。限制 body 后调用已有校验/写入函数。`server.ts` 用 Node HTTP 转换为 Web Request，传递代理信任规则下的来源 IP，禁用任意 `X-Forwarded-For` 信任。ingest package scripts 定义 `build: tsc --project tsconfig.json`、`start: node dist/server.js`、`test: vitest run`；tsconfig 排除 `*.test.ts` 的生产编译，依赖沿用 Gateway 已有 pg/TypeScript 版本并更新根 lock。独立进程只依赖 PostgreSQL，不请求 control；事件错误不影响页面，询盘错误在表单显示可重试且保留输入。
 
 ```ts
 // http.ts 的结果分支：传入值来自已验证请求及数据库归属。
@@ -187,8 +187,8 @@ return Response.json({ accepted: true, ...result }, {
 ```
 
 `workspaceId/payload/ip/origin` 分别由前述查询、64 KiB JSON 解析、受信代理解析、域名白名单校验得到，均不采用 body 中的站点或工作区覆盖值。
-- [ ] **Step 4：独立启动 ingest 并复验。** `npm run build --workspace @gateway/ingest`、`npx vitest run apps/ingest/http.test.ts`；CMS 执行 `node ops/e2e/test.mjs analytics-isolation`，将公共发送 origin 指向独立 ingest。用同一页面测试 control 停止仍收件、ingest 停止仍返回公开页面。询盘管理和事件看板的站点授权在 C1 统一补齐。
-- [ ] **Step 5：提交。** `feat: run lead and event ingestion independently`；测试证据记录 PID/服务名，避免仅导入函数就声称进程隔离。
+- [x] **Step 4：独立启动 ingest 并复验。** `npm run build --workspace @gateway/ingest`、`npx vitest run apps/ingest/http.test.ts`；CMS 执行 `node ops/e2e/test.mjs analytics-isolation`，将公共发送 origin 指向独立 ingest。用同一页面测试 control 停止仍收件、ingest 停止仍返回公开页面。询盘管理和事件看板的站点授权在 C1 统一补齐。
+- [x] **Step 5：提交。** `feat: run lead and event ingestion independently`；测试证据记录 PID/服务名，避免仅导入函数就声称进程隔离。
 
 执行提交前先核对 staging 只包含本任务；下面命令在各自目标工作树根执行。若列出的规划文件没有生成，先核对任务实现，不用 `git add -A` 绕过。跨仓提交分别记录 SHA。
 

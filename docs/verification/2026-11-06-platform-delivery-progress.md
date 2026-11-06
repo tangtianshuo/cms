@@ -62,6 +62,32 @@ CMS commit-hook lint reported zero errors and 234 non-null-assertion warnings; t
 
 No new template registry records, OCI images or preview bundles were externally published. Browser delivery and final lock remain B2/B3/A4 acceptance work.
 
+## A3 — Independent intake accepted
+
+Commits:
+
+- Gateway `ca3c543839918928ad724bf30d4fa05e5e90a93e`: independent HTTP/server workspace, trusted origins/proxies, atomic lead quota, management routes and worker environment propagation.
+- Gateway `f71bbd0007c880a0b8821a90cbe26592a2a3c53a`: reject empty inquiries and malformed visitor/session identifiers as client errors.
+- Templates `57b12336c98dec0082dc849ab97bc5571565892f`: both new versions use the independent intake origin, one analytics plugin and retryable forms that retain input.
+- CMS `513b994a5711d2b27c78622ee3486057183de3aa`: independent compose service and disposable real-process isolation runner.
+
+Intake derives workspace/site ownership and all enabled domains from PostgreSQL, requires an allowed Origin, rejects management credentials, bounds JSON to 64 KiB and uses socket IP unless an explicitly trusted proxy supplies the chain. Lead quota is atomic for each site/IP; duplicate accepted keys remain successful at capacity. The worker passes only its trusted configured public ingest origin; missing configuration disables public submission.
+
+| Check | Result | Revision/scope |
+| --- | --- | --- |
+| Complete Gateway suite against random migrated database | 220 passed, 1 Linux-only mount skip | Before the atomic quota amendment; not a full rerun of final code |
+| Final intake tests after both review fixes | 23 passed, zero skipped | Real PostgreSQL, HTTP/socket/proxy, concurrent quota, dedupe and malformed input |
+| Worker Docker adapter | 13 passed, zero skipped | Trusted intake configuration and ignored candidate override |
+| Template client behavior | 4 passed, zero skipped | Both versions, analytics and retained-input retry |
+| Cross-repository and built HTTP contract | 16 passed, zero skipped | Real CMS → Gateway → both new Templates |
+| Templates root | 43 passed, 1 legacy runtime skip | Skip not counted passing |
+| Production builds and compose configuration | Passed | Ingest/control/worker and both Nuxt runtimes; compose validation |
+| Independent review and scoped follow-up | Approved | Two minor validator defects fixed; no remaining findings |
+
+The actual process drill ran production control, compiled ingest and both compiled public template servers with separate PIDs. After control exited, both sites still received actual lead/event 202 responses. After ingest exited, the same two public URLs returned 200 with identical HTML hashes. Final cleanup independently confirmed no remaining child PIDs and no random test database. This drill preceded the small validator follow-up; the follow-up reran all 23 affected intake tests and the production ingest build.
+
+The complete Docker/traffic/TLS outage matrix belongs to A4. Shared service management authorization remains C1. Browser interaction, external publication and production acceptance are not claimed here. The 154 protected source fingerprints remain unchanged.
+
 ## Next task
 
-A3 implements independent lead/event HTTP intake, preserves management reads/writes in control, points both new templates to ingest, and proves separation using actual running processes and disposable databases.
+A4 implements reproducible clean builds, parameterized two-template runtime fault checks and strict platform-lock validation. Final lock acceptance remains pending until B2 supplies real image/preview digests; no placeholder identities will be used.
