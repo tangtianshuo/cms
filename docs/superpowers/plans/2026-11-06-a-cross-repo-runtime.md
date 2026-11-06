@@ -61,10 +61,10 @@ Gateway contracts 定义边界，control 保存权威发布状态，worker 产�
 - Consumes: 已有 ReleaseInput、PublishOperation、ActiveDeployment、CMS `toContractSnapshot` 输出。
 - Produces: 来源工作树已有 `validateContractSnapshotV1(value: unknown): ContractSnapshotV1`、`createTrafficProxy(statePath: string)`、`backupRouteState(sourcePath, backupPath)`、`restoreRouteState(backupPath, destinationPath)`；保留来源代码的确切类型，不重新起名。
 
-- [ ] **Step 1：记录并保护来源。** 在主目录与两个来源工作树运行 `git status --short`、`git diff --stat`、`git ls-files --others --exclude-standard`。将清单写入本次运行目录，按 using-git-worktrees 技能建立或复用目标工作树；排除 `.env`、运行凭据、node_modules、构建结果。来源修改不删除、不自动提交。
-- [ ] **Step 2：复现现有失败。** 在 CMS 执行 `npm run build --prefix backend`，再用目标 Gateway 根目录设置 `E2E_GATEWAY_ROOT`，执行 `node ops/e2e/contract-roundtrip.mjs`。预期当前 Gateway 缺少新校验导出；保存失败输出。该测试已存在，无需增加镜像断言式测试。
-- [ ] **Step 3：按文件移入来源实现和测试。** 已跟踪文件使用 `git diff --binary HEAD -- <本任务文件>` 导出的补丁在目标目录执行 `git apply --check`，检查通过后 apply；未跟踪文件从上列明确目录逐个复制。冲突按当前主分支加来源功能合并，不整目录覆盖。保留 migration SQL 原始身份。
-- [ ] **Step 4：验证独立构建及数据库真实路径。** Gateway 执行：
+- [x] **Step 1：记录并保护来源。** 在主目录与两个来源工作树运行 `git status --short`、`git diff --stat`、`git ls-files --others --exclude-standard`。将清单写入本次运行目录，按 using-git-worktrees 技能建立或复用目标工作树；排除 `.env`、运行凭据、node_modules、构建结果。来源修改不删除、不自动提交。
+- [x] **Step 2：复现现有失败。** 在 CMS 执行 `npm run build --prefix backend`，再用目标 Gateway 根目录设置 `E2E_GATEWAY_ROOT`，执行 `node ops/e2e/contract-roundtrip.mjs`。预期当前 Gateway 缺少新校验导出；保存失败输出。该测试已存在，无需增加镜像断言式测试。
+- [x] **Step 3：按文件移入来源实现和测试。** 已跟踪文件使用 `git diff --binary HEAD -- <本任务文件>` 导出的补丁在目标目录执行 `git apply --check`，检查通过后 apply；未跟踪文件从上列明确目录逐个复制。冲突按当前主分支加来源功能合并，不整目录覆盖。保留 migration SQL 原始身份。
+- [x] **Step 4：验证独立构建及数据库真实路径。** Gateway 执行：
 
 ```sh
 npm ci
@@ -74,7 +74,7 @@ npm test
 ```
 
 随后在 CMS 的独立 E2E 数据库启动后执行 `node ops/e2e/runtime.mjs migrate` 和 `node ops/e2e/test.mjs gateway`。预期数据库集成不跳过；worker 不再监听 traffic 对外端口。连接失败属于环境阻塞，不能改成跳过。
-- [ ] **Step 5：检查 diff 后提交本任务列出的 Gateway 文件及其测试。** 提交信息 `feat: integrate artifact runtime and independent traffic`；记录提交 SHA。涉及 ingest HTTP 入口的新增文件留给 A3，不将“目录已存在”当成独立服务完成。
+- [x] **Step 5：检查 diff 后提交本任务列出的 Gateway 文件及其测试。** 提交信息 `feat: integrate artifact runtime and independent traffic`；记录提交 SHA。涉及 ingest HTTP 入口的新增文件留给 A3，不将“目录已存在”当成独立服务完成。
 
 执行提交前先核对 staging 只包含本任务；下面命令在各自目标工作树根执行。若列出的规划文件没有生成，先核对任务实现，不用 `git add -A` 绕过。跨仓提交分别记录 SHA。
 

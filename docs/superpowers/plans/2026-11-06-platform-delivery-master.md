@@ -135,7 +135,7 @@ interface AcceptanceEvidence {
 
 ## 任务状态与边界
 
-- [ ] A1 Gateway 架构成果整合。
+- [x] A1 Gateway 架构成果整合（Gateway `a3a169e`、`c3d6ee9`；真实 SQL 195 项通过，修复定向 123 项通过、零跳过；独立复审通过。完整目标组合契约由 A2/A4 继续验收）。
 - [ ] A2 Templates/CMS 整合及新不可变版本。
 - [ ] A3 独立询盘/事件服务与授权收口。
 - [ ] A4 干净构建、运行隔离及组合锁定。
