@@ -39,3 +39,12 @@ Replay commands and lifecycle/cleanup requirements are in
 blocked/skipped counts in the report; source metadata is never relabeled as another
 commit or release. Runtime private files and owned processes/databases are removed
 on normal completion, with shared Mongo/PostgreSQL services left running.
+
+
+B3 fix1 corrects the earlier claim that the release status/history GETs were read-only:
+those handlers intentionally recover pending publications. Formal PUBLISH now uses
+`GET /api/v4/presets/releases/gateway/observation`, requiring the exact expected active
+revision and immutable release/template/home-marker association before public HTML
+access. Pending intents without an operation ID fail without Gateway requests or
+local writes. Focused authenticated requester/handler tests cover that boundary;
+normal UI recovery and the earlier broad browser evidence remain separate.

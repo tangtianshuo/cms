@@ -196,16 +196,25 @@ foundation. Formal mode requires `STOREFRONT_E2E_PLATFORM_LOCK`,
 `STOREFRONT_E2E_MATRIX`, `STOREFRONT_E2E_APPROVED_PREVIEW_REGISTRY`, and exact repository roots
 (the runner validates each required input and Git identity). The matrix JSON contains
 `templateId`, `templateVersion`, `cms`, `previewOrigin`, `siteUrl`, `siteId`,
-`workspaceId`, plus `expectedReleaseId` and `publishedMarker` for PUBLISH. Supply
+`workspaceId`, plus `expectedReleaseId`, positive integer `expectedActiveRevision` and `publishedMarker` for PUBLISH. Supply
 actual authenticated credentials through the environment. Formal origins must use
 HTTPS and real trust; local certificate/fixture overrides are cleared.
 
 Formal evidence uses the master `AcceptanceEvidence` shape and emits only the B3
 required subset. Each case binds template/version, actual viewport dimensions and
 the exact lock checksum. Missing, duplicate, stale, failed, blocked or unrun required
-cells make the command nonzero. PUBLISH reads actual Gateway state/history, saved
-content and the real public site; it never invents a release or performs a production
-write. D1 composes this subset with the other platform cases. No local invocation
+cells make the command nonzero. PUBLISH makes one authenticated selected-site GET to
+`/api/v4/presets/releases/gateway/observation?marker=...`. This observation reads Gateway
+authority and the matching retained immutable release without invoking recovery,
+reconciliation, projection or audit writes. Pending/incomplete intents block before
+Gateway access. Ready output must match the expected release/revision, selected site,
+exact locked template and immutable snapshot checksums. The bounded marker (1–256
+characters) must appear in the immutable homepage's enabled hero title after layout
+overrides, rather than metadata or unrelated pages; the response contains checksums
+and a boolean, never the content. Only then does PUBLISH fetch the real public HTML.
+Formal login/navigation and test contexts block recovery-enabled release reads and
+publication writes; any attempted call fails acceptance. Normal UI recovery remains
+available outside this observation flow. D1 composes this subset with the other platform cases. No local invocation
 creates a full passing PlatformLock acceptance result.
 
 Preview deployment assets and the opt-in actual TLS edge test are documented in the

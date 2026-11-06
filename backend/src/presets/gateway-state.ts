@@ -36,7 +36,7 @@ export interface GatewayState {
         metadata: Record<string, unknown>; snapshot: ReleaseSnapshot; createdAt: string };
 }
 
-function templateRecord(metadata: Record<string, unknown>, imageDigest: string): PublicTemplateRecord {
+export function gatewayStateTemplateRecord(metadata: Record<string, unknown>, imageDigest: string): PublicTemplateRecord {
     const { templateId: id, templateVersion: version, manifestChecksum, imageRepository, sourceCommit } = metadata;
     if (typeof id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) ||
         typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version) ||
@@ -50,18 +50,15 @@ function templateRecord(metadata: Record<string, unknown>, imageDigest: string):
         manifestPath: `templates/${id}/${version}/template.json`, status: 'available' };
 }
 
-/** Project only the authoritative active tuple; operation.ready alone grants no public media access. */
-export async function reconcileGatewayState(source: GatewayReleaseSource, site: SiteInstallation,
+/** Read and validate authority without retaining, projecting, auditing or recovering it. */
+export async function readGatewayState(site: SiteInstallation,
     config: GatewayPublishConfig, fetcher: typeof fetch = fetch): Promise<GatewayState> {
     const { base } = validateConfig(config);
     if (site._id !== config.cmsSiteId || ownerWorkspace(site) !== config.cmsWorkspaceId) throw new Error('Gateway site binding mismatch');
-    const value = await gatewayRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/publication-state`, config.serviceSecret) as GatewayState;
+    const value = await gatewayRequest(fetcher, `${base.origin}/api/v1/sites/${config.siteId}/publication-state`, config.serviceSecret, { method: 'GET' }) as GatewayState;
     if (!value || !Number.isSafeInteger(value.revision) || value.revision < 0 || value.active === undefined) throw new Error('Gateway returned invalid publication state');
     const active = value.active;
-    if (!active) {
-        if (site.gatewayCurrentReleaseId) throw new Error('Gateway active deployment is missing; publication state requires reconciliation');
-        return value;
-    }
+    if (!active) return value;
     if (typeof active.releaseId !== 'string' || !/^[a-zA-Z0-9._-]{1,128}$/.test(active.releaseId) ||
         !Number.isSafeInteger(active.routeRevision) || active.routeRevision < 1 || active.routeRevision > value.revision ||
         !Number.isFinite(Date.parse(active.createdAt)) || !active.metadata || !active.snapshot ||
@@ -69,7 +66,20 @@ export async function reconcileGatewayState(source: GatewayReleaseSource, site: 
         !Array.isArray(active.snapshot.pages) || !Array.isArray(active.snapshot.navigation) || !Array.isArray(active.snapshot.redirects)) {
         throw new Error('Gateway returned invalid active deployment');
     }
-    const record = templateRecord(active.metadata, active.imageDigest);
+    gatewayStateTemplateRecord(active.metadata, active.imageDigest);
+    return value;
+}
+
+/** Project only the authoritative active tuple; operation.ready alone grants no public media access. */
+export async function reconcileGatewayState(source: GatewayReleaseSource, site: SiteInstallation,
+    config: GatewayPublishConfig, fetcher: typeof fetch = fetch): Promise<GatewayState> {
+    const value = await readGatewayState(site, config, fetcher);
+    const active = value.active;
+    if (!active) {
+        if (site.gatewayCurrentReleaseId) throw new Error('Gateway active deployment is missing; publication state requires reconciliation');
+        return value;
+    }
+    const record = gatewayStateTemplateRecord(active.metadata, active.imageDigest);
     let intent: { releaseId?: string; actorId?: string; operation?: 'publish' | 'rollback'; expectedReleaseId?: string } = {};
     try { intent = JSON.parse(site.gatewayPublishIntent || '{}'); } catch { /* active state can recover a damaged legacy intent */ }
     const existing = await source.findRelease(active.releaseId);

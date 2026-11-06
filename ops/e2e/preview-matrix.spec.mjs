@@ -1,4 +1,5 @@
 import { test, expect } from './browser-fixture.mjs';
+import { readAndVerifyPublication } from './publication-observation.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { savedContractFixture } from './saved-snapshot-fixture.mjs';
@@ -516,43 +517,38 @@ test('[PUBLISH] actual Gateway release identity matches saved content and the co
         !expectedReleaseId || !marker || !siteUrl,
         'D1 must supply the actual publication result and marker; isolated saved-runtime proof is separate',
     );
-    const state = await page.evaluate(async () => {
-        const sdk = window.bcms.sdk;
-        const gateway = await sdk.send({
-            url: '/api/v4/presets/releases/gateway',
-        });
-        const history = await sdk.send({ url: '/api/v4/presets/releases/' });
-        const saved = await sdk.send({
-            url: '/api/v4/storefront/site-preview',
-        });
-        return {
-            bound: gateway.bound,
-            configured: gateway.configured,
-            siteUrl: gateway.siteUrl,
-            publication: gateway.publishStatus,
-            currentReleaseId: history.currentReleaseId,
-            savedHome: JSON.stringify(
-                saved.pages.find((page) => page.path === '/'),
+    const state = await readAndVerifyPublication(
+        (request) =>
+            page.evaluate((request) => window.bcms.sdk.send(request), request),
+        {
+            releaseId: expectedReleaseId,
+            activeRevision: Number(
+                process.env.STOREFRONT_E2E_EXPECTED_ACTIVE_REVISION,
             ),
-        };
-    });
-    expect(state.bound).toBe(true);
-    expect(state.configured).toBe(true);
-    expect(state.currentReleaseId).toBe(expectedReleaseId);
-    expect(state.publication.releaseId).toBe(expectedReleaseId);
-    expect(state.publication.status).toBe('ready');
-    expect(state.publication.activeRevision).toBeGreaterThan(0);
-    expect(new URL(state.siteUrl).origin).toBe(new URL(siteUrl).origin);
-    expect(state.savedHome).toContain(marker);
+            workspaceId: process.env.STOREFRONT_E2E_WORKSPACE_ID,
+            siteId: process.env.STOREFRONT_E2E_SITE_ID,
+            templateId: installation.templateId,
+            templateVersion: installation.templateVersion,
+            siteUrl,
+            marker,
+            imageDigest: process.env.STOREFRONT_E2E_EXPECTED_IMAGE_DIGEST,
+            manifestChecksum:
+                process.env.STOREFRONT_E2E_EXPECTED_MANIFEST_CHECKSUM,
+            sourceCommit: process.env.STOREFRONT_E2E_EXPECTED_SOURCE_COMMIT,
+        },
+    );
     const response = await fetch(siteUrl);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain(marker);
     await attach(info, {
         case: 'PUBLISH',
         expectedReleaseId,
-        activeRevision: state.publication.activeRevision,
+        activeRevision: state.activeRevision,
+        snapshotChecksum: state.snapshotChecksum,
+        homeContentChecksum: state.publishedHome.contentChecksum,
         markerSha256: createHash('sha256').update(marker).digest('hex'),
         savedAndPublicMarkerMatch: true,
-        publicationSource: 'actual-CMS-Gateway-state-and-history-readback',
+        publicationSource:
+            'read-only-authoritative-immutable-release-observation',
     });
 });

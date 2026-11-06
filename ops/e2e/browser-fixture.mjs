@@ -2,6 +2,7 @@ import { test as base, expect } from '@playwright/test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { interactionTrace } from './interaction-trace.mjs';
+import { installPublicationReadGuard } from './publication-observation.mjs';
 const timelines = new WeakMap();
 
 export function browserEnvironment(env = process.env) {
@@ -81,6 +82,9 @@ export const test = base.extend({
             );
             // browser.newContext deliberately bypasses Playwright test context recording.
             const context = await browser.newContext({ locale: 'zh-CN' });
+            const assertSafe = process.env.STOREFRONT_E2E_FORMAL_PREVIEW
+                ? await installPublicationReadGuard(context)
+                : () => {};
             try {
                 await login(await context.newPage());
                 if (
@@ -103,6 +107,7 @@ export const test = base.extend({
                     );
                     await page.waitForURL('**/d/studio');
                 }
+                assertSafe();
                 // Create privately before writing so even a permissive umask cannot expose tokens.
                 await writeFile(
                     statePath,
@@ -114,6 +119,7 @@ export const test = base.extend({
             } finally {
                 await context.close().catch(() => {});
                 await rm(statePath, { force: true });
+                assertSafe();
             }
         },
         { scope: 'worker' },
@@ -157,9 +163,15 @@ export const test = base.extend({
     },
     traceSteps: async ({ page }, use) => use(timelines.get(page)),
     page: async ({ page }, use, testInfo) => {
+        const assertSafe =
+            process.env.STOREFRONT_E2E_FORMAL_PREVIEW ||
+            testInfo.title.includes('[PUBLISH]')
+                ? await installPublicationReadGuard(page.context())
+                : () => {};
         const timeline = interactionTrace(page);
         timelines.set(page, timeline);
         await use(page);
+        assertSafe();
         const trace = timeline.finish();
         if (testInfo.status !== testInfo.expectedStatus && !page.isClosed()) {
             const tracePath = testInfo.outputPath(

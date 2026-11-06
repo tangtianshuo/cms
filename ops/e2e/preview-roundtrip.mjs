@@ -1,3 +1,4 @@
+import { validatePublicationExpectation } from './publication-observation.mjs';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
@@ -232,6 +233,15 @@ if (
                         'Formal configured origins require valid HTTPS',
                     );
             }
+            validatePublicationExpectation({
+                ...item,
+                releaseId: item.expectedReleaseId,
+                activeRevision: item.expectedActiveRevision,
+                marker: item.publishedMarker,
+            });
+            const publishedTemplate = lock.templates.find(
+                (t) => t.id === templateId,
+            );
             const cellReport = path.join(output, templateId + '-cells.json');
             const result = playwright('ops/e2e/preview-matrix.spec.mjs', {
                 ...process.env,
@@ -249,6 +259,15 @@ if (
                 STOREFRONT_E2E_FORMAL_PREVIEW: '1',
                 STOREFRONT_E2E_EXPECTED_RELEASE_ID:
                     item.expectedReleaseId || '',
+                STOREFRONT_E2E_EXPECTED_ACTIVE_REVISION: String(
+                    item.expectedActiveRevision,
+                ),
+                STOREFRONT_E2E_EXPECTED_IMAGE_DIGEST:
+                    publishedTemplate.imageDigest,
+                STOREFRONT_E2E_EXPECTED_MANIFEST_CHECKSUM:
+                    publishedTemplate.manifestChecksum,
+                STOREFRONT_E2E_EXPECTED_SOURCE_COMMIT:
+                    lock.repositories.templates.commit,
                 STOREFRONT_E2E_PUBLISHED_MARKER: item.publishedMarker || '',
                 STOREFRONT_E2E_TEMPLATE_ID: templateId,
                 STOREFRONT_E2E_TEMPLATE_VERSION: templateVersion,

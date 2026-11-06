@@ -13,6 +13,7 @@ import { releaseSource } from './release-source';
 export { releaseSource } from './release-source';
 import { reconcileGatewayState, snapshotFingerprint } from './gateway-state';
 import { recoverGatewayPublication } from './gateway-recovery';
+import { observeGatewayPublication } from './gateway-observation';
 
 const publishBody = z.object({ expectedReleaseId: z.string(), target: z.literal('gateway').optional(), requestKey: z.string().optional(),
     snapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict();
@@ -22,6 +23,18 @@ export const ReleaseController = createController({
     path: '/api/v4/presets/releases',
     methods() {
         return {
+            gatewayObservation: createControllerMethod({
+                path: '/gateway/observation', type: 'get', preRequestHandler: RP.createSiteCapabilityCheck('operations.read'),
+                async handler({ request, reply, errorHandler }) {
+                    reply.header('Cache-Control', 'no-store');
+                    const query = z.object({ marker: z.string().min(1).max(256).optional() }).strict().safeParse(request.query);
+                    if (!query.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid publication observation query');
+                    return observeGatewayPublication({
+                        findSite: () => Repo.siteInstallation.methods.findSelected(),
+                        findRelease: id => Repo.storefrontRelease.findById(id),
+                    }, gatewayPublishConfig(), query.data.marker);
+                },
+            }),
             gateway: createControllerMethod({
                 path: '/gateway', type: 'get', preRequestHandler: RP.createSiteCapabilityCheck('operations.read'),
                 async handler({ reply }) {
