@@ -106,7 +106,7 @@ mode-0600 storage-state file in an ignored mode-0700 directory. It removes that
 file when the worker ends. Test pages start after authentication. One worker runs
 both 1440×900 desktop and 390×844 mobile projects.
 
-Prerequisites: Node 22, existing CMS root/backend/UI dependencies, Docker with the
+Prerequisites: a POSIX host, Node 22, existing CMS root/backend/UI dependencies, Docker with the
 owned disposable A1 Mongo service healthy on `127.0.0.1:27029`, and the Preview
 source checkout. This stage pins `@playwright/test` to `1.65.0` in the root lock.
 Install its browser once with `npx playwright install chromium`.
@@ -137,8 +137,14 @@ it does not attribute the old A4 Docker image to the current CMS source.
 `run` injects credentials directly into its child process. `serve` keeps the same
 setup alive for interactive work until SIGINT/SIGTERM. While alive, private injection
 is in `.e2e/runtime/runtime.env`; never print, attach or commit it. Normal completion,
-command failure and SIGINT/SIGTERM stop only helper-owned processes, drop only that
-invocation's database, and remove private auth, logs and generated build output.
+command failure and SIGINT/SIGTERM stop the helper's owned POSIX process groups,
+including npm/npx descendants even after their wrapper exits. One remembered
+interruption also covers setup before the serve waiter starts. Shutdown sends TERM,
+then KILL after a bounded grace period, and confirms every owned group is gone
+before dropping this invocation's database or removing private auth, logs, build
+output and lease. A group that cannot be confirmed gone fails closed with private
+resources and lease retained. Commands must preserve the inherited ownership group;
+independently daemonized commands are outside this local helper's contract.
 The A1 Mongo/PostgreSQL containers keep running. A lease rejects concurrent helper
 invocations. After an uncatchable process kill, inspect the owned processes and
 source-baseline database identity before removing a stale lease; do not stop shared

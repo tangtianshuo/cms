@@ -1,6 +1,7 @@
 // Disposable current-source CMS + actual Preview source, for early local browser work.
 // This is intentionally not a PlatformLock, release deployment or published site.
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { BrowserProcesses } from './browser-processes.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -33,15 +34,11 @@ const identity = randomBytes(8).toString('hex');
 const database = `b3_browser_${identity}`;
 const cms = 'http://127.0.0.1:18088';
 const preview = 'http://127.0.0.1:18089';
-const children = [];
+const processes = new BrowserProcesses();
 const logs = [];
 let mongo;
-let interrupted = false;
 for (const signal of ['SIGINT', 'SIGTERM'])
-    process.once(signal, () => {
-        interrupted = true;
-        for (const child of children) child.kill('SIGTERM');
-    });
+    process.once(signal, () => processes.interrupt());
 function sourceIdentity(directory) {
     const git = (args) => execFileSync('git', args, { cwd: directory });
     const diff = git(['diff', 'HEAD', '--']);
@@ -72,11 +69,10 @@ async function start(name, executable, args, options) {
         0o600,
     );
     logs.push(output);
-    const child = spawn(executable, args, {
+    const child = processes.spawn(executable, args, {
         ...options,
         stdio: ['ignore', output.fd, output.fd],
     });
-    children.push(child);
     await new Promise((resolve, reject) => {
         child.once('spawn', resolve);
         child.once('error', () => reject(new Error(`${name} failed to start`)));
@@ -85,7 +81,7 @@ async function start(name, executable, args, options) {
 }
 async function ready(url, child, method = 'GET') {
     for (let attempt = 0; attempt < 150; attempt++) {
-        if (interrupted || child.exitCode !== null)
+        if (processes.interrupted || child.exitCode !== null)
             throw new Error('Private fixture service stopped before readiness');
         try {
             if (
@@ -105,6 +101,7 @@ async function ready(url, child, method = 'GET') {
 try {
     await available(18088);
     await available(18089);
+    processes.throwIfInterrupted();
     const owned = Object.fromEntries(
         (await readFile(reference, 'utf8'))
             .trim()
@@ -123,6 +120,7 @@ try {
     } catch {
         throw new Error('Owned disposable Mongo service is unavailable');
     }
+    processes.throwIfInterrupted();
     for (const directory of [
         'backend/public',
         'ui',
@@ -149,9 +147,7 @@ try {
             },
         },
     );
-    const buildCode = await new Promise((resolve) =>
-        build.once('exit', resolve),
-    );
+    const buildCode = await processes.exit(build);
     if (buildCode !== 0)
         throw new Error(
             'Current-source UI build failed; inspect private build log',
@@ -229,8 +225,10 @@ try {
     const email = `browser-${identity}@acceptance.invalid`;
     const password = randomBytes(24).toString('hex');
     async function api(route, body, token, selection = {}) {
+        processes.throwIfInterrupted();
         const response = await fetch(`${cms}/api/v4${route}`, {
             method: body ? 'POST' : 'GET',
+            signal: processes.signal,
             headers: {
                 'content-type': 'application/json',
                 ...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -308,6 +306,7 @@ try {
             2,
         ) + '\n',
     );
+    processes.throwIfInterrupted();
     console.log(
         `Current-source CMS ready at ${cms}; actual ${actual.presetId}@${actual.presetVersion}; private injection in .e2e/runtime/runtime.env`,
     );
@@ -325,35 +324,28 @@ try {
                   ]
                 : process.argv.slice(separator + 1);
         if (!args.length) throw new Error('Missing runtime command');
-        const child = spawn(args[0], args.slice(1), {
+        const child = processes.spawn(args[0], args.slice(1), {
             cwd: root,
             env: testEnv,
             stdio: 'inherit',
         });
-        children.push(child);
-        process.exitCode = await new Promise((resolve) => {
-            child.once('error', () => resolve(1));
-            child.once('exit', (code) => resolve(code ?? 1));
-        });
+        process.exitCode = await processes.exit(child);
     } else {
-        await new Promise((resolve) => {
-            process.once('SIGINT', resolve);
-            process.once('SIGTERM', resolve);
-        });
+        await processes.stopped;
     }
+} catch (error) {
+    if (!processes.interrupted) throw error;
+    process.exitCode = 0;
 } finally {
     const cleanupErrors = [];
-    for (const child of [...children].reverse()) {
-        if (child.exitCode !== null || child.signalCode || !child.pid) continue;
-        child.kill('SIGTERM');
-        await Promise.race([
-            new Promise((resolve) => child.once('exit', resolve)),
-            delay(5000),
-        ]);
-        if (child.exitCode === null && !child.signalCode) {
-            child.kill('SIGKILL');
-            await new Promise((resolve) => child.once('exit', resolve));
-        }
+    // Do not delete credentials/builds or release the lease until owned groups exit.
+    try {
+        await processes.stop();
+    } catch (error) {
+        // Fail closed while allowing the helper itself to exit with its error.
+        if (mongo) await mongo.close();
+        for (const log of logs) await log.close();
+        throw error;
     }
     for (const log of logs) await log.close();
     if (mongo) {
