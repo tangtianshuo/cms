@@ -5,7 +5,8 @@ import { PropType, type PropValue } from '../prop/models/main';
 import type { SiteInstallation } from '../presets/site-model';
 import { canWriteContent, workspaceContext, workspaceId } from '../workspaces/context';
 
-export type StudioValue = string | number | boolean | Array<{ _id: string; alt_text?: string; caption?: string }> | Array<{ tid: string; eid: string }>;
+export interface StructuredStudioValue { kind: 'prop-data'; data: PropValue['data'] }
+export type StudioValue = StructuredStudioValue | string | number | boolean | Array<{ _id: string; alt_text?: string; caption?: string }> | Array<{ tid: string; eid: string }>;
 export interface StudioField { key: string; label: string; type: PropType; array: boolean; required: boolean; editable: boolean; referenceTemplateIds: string[] }
 export function assertStudioWrite(templateId: string, operation: 'post' | 'put') {
     if (!workspaceContext() || !canWriteContent('Entry', { templateId }, operation)) throw Object.assign(new Error('Content write denied'), { status: 403 });
@@ -16,8 +17,7 @@ export function fieldDescriptors(site: SiteInstallation, template: Template, mod
     return model.fields.flatMap(field => {
         const prop = template.props.find(item => item.id === field.propId);
         return prop ? [{ key: field.key, label: prop.label, type: prop.type, array: prop.array, required: prop.required,
-            editable: ([PropType.STRING, PropType.NUMBER, PropType.BOOLEAN, PropType.MEDIA, PropType.ENTRY_POINTER].includes(prop.type) &&
-                (!prop.array || [PropType.MEDIA, PropType.ENTRY_POINTER].includes(prop.type))),
+            editable: Object.values(PropType).includes(prop.type),
             referenceTemplateIds: prop.data?.propEntryPointer?.map(pointer => pointer.templateId) || [] }] : [];
     });
 }
@@ -40,15 +40,17 @@ export function patchEntry(site: SiteInstallation, template: Template, modelKey:
         groupId: site.contentGroupId || site._id, statuses: [], content: [{ lng, nodes: [], plainText: '' }],
         meta: [{ lng, props: template.props.map(prop => ({ id: prop.id, data: [] })) }] };
     const meta = entry.meta.find(item => item.lng === lng);
-    if (!meta) throw new Error(`Entry has no ${lng} translation; use the advanced editor`);
+    if (!meta) throw new Error(`Entry has no ${lng} translation; create this translation in the content workspace`);
     for (const [key, value] of Object.entries(changes)) {
         const field = descriptors.find(item => item.key === key);
         if (!field) throw new Error(`Unknown installed field ${key}`);
         let data: PropValue['data'];
-        if (field.type === PropType.RICH_TEXT && !previous && typeof value === 'string') {
+        if (value && typeof value === 'object' && !Array.isArray(value) && value.kind === 'prop-data') {
+            data = structuredClone(value.data);
+        } else if (field.type === PropType.RICH_TEXT && !previous && typeof value === 'string') {
             data = [{ nodes: value.split('\n').map(text => ({ type: 'paragraph' as const, content: text ? [{ type: 'text' as const, text }] : [] })) }] as unknown as PropValue['data'];
         } else {
-            if (!field.editable) throw new Error(`${field.label} requires the advanced editor`);
+            if (!field.editable || field.type === PropType.RICH_TEXT) throw new Error(`${field.label} requires structured content`);
             if (field.type === PropType.STRING) {
                 if (typeof value !== 'string' || value.length > 30000) throw new Error(`Invalid ${field.label}`);
                 if (key === 'slug' && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) throw new Error('Slug must use lowercase letters, numbers and hyphens');
@@ -75,7 +77,7 @@ export function patchEntry(site: SiteInstallation, template: Template, modelKey:
         else meta.props.push({ id: propId, data });
     }
     if (!previous) for (const prop of template.props) {
-        if (prop.required && !(meta.props.find(item => item.id === prop.id)?.data as unknown[])?.length) throw new Error(`${prop.label} is required; use the advanced editor if unsupported`);
+        if (prop.required && !(meta.props.find(item => item.id === prop.id)?.data as unknown[])?.length) throw new Error(`${prop.label} is required`);
     }
     return entry;
 }

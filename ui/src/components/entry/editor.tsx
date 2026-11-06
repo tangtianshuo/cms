@@ -256,7 +256,7 @@ export const EntryEditor = defineComponent({
                                     ctx.emit('editSlug', value);
                                 }}
                             />
-                            <EntryMetaEditor
+                            {ctx.slots.metadata ? ctx.slots.metadata({ languageIndex: lngIdx.value }) : <EntryMetaEditor
                                 propPath={`entry.meta.${lngIdx.value}.props`}
                                 props={template.value?.props.slice(2)}
                                 propsIdxOffset={2}
@@ -295,7 +295,7 @@ export const EntryEditor = defineComponent({
                                         direction,
                                     );
                                 }}
-                            />
+                            />}
                         </div>
                         <div>
                             <EntryContentEditor

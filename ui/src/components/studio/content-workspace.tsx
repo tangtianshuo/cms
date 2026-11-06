@@ -20,6 +20,8 @@ import type { StudioState } from '../../sdk/handlers/studio';
 import type { PageDraft } from '@bcms/selfhosted-backend/presets/pages';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 import { EntryEditor } from '../entry/editor';
+import { StructuredField } from './structured-field';
+import { structuredValue } from './structured-value';
 import { EntryStatusSelect } from '../inputs/select/entry-status';
 import { CopyProvenance } from '../workspace/provenance';
 import {
@@ -39,7 +41,6 @@ import { siteImageOptions } from './media-options';
 import { contentMediaSiteKey } from './content-media-context';
 import {
     sectionFieldError,
-    sectionFieldSupported,
     sectionFieldVisible,
     sectionPropertyFields,
 } from './section-property-state';
@@ -432,6 +433,12 @@ export const ContentWorkspace = defineComponent({
         }
         async function run(action: () => Promise<void>) {
             if (busy.value || !isCurrent()) return;
+            const focused = document.activeElement instanceof HTMLElement && document.activeElement.matches('[contenteditable="true"]') ? document.activeElement : undefined;
+            const selection = window.getSelection();
+            const range = focused && selection?.rangeCount && focused.contains(selection.anchorNode) ? selection.getRangeAt(0).cloneRange() : undefined;
+            let newFocusIntent = false;
+            const onFocus = (event: FocusEvent) => { if (event.target !== focused && event.target !== document.body) newFocusIntent = true; };
+            if (focused) document.addEventListener('focusin', onFocus);
             busy.value = true;
             error.value = '';
             notice.value = '';
@@ -440,7 +447,15 @@ export const ContentWorkspace = defineComponent({
             } catch (cause) {
                 if (isCurrent()) error.value = userErrorMessage(cause);
             } finally {
-                if (isCurrent()) busy.value = false;
+                if (isCurrent()) {
+                    busy.value = false;
+                    await nextTick();
+                    if (isCurrent() && error.value && focused?.isConnected && !newFocusIntent && (document.activeElement === document.body || document.activeElement === focused)) {
+                        focused.focus();
+                        if (range && focused.contains(range.startContainer) && focused.contains(range.endContainer)) { const currentSelection = window.getSelection(); currentSelection?.removeAllRanges(); currentSelection?.addRange(range); }
+                    }
+                }
+                if (focused) document.removeEventListener('focusin', onFocus);
             }
         }
         function uploadMedia() {
@@ -598,7 +613,6 @@ export const ContentWorkspace = defineComponent({
                       )
                           .filter(
                               (field) =>
-                                  sectionFieldSupported(field) &&
                                   sectionFieldVisible(field, {
                                       ...Object.fromEntries(
                                           sectionPropertyFields(
@@ -971,7 +985,7 @@ export const ContentWorkspace = defineComponent({
                         <CopyProvenance value={entry.value.provenance} />
                         {missingLanguage.value && (
                             <p role="status" class="studio-warning">
-                                当前内容没有此语言版本，请选择已有的内容语言。
+                                当前内容没有此语言版本。创建翻译后可在这里填写内容。{sdk.context?.context.role !== 'viewer' && (sdk.context?.context.instanceAdmin || sdk.context?.context.templatePermissions?.some(grant => grant._id === target.templateId && grant.put)) && <button type="button" disabled={busy.value} onClick={() => { if (isCurrent() && !busy.value) missingLanguage.value = false; }}>创建此语言版本</button>}
                             </p>
                         )}
                         <fieldset
@@ -981,6 +995,12 @@ export const ContentWorkspace = defineComponent({
                             }
                         >
                             <EntryEditor
+                                v-slots={{ metadata: () => template.value?.props.slice(2).map((prop, index) => {
+                                    const value = entry.value?.meta[lngIdx.value]?.props.find(item => item.id === prop.id);
+                                    return value ? <StructuredField key={prop.id} prop={prop} value={value} propIndex={index + 2} entryId={entry.value?._id || ""} languageIndex={lngIdx.value} disabled={busy.value || !canEdit.value} validator={validator} onChange={data => {
+                                        if (isCurrent() && canEdit.value && !busy.value) value.data = structuredValue(data).data;
+                                    }} /> : null;
+                                }) }}
                                 entry={entry.value}
                                 propValidator={validator}
                                 onEditTitle={(value) => {

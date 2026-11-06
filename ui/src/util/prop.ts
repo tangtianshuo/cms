@@ -9,7 +9,9 @@ import type { PropValueGroupPointerData } from '@bcms/selfhosted-backend/prop/mo
 export async function propValuesFromSchema(
     props: Prop[],
     propValues?: PropValue[],
+    depth = 0,
 ): Promise<PropValue[]> {
+    if (depth > 32) throw new Error('Nested content exceeds maximum depth');
     const sdk = window.bcms.sdk;
     const values: PropValue[] = [];
     if (!propValues) {
@@ -127,7 +129,7 @@ export async function propValuesFromSchema(
                                     items = [
                                         {
                                             props: await propValuesFromSchema(
-                                                group.props,
+                                                group.props, undefined, depth + 1,
                                             ),
                                         },
                                     ];
@@ -147,7 +149,7 @@ export async function propValuesFromSchema(
                                     items.push({
                                         props: await propValuesFromSchema(
                                             group.props,
-                                            currentValueData.items[j].props,
+                                            currentValueData.items[j].props, depth + 1,
                                         ),
                                     });
                                 }
@@ -177,6 +179,22 @@ export async function propValuesFromSchema(
                     }
                 }
                 break;
+            case 'WIDGET':
+                {
+                    const id = prop.data.propWidget?._id;
+                    const current = value?.data as { _id: string; props: PropValue[] } | undefined;
+                    if (current) {
+                        values.push(value as PropValue);
+                    } else if (id) {
+                        try {
+                            const widget = await sdk.widget.get({ widgetId: id });
+                            values.push({ id: prop.id, data: { _id: id, props: await propValuesFromSchema(widget.props, undefined, depth + 1) } });
+                        } catch {
+                            values.push(value || { id: prop.id, data: { _id: id, props: [] } });
+                        }
+                    } else if (value) values.push(value);
+                }
+                break;
             case 'RICH_TEXT':
                 {
                     const data = prop.data.propRichText;
@@ -196,6 +214,9 @@ export async function propValuesFromSchema(
                     }
                 }
                 break;
+            default:
+                if (value) values.push(value);
+                else values.push({ id: prop.id, data: [] });
         }
     }
     return JSON.parse(JSON.stringify(values));

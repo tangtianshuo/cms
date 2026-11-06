@@ -1,4 +1,4 @@
-import { defineComponent, onMounted, type PropType, ref } from 'vue';
+import { defineComponent, onBeforeUnmount, onMounted, type PropType, ref } from 'vue';
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/vue';
 import type { JSX } from 'vue/jsx-runtime';
 import { type DefaultComponentPropsType } from '@bcms/selfhosted-ui/components/default';
@@ -64,22 +64,31 @@ export function getModalDefaultProps<Input = unknown, Output = unknown>(): {
     };
 }
 
+// Global singleton dialogs share a portal; opening order determines the foreground.
+let modalLayer = 1100;
+const openModalLayers = new Set<number>();
+
 export const ModalWrapper = defineComponent({
     props: getModalDefaultProps<any, any>(),
     setup(props, ctx) {
         const { t } = useI18n();
         const show = ref(false);
+        const layer = ref(0);
         let options: ModalHandlerOptions<any> | undefined = undefined;
 
         onMounted(() => {
             const handler = props.handler;
             handler.open = (opt) => {
                 options = opt;
+                openModalLayers.delete(layer.value);
+                layer.value = ++modalLayer;
+                openModalLayers.add(layer.value);
                 show.value = true;
                 handler._onOpen(options);
             };
             handler.close = (isDone, doneValue) => {
                 show.value = false;
+                openModalLayers.delete(layer.value);
                 if (isDone) {
                     if (options?.onDone) {
                         options.onDone(doneValue);
@@ -91,6 +100,8 @@ export const ModalWrapper = defineComponent({
                 }
             };
         });
+
+        onBeforeUnmount(() => openModalLayers.delete(layer.value));
 
         function header() {
             return (
@@ -153,9 +164,15 @@ export const ModalWrapper = defineComponent({
         }
 
         async function cancel() {
-            if (await props.handler._onCancel()) await props.handler.close();
+            const closingLayer = layer.value;
+            // Sibling portal dialogs see the same outside click; only the foreground owns it.
+            if (!show.value || closingLayer !== Math.max(...openModalLayers)) return;
+            if (await props.handler._onCancel()) {
+                if (show.value && layer.value === closingLayer && closingLayer === Math.max(...openModalLayers))
+                    await props.handler.close();
+            }
         }
-        return () => <Dialog open={show.value} onClose={cancel} class="cms-modal" aria-label={props.title || '编辑设置'}>
+        return () => <Dialog open={show.value} onClose={cancel} class="cms-modal" style={{ zIndex: layer.value }} aria-label={props.title || '编辑设置'}>
             <div class="cms-modal-backdrop" aria-hidden="true" />
             <div class="cms-modal-position"><DialogPanel class="cms-modal-panel">
                 {header()}

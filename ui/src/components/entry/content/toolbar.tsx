@@ -1,5 +1,7 @@
+import { contentMediaSiteKey } from '../../studio/content-media-context';
 import {
     defineComponent,
+    inject,
     onBeforeUnmount,
     onMounted,
     type PropType,
@@ -37,6 +39,18 @@ export const EntryContentEditorToolbar = defineComponent({
     setup(props) {
         const { t, locale } = useI18n();
         const modal = window.bcms.modalService;
+        const contentSite = inject(contentMediaSiteKey, undefined);
+        const ownerSdk = window.bcms.sdk;
+        const ownerContext = ownerSdk.context;
+        let ownsLinkModal = false;
+        let linkOwnerAlive = true;
+        function linkContext() {
+            const site = contentSite?.value;
+            ownsLinkModal = true;
+            return { site, isCurrent: () => linkOwnerAlive && window.bcms.sdk === ownerSdk && ownerSdk.context === ownerContext && contentSite?.value?._id === site?._id };
+        }
+        onBeforeUnmount(() => { linkOwnerAlive = false; if (ownsLinkModal) modal.handlers.entryContentLinkEdit.close(); });
+
 
         const toolbarPosition = ref<{ top: number; left: number }>();
         const navItems = ref(getNavItems());
@@ -242,9 +256,12 @@ export const EntryContentEditorToolbar = defineComponent({
                         }
                         modal.handlers.entryContentLinkEdit.open({
                             data: {
-                                href,
+                                href, ...linkContext(),
                             },
+                            onCancel() { ownsLinkModal = false; },
                             onDone(data) {
+                                ownsLinkModal = false;
+                                if (!linkOwnerAlive || window.bcms.sdk !== ownerSdk || ownerSdk.context !== ownerContext) return;
                                 if (data.href) {
                                     props.editor
                                         .chain()

@@ -1,4 +1,4 @@
-import { defineComponent, type PropType } from 'vue';
+import { defineComponent, inject, type InjectionKey, type VNodeChild, type PropType } from 'vue';
 import type {
     Prop,
     PropValue,
@@ -14,6 +14,11 @@ import { PropMediaInput } from '@bcms/selfhosted-ui/components/prop/media';
 import { PropRichTextInput } from '@bcms/selfhosted-ui/components/prop/rich-text';
 import { PropGroupPointerInput } from '@bcms/selfhosted-ui/components/prop/group-pointer';
 import { PropEntryPointerInput } from '@bcms/selfhosted-ui/components/prop/entry-pointer';
+
+export const entryMetaWidgetRendererKey: InjectionKey<(options: {
+    prop: Prop; value: PropValue; propPath: string; entryId: string; languageIndex: number;
+    validator: PropValidator; onChange: (data: PropValue['data']) => void;
+}) => VNodeChild> = Symbol('entry-meta-widget-renderer');
 
 export const EntryMetaEditor = defineComponent({
     props: {
@@ -67,6 +72,7 @@ export const EntryMetaEditor = defineComponent({
         },
     },
     setup(props, ctx) {
+        const renderWidget = inject(entryMetaWidgetRendererKey, undefined);
         return () => (
             <div id={props.propPath}>
                 {props.props.map((prop, _propIdx) => {
@@ -75,6 +81,7 @@ export const EntryMetaEditor = defineComponent({
                         : _propIdx;
                     const value = props.values.find((e) => e.id === prop.id);
                     if (value) {
+                        if (prop.type === 'WIDGET' && renderWidget) return renderWidget({ prop, value, propPath: `${props.propPath}.${propIdx}`, entryId: props.entryId, languageIndex: props.lngIdx, validator: props.propValidator, onChange: data => ctx.emit('editProp', `${props.propPath}.${propIdx}.data`, data) });
                         if (prop.type === 'STRING') {
                             return (
                                 <PropStringInput

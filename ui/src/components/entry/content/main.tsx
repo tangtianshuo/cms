@@ -1,12 +1,14 @@
+import { contentMediaSiteKey } from '../../studio/content-media-context';
 import { v4 as uuidv4 } from 'uuid';
 import {
     computed,
     defineComponent,
+    inject,
     onBeforeUnmount,
-    onBeforeUpdate,
     onMounted,
     type PropType,
     type ShallowRef,
+    watch,
 } from 'vue';
 import { type Content, Editor, EditorContent, useEditor } from '@tiptap/vue-3';
 import { Paragraph } from '@tiptap/extension-paragraph';
@@ -92,6 +94,18 @@ export const EntryContentEditor = defineComponent({
         const sdk = window.bcms.sdk;
         const throwable = window.bcms.throwable;
         const modal = window.bcms.modalService;
+        const contentSite = inject(contentMediaSiteKey, undefined);
+        const ownerSdk = window.bcms.sdk;
+        const ownerContext = ownerSdk.context;
+        let ownsLinkModal = false;
+        let linkOwnerAlive = true;
+        function linkContext() {
+            const site = contentSite?.value;
+            ownsLinkModal = true;
+            return { site, isCurrent: () => linkOwnerAlive && window.bcms.sdk === ownerSdk && ownerSdk.context === ownerContext && contentSite?.value?._id === site?._id };
+        }
+        onBeforeUnmount(() => { linkOwnerAlive = false; if (ownsLinkModal) modal.handlers.entryContentLinkEdit.close(); });
+
         const [language] = window.bcms.useLanguage();
 
         const me = computed(() => sdk.store.user.methods.me() as UserProtected);
@@ -102,9 +116,12 @@ export const EntryContentEditor = defineComponent({
                 if (el && el.href) {
                     modal.handlers.entryContentLinkEdit.open({
                         data: {
-                            href: el.href,
+                            href: el.href, ...linkContext(),
                         },
+                        onCancel() { ownsLinkModal = false; },
                         onDone(data) {
+                            ownsLinkModal = false;
+                            if (!linkOwnerAlive || window.bcms.sdk !== ownerSdk || ownerSdk.context !== ownerContext) return;
                             if (data.href) {
                                 editor.value
                                     ?.chain()
@@ -402,6 +419,7 @@ export const EntryContentEditor = defineComponent({
          */
         let selfUpdate = false;
         let readyForUpdates = false;
+        let acceptedNodes = JSON.stringify(props.nodes);
 
         function getDocContent(nodes: EntryContentNode[]) {
             const content: Content = {
@@ -480,17 +498,14 @@ export const EntryContentEditor = defineComponent({
             readyForUpdates = true;
         });
 
-        onBeforeUpdate(() => {
-            if (readyForUpdates) {
-                if (selfUpdate) {
-                    selfUpdate = false;
-                } else {
-                    editor.value?.commands.setContent(
-                        getDocContent(props.nodes),
-                    );
-                }
-            }
-        });
+        watch(() => [props.nodes, props.disabled], () => {
+            if (!readyForUpdates) return;
+            const signature = JSON.stringify(props.nodes);
+            if (editor.value && editor.value.isEditable === props.disabled) editor.value.setEditable(!props.disabled, false);
+            if (selfUpdate) selfUpdate = false;
+            else if (signature !== acceptedNodes) editor.value?.commands.setContent(getDocContent(props.nodes));
+            acceptedNodes = signature;
+        }, { deep: true });
 
         onBeforeUnmount(async () => {
             w[middlewareId] = undefined;

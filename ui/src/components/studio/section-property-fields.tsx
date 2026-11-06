@@ -1,6 +1,10 @@
 import { defineComponent, ref, type PropType } from 'vue';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
 import type { StudioModel } from '../../sdk/handlers/studio';
+import { EntryContentEditor } from '../entry/content';
+import { entryContentNodesForSave } from '../../util/entry-create';
+import { structuredValue } from './structured-value';
+import type { EntryContentNode } from '@bcms/selfhosted-backend/entry/models/content';
 import { StudioMediaPicker } from './fields';
 import { sectionFieldError, sectionFieldSupported, sectionFieldVisible, updateSectionField, type SectionPropertyField } from './section-property-state';
 
@@ -35,6 +39,7 @@ export const SectionPropertyFields = defineComponent({
             return <div class="studio-field" key={field.key}><label for={fieldId}>{field.label}{field.required ? ' *' : ''}</label>
                 {field.description && <p id={`${fieldId}-help`} class="studio-help">{field.description}</p>}
                 {!sectionFieldSupported(field) ? <div id={fieldId} tabindex={-1} aria-disabled="true" class="studio-help">此内容暂时只读，原有内容会完整保留。</div>
+                    : field.control === 'rich-text' ? <div id={fieldId} tabindex={-1}><EntryContentEditor entryId="" propPath={`section.${props.nodeId}.${field.key}`} lngIdx={0} nodes={value && typeof value === 'object' && Array.isArray((value as { nodes?: unknown }).nodes) ? (value as { nodes: EntryContentNode[] }).nodes : []} disabled={props.disabled || Boolean(value && !(typeof value === 'object' && Array.isArray((value as { nodes?: unknown }).nodes)))} onInput={nodes => change(field, { nodes: (structuredValue([{ nodes: entryContentNodesForSave(nodes) }]).data as Array<{ nodes: EntryContentNode[] }>)[0].nodes })} /></div>
                     : field.control === 'boolean' ? <input {...common} type="checkbox" checked={value === true} onChange={event => change(field, (event.target as HTMLInputElement).checked)} />
                     : field.control === 'enum' ? <select {...common} value={String(value ?? '')} onChange={event => change(field, (event.target as HTMLSelectElement).value)}><option value="">未选择</option>{field.options?.map(option => <option value={option}>{option}</option>)}</select>
                     : field.control === 'media' ? <StudioMediaPicker fieldId={fieldId} fieldKey={field.key} invalid={Boolean(error)} describedBy={error ? `${fieldId}-error` : undefined} value={value && typeof value === 'object' && '_id' in value ? [value as { _id: string }] : []} media={props.media} disabled={props.disabled} onUpload={props.onUpload} onChange={items => change(field, items[0] || '')} />

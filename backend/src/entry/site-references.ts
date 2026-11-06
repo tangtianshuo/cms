@@ -44,6 +44,22 @@ export async function validateEntrySiteReferences(
     }
     const content = async (nodes: EntryContentNode[]) => {
         for (const node of nodes || []) {
+            for (const mark of node.marks || []) if (mark.type === 'link') {
+                const href = mark.attrs?.href || '';
+                if (/^media:/i.test(href)) {
+                    const match = /^media:([^:]+)@\*_@\*_:media$/.exec(href);
+                    if (!match) throw denied('Media');
+                    authorized(await source.media.findById(match[1]), 'Media', true);
+                }
+                if (/^entry:/i.test(href)) {
+                    const match = /^entry:([^:]+)@\*_([^:]+):entry$/.exec(href);
+                    if (!match) throw denied('Entry');
+                    const linkedTemplate = authorized(await source.template.findById(match[2]), 'Template');
+                    const linkedEntry = authorized(await source.entry.findById(match[1]), 'Entry');
+                    if (linkedEntry.templateId !== linkedTemplate._id) throw denied('Entry');
+                }
+            }
+
             if (node.type === 'widget') {
                 const data = (node.attrs as { data?: { _id: string; props: PropValue[] } })?.data;
                 if (!data?._id) throw denied('Widget');

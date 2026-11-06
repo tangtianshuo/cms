@@ -67,3 +67,12 @@ test('declared properties validate finite scalars, required visible values and m
     for (const patch of [{ title: ' ' }, { count: Infinity }, { count: '1' }, { showButton: true }, { date: '2026-02-30' }, { tone: 'bad' }, { image: { _id: 'foreign' } }, { image: { _id: 'unknown' } }, { image: { _id: 'own', extra: true } }]) assert.throws(() => validate({ ...valid, ...patch }), /内容|数字|日期|选项|图片|title|count|href|image/);
     assert.deepEqual(valid.body, { content: [{ text: '结构化保留' }] });
 });
+
+
+test('required readonly section collections reject empty values and preserve nonempty values', () => {
+    for (const control of ['array', 'widget']) {
+        const declared = { content: { control, required: true } } as any;
+        for (const value of [undefined, [], {}]) assert.throws(() => validateDeclaredSectionProperties([{ type: 'hero', enabled: true, data: { content: value } }], [{ type: 'hero', props: declared }] as any, { site: { _id: 'site' } as any, media: [] }), /content/);
+        assert.doesNotThrow(() => validateDeclaredSectionProperties([{ type: 'hero', enabled: true, data: { content: { preserved: 'content' } } }], [{ type: 'hero', props: declared }] as any, { site: { _id: 'site' } as any, media: [] }));
+    }
+});

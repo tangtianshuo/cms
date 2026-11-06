@@ -1,3 +1,5 @@
+import type { Template } from '../template/models/main';
+import type { Entry } from '../entry/models/main';
 import { prepareEntryCreate } from '../entry/create';
 import { validateEntrySiteReferences } from '../entry/site-references';
 import { EntryFactory } from '../entry/factory';
@@ -13,6 +15,9 @@ import { resolveInstalledPreset } from '../presets/installed';
 import { pageDraft, pageSectionOptionsForPage, updatePageDraft } from '../presets/pages';
 import type { SiteInstallation } from '../presets/site-model';
 import { assertStudioWrite, entryValues, fieldDescriptors, pageOperationIds, patchEntry, type StudioValue } from './business';
+import { validateStructuredFields, validateStructuredNodes } from './structured-content';
+import { ownerWorkspace } from '../workspaces/context';
+import { mediaReferenceAllowedForSite } from '../_utils/site-media';
 import { createStudioPage } from './page-create';
 import { normalizeNavigation, type NavigationNode } from '../presets/navigation';
 import { normalizeSiteOperations } from '../presets/operations';
@@ -20,7 +25,8 @@ import { validateDeclaredSectionProperties, validateSectionMediaReferences, medi
 import { editorSchemaForSite } from '../template-contract/editor-schema';
 import { buildContentForm, validateContentValues } from '../content-editor/schema-form';
 
-const studioValueSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.array(z.object({ _id: z.string().min(1), alt_text: z.string().optional(), caption: z.string().optional() }).strict()), z.array(z.object({ tid: z.string().min(1), eid: z.string().min(1) }).strict())]);
+const structuredValueSchema = z.object({ kind: z.literal('prop-data'), data: z.union([z.array(z.unknown()), z.object({ _id: z.string().min(1), props: z.array(z.unknown()).optional(), items: z.array(z.unknown()).optional() }).strict()]) }).strict();
+const studioValueSchema = z.union([structuredValueSchema, z.string(), z.number().finite(), z.boolean(), z.array(z.object({ _id: z.string().min(1), alt_text: z.string().optional(), caption: z.string().optional() }).strict()), z.array(z.object({ tid: z.string().min(1), eid: z.string().min(1) }).strict())]);
 const entryBody = z.object({ entryId: z.string().min(1).optional(), operationId: z.string().uuid(), expectedUpdatedAt: z.number().int().nonnegative().optional(), fields: z.record(studioValueSchema) }).strict();
 const sectionConfigBody = z.object({ type: z.string().trim().min(1).max(120), enabled: z.boolean(), data: z.record(z.unknown()) }).strict();
 const pageBody = z.object({ expectedUpdatedAt: z.number().int().nonnegative(), title: z.string().trim().min(1).max(120), path: z.string().min(1).max(160), seoTitle: z.string().max(120), seoDescription: z.string().max(320), sections: z.array(z.string()).min(1), sectionConfigs: z.array(sectionConfigBody).optional(), layoutDocument: z.unknown().optional(), entryId: z.string(), enabled: z.boolean(), navigation: z.boolean() }).strict();
@@ -50,6 +56,18 @@ async function validateSelectedMedia(site: SiteInstallation, modelKey: string, f
             if (!media || !['IMG', 'SVG', 'GIF'].includes(media.type)) throw new Error(`${field.label}: select an accessible image`);
         }
     }
+}
+async function structuredResources(site: SiteInstallation) {
+    const [widgets, groups, templates, medias] = await Promise.all([Repo.widget.findAll(), Repo.group.findAll(), Repo.template.findAll(), Repo.media.findAll()]);
+    const allowed = (item: { workspaceId?: string; siteId?: string }) => ownerWorkspace(item) === ownerWorkspace(site) && (!item.siteId || item.siteId === site._id);
+    return { widgets: widgets.filter(allowed), groups: groups.filter(allowed), templates: templates.filter(item => allowed(item) && canReadContent('Template', item)), medias: medias.filter(item => mediaReferenceAllowedForSite(item, site)) };
+}
+async function validateStudioEntry(site: SiteInstallation, template: Template, entry: Entry, allLanguages = false) {
+    const resources = await structuredResources(site);
+    const meta = entry.meta.find(item => item.lng === (site.language || 'en'));
+    if (!meta) throw new Error('Create this translation in the content workspace');
+    validateStructuredFields(template, meta.props, resources);
+    await validateEntrySiteReferences(entry, template, Repo, allLanguages ? undefined : site.language || 'en');
 }
 function conflict() { return Object.assign(new Error('Site changed; refresh before saving'), { status: 409 }); }
 export function assertStudioPageEntryBinding(siteId: string, entryId: string, boundEntry: { _id: string; siteId?: string } | null): void {
@@ -95,15 +113,17 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                 if (previous && previous.updatedAt !== parsed.data.expectedUpdatedAt) throw conflict();
                 const form = buildContentForm(resolveInstalledPreset(site), key);
                 const existingValues = previous ? entryValues(site, key, previous) : {};
-                const fieldErrors = validateContentValues(form, { ...existingValues, ...parsed.data.fields });
+                const fields = parsed.data.fields as Record<string, StudioValue>;
+                const fieldErrors = validateContentValues(form, { ...existingValues, ...Object.fromEntries(Object.entries(fields).map(([fieldKey, value]) => [fieldKey, value && typeof value === 'object' && !Array.isArray(value) && value.kind === 'prop-data' ? value.data : value])) });
                 if (Object.keys(fieldErrors).length) throw new Error(`Invalid content fields: ${Object.entries(fieldErrors).map(([field, message]) => `${field}: ${message}`).join('; ')}`);
-                await validateSelectedMedia(site, key, parsed.data.fields);
+                await validateSelectedMedia(site, key, fields);
                 const id = createHash('sha256').update(`${site._id}:studio:${key}:${template.singleEntry ? 'single' : parsed.data.operationId}`).digest('hex').slice(0, 24);
                 if (!previous && template.singleEntry) {
                     const all = await Repo.entry.methods.findAllByTemplateId(template._id);
                     if (all.some(entry => entry._id !== id)) throw new Error('This model already has content; refresh and edit it');
                 }
-                const updated = patchEntry(site, template, key, previous, parsed.data.fields, workspaceContext()!.actorId, id);
+                const updated = patchEntry(site, template, key, previous, fields, workspaceContext()!.actorId, id);
+                await validateStudioEntry(site, template, updated);
                 let saved;
                 if (previous) saved = await Repo.entry.update(updated, false, parsed.data.expectedUpdatedAt);
                 else {
@@ -148,12 +168,12 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                     const prepared = prepareEntryCreate(body, template.props, languages.map(item => item.code), statuses.map(item => item._id), widgets, groups, templates, medias);
                     entry = { ...EntryFactory.create({ templateId: template._id, workspaceId: context.workspaceId, siteId: site._id, userId: context.actorId, groupId: body.groupId || site.contentGroupId || site._id, ...prepared }), _id: ids.entryId };
                 } else {
-                    const fields = parsed.data.fields;
+                    const fields = parsed.data.fields as Record<string, StudioValue> | undefined;
                     if (!fields) throw new Error('Invalid page content');
                     await validateSelectedMedia(site, blueprint.modelKey, fields);
                     entry = patchEntry(site, template, blueprint.modelKey, null, fields, context.actorId, ids.entryId);
                 }
-                await validateEntrySiteReferences(entry, template, Repo);
+                await validateStudioEntry(site, template, entry, true);
                 return await createStudioPage(site, parsed.data.operationId, entry, parsed.data, {
                     findEntry: id => Repo.entry.findById(id), addEntry: createdEntry => Repo.entry.add(createdEntry),
                     saveSite: (updated, expected) => Repo.siteInstallation.methods.saveDraft(updated, expected), findSite: () => Repo.siteInstallation.methods.findSelected(),
@@ -189,6 +209,18 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                     const media = await Repo.media.findAll();
                     const references = (await Promise.all(site.models.map(model => Repo.entry.methods.findAllByTemplateId(model.templateId)))).flat().filter(entry => entry.siteId === site._id && canReadContent('Entry', entry));
                     validateDeclaredSectionProperties((savedPage.layoutDocument as { root: Array<{ type: string; enabled: boolean; props: Record<string, unknown> }> }).root.map(node => ({ type: node.type, enabled: node.enabled, data: node.props })), definitions, { media, site, referenceIds: new Set(references.map(entry => entry._id)) });
+                    const resources = await structuredResources(site);
+                    for (const node of (savedPage.layoutDocument as { root: Array<{ type: string; props: Record<string, unknown> }> }).root) {
+                        const declared = definitions.find(item => item.type === node.type)?.props || {};
+                        for (const [fieldKey, field] of Object.entries(declared)) if (field.control === 'rich-text' && node.props[fieldKey] !== undefined && node.props[fieldKey] !== null) {
+                            const value = node.props[fieldKey] as { nodes?: unknown };
+                            validateStructuredNodes(value?.nodes, resources, `section.${node.type}.${fieldKey}`);
+                            // Only the content view is synthetic. Site and model identities are resolved above.
+                            const model = await installedModel(site, savedPage.modelKey);
+                            await validateEntrySiteReferences({ siteId: site._id, templateId: model._id, groupId: site.contentGroupId || site._id, meta: [], content: [{ lng: site.language || 'en', nodes: value.nodes as never, plainText: '' }] }, model, Repo);
+                        }
+                    }
+
                 }
                 if (!await Repo.siteInstallation.methods.saveDraft(updated, site.updatedAt)) throw conflict();
                 return pageDraft(updated, key);

@@ -1,7 +1,7 @@
 import type { Group } from '../group/models/main';
 import type { Media } from '../media/models/main';
 import type { Prop } from '../prop/models/main';
-import { propsValueCheck } from '../prop/values';
+import { validateStructuredFields, validateStructuredNodes } from '../studio/structured-content';
 import type { Template } from '../template/models/main';
 import type { Widget } from '../widget/models/main';
 import { entryContentNodeToHtml } from './content';
@@ -23,9 +23,7 @@ export function prepareEntryCreate(
             throw new Error(`Invalid or duplicate language ${meta.lng}`);
         }
         metaLanguages.add(meta.lng);
-        const invalid = propsValueCheck(props, meta.props, `body.meta.${meta.lng}.props`,
-            widgets, groups, templates, medias);
-        if (invalid instanceof Error) throw invalid;
+        validateStructuredFields({ props }, meta.props, { widgets, groups, templates, medias });
     }
     const contentLanguages = new Set<string>();
     const content = body.content.map((item) => {
@@ -33,6 +31,7 @@ export function prepareEntryCreate(
             throw new Error(`Content needs matching metadata for language ${item.lng}`);
         }
         contentLanguages.add(item.lng);
+        validateStructuredNodes(item.nodes, { widgets, groups, templates, medias }, `body.content.${item.lng}.nodes`);
         return {
             lng: item.lng,
             nodes: item.nodes,

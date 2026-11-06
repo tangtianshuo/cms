@@ -366,6 +366,7 @@ export const PropInputWrapperArrayItem = defineComponent({
                     />
                     <div class={`flex items-center gap-2`}>
                         <button
+                            type="button" aria-label="删除此项"
                             class={`text-red`}
                             onClick={() => {
                                 ctx.emit('delete');
@@ -378,6 +379,7 @@ export const PropInputWrapperArrayItem = defineComponent({
                         </button>
                         <button
                             class={`text-dark disabled:text-gray dark:text-white dark:disabled:text-darkGray`}
+                            type="button" aria-label="上移此项"
                             disabled={props.disableMoveUp}
                             onClick={() => {
                                 ctx.emit('move', -1);
@@ -390,6 +392,7 @@ export const PropInputWrapperArrayItem = defineComponent({
                         </button>
                         <button
                             class={`text-dark disabled:text-gray dark:text-white dark:disabled:text-darkGray`}
+                            type="button" aria-label="下移此项"
                             disabled={props.disableMoveDown}
                             onClick={() => {
                                 ctx.emit('move', 1);

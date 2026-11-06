@@ -23,6 +23,7 @@ export enum EntryContentNodeType {
     text = 'text',
     codeBlock = 'codeBlock',
     hardBreak = 'hardBreak',
+    horizontalRule = 'horizontalRule',
 }
 
 export interface EntryContentNodeHeadingAttr {

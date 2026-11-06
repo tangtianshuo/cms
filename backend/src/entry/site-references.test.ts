@@ -79,3 +79,10 @@ test('bound content rejects another site group but accepts a lawful unbound cont
     await validateEntrySiteReferences({ ...entry(), groupId: 'shared' }, template, source);
     await assert.rejects(validateEntrySiteReferences({ ...entry(), groupId: 'other' }, template, source), forbidden);
 });
+
+test('rich internal media and Entry link marks follow the same site provenance', async () => {
+    const { source } = fixture();
+    const linked = (href: string) => { const draft = entry(); draft.content[0].nodes = [{ type: 'paragraph' as never, content: [{ type: 'text' as never, text: 'Link', marks: [{ type: 'link' as never, attrs: { href, target: '_self' } }] }] }]; return draft; };
+    for (const href of ['media:own@*_@*_:media', 'entry:own@*_own:entry', 'https://example.com', '/contact']) await validateEntrySiteReferences(linked(href), template, source);
+    for (const href of ['media:other@*_@*_:media', 'entry:disguised@*_own:entry', 'entry:own@*_other:entry', 'media:other:media', 'entry:own:entry', 'MEDIA:other@*_@*_:media', 'ENTRY:disguised@*_own:entry']) await assert.rejects(validateEntrySiteReferences(linked(href), template, source), forbidden);
+});

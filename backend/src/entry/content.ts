@@ -82,6 +82,8 @@ export function entryContentNodeToHtml(node: EntryContentNode): string {
             output = `<pre><code>${node.content
                 .map((childNode) => entryContentNodeToHtml(childNode))
                 .join('')}</code></pre>`;
+        } else if (node.type === EntryContentNodeType.horizontalRule) {
+            output = '<hr />';
         } else if (node.type === EntryContentNodeType.hardBreak) {
             output = '<br />';
         }

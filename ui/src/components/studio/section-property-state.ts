@@ -20,10 +20,12 @@ export function sectionFieldVisible(field: SectionPropertyField, values: Record<
     return !field.visibleWhen || JSON.stringify(values[field.visibleWhen.field]) === JSON.stringify(field.visibleWhen.equals);
 }
 export function sectionFieldSupported(field: SectionPropertyField): boolean {
-    return ['text', 'number', 'boolean', 'date', 'enum', 'media', 'reference'].includes(field.control);
+    return ['text', 'number', 'boolean', 'date', 'enum', 'media', 'reference', 'rich-text'].includes(field.control);
 }
 export function sectionFieldError(field: SectionPropertyField, value: unknown): string | null {
-    const empty = value === undefined || value === null || typeof value === 'string' && !value.trim();
+    const empty = value === undefined || value === null || typeof value === 'string' && !value.trim() || (['array', 'widget'].includes(field.control) && typeof value === 'object' && (Array.isArray(value) ? value.length === 0 : Object.keys(value).length === 0)) || (field.control === 'rich-text' && typeof value === 'object' && value !== null && 'nodes' in value && Array.isArray(value.nodes) && value.nodes.length === 0);
+    if (field.control === 'rich-text' && !empty && !(value && typeof value === 'object' && Array.isArray((value as { nodes?: unknown }).nodes))) return '正文格式无效，原有内容会完整保留。';
+    if (field.control === 'rich-text' && field.required && value && typeof value === 'object' && !(value as { nodes: unknown[] }).nodes?.length) return `请填写${field.label}。`;
     if (empty) return field.required ? `请填写${field.label}。` : null;
     if (field.control === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) return '请输入有效数字。';
     if (field.control === 'number' && typeof value === 'number' && field.minimum !== undefined && value < field.minimum) return `请输入不小于${field.minimum}的数字。`;

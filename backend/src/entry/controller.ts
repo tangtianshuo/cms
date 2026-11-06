@@ -33,7 +33,7 @@ import {
     EntryUpdateBodySchema,
 } from '@bcms/selfhosted-backend/entry/models/controller';
 import { SocketManager } from '@bcms/selfhosted-backend/socket/manager';
-import { propsValueCheck } from '@bcms/selfhosted-backend/prop/values';
+import { validateStructuredFields, validateStructuredNodes } from '../studio/structured-content';
 import { entryContentNodeToHtml } from '@bcms/selfhosted-backend/entry/content';
 import { EventManager } from '@bcms/selfhosted-backend/event/manager';
 import { assertSiteCapability } from '../authorization/site-access';
@@ -751,20 +751,12 @@ export const EntryController = createController({
                             });
                         }
                     }
-                    const propsCheck = propsValueCheck(
-                        template.props,
-                        body.meta.props,
-                        `body.meta.${lng.code}.props`,
-                        widgets,
-                        groups,
-                        templates,
-                        medias,
-                    );
-                    if (propsCheck instanceof Error) {
-                        throw errorHandler(
-                            HttpStatus.BadRequest,
-                            propsCheck.message,
-                        );
+                    try {
+                        const resources = { widgets, groups, templates, medias };
+                        validateStructuredFields(template, body.meta.props, resources);
+                        validateStructuredNodes(body.content.nodes, resources, 'body.content.nodes');
+                    } catch (cause) {
+                        throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Invalid structured content');
                     }
                     let metaFound = false;
                     for (let i = 0; i < entry.meta.length; i++) {

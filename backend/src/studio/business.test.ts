@@ -19,10 +19,10 @@ test('mapped patch preserves all unedited values, rich text, other languages and
     assert.deepEqual(updated.content, entry.content);
     assert.equal((entry.meta[0].props[0].data as string[])[0], 'Before');
 });
-test('rejects flattening rich text and unknown fields; descriptors expose read-only rich text', () => {
-    assert.throws(() => patchEntry(site, template, 'content-page', entry, { body: 'Flatten' }), /advanced editor/);
+test('rejects flattening rich text and unknown fields; descriptors expose editable rich text', () => {
+    assert.throws(() => patchEntry(site, template, 'content-page', entry, { body: 'Flatten' }), /structured content/);
     assert.throws(() => patchEntry(site, template, 'content-page', entry, { injected: 'bad' }), /Unknown/);
-    assert.equal(fieldDescriptors(site, template, 'content-page').find(field => field.key === 'body')?.editable, false);
+    assert.equal(fieldDescriptors(site, template, 'content-page').find(field => field.key === 'body')?.editable, true);
 });
 test('new rich text is explicitly converted from plain input', () => {
     const created = patchEntry(site, template, 'content-page', null, { title: 'New', slug: 'new', body: 'Hello\nWorld' }, 'actor', 'new-entry');

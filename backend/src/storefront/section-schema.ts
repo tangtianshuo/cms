@@ -137,7 +137,7 @@ export function validateDeclaredSectionValues(props: Record<string, unknown>, de
     for (const [key, field] of Object.entries(declared)) {
         const value = props[key] ?? field.default;
         const visible = !field.visibleWhen || JSON.stringify(props[field.visibleWhen.field] ?? declared[field.visibleWhen.field]?.default) === JSON.stringify(field.visibleWhen.equals);
-        const empty = value === undefined || value === null || typeof value === 'string' && !value.trim();
+        const empty = value === undefined || value === null || typeof value === 'string' && !value.trim() || (['array', 'widget'].includes(field.control) && typeof value === 'object' && (Array.isArray(value) ? value.length === 0 : Object.keys(value).length === 0)) || (field.control === 'rich-text' && typeof value === 'object' && value !== null && 'nodes' in value && Array.isArray(value.nodes) && value.nodes.length === 0);
         const label = field.label || field.description || key;
         if (field.required && enabled && visible && empty) throw new Error(`${label}: 请填写内容`);
         if (empty) continue;

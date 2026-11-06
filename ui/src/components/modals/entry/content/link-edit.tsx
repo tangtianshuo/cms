@@ -9,7 +9,6 @@ import {
 } from '@bcms/selfhosted-ui/util/validation';
 import { TextInput } from '@bcms/selfhosted-ui/components/inputs/text';
 import { StringUtility } from '@bcms/selfhosted-utils/string-utility';
-import { Select } from '@bcms/selfhosted-ui/components/inputs/select/main';
 import { SelectEntryPointer } from '@bcms/selfhosted-ui/components/inputs/select/entry-pointer';
 import { MediaSelect } from '@bcms/selfhosted-ui/components/inputs/select/media';
 import { useI18n } from 'vue-i18n';
@@ -18,7 +17,10 @@ type LinkType = 'url' | 'entry' | 'media';
 
 export const linkSplitChar = '@*_';
 
+import type { ContentMediaSite } from '../../../studio/content-media-context';
 export interface ModalEntryContentLindEditInput {
+    site?: ContentMediaSite;
+    isCurrent?: () => boolean;
     href: string;
 }
 
@@ -99,48 +101,48 @@ export const ModalEntryContentLinkEdit = defineComponent({
             handler._onOpen = (event) => {
                 if (event?.data) {
                     data.value = event.data;
-                    throwable(
-                        async () => {
-                            await sdk.entry.getAllLite();
-                            await sdk.media.getAll();
-                        },
-                        async () => {
-                            if (
-                                data.value.href.startsWith('entry:') &&
-                                data.value.href.endsWith(':entry')
-                            ) {
-                                const [eid, tid] = StringUtility.textBetween(
-                                    data.value.href,
-                                    'entry:',
-                                    ':entry',
-                                ).split(linkSplitChar);
-                                inputs.value = getInputs('entry', {
-                                    entry: {
-                                        eid,
-                                        tid,
-                                    },
-                                });
-                            } else if (
-                                data.value.href.startsWith('media:') &&
-                                data.value.href.endsWith(':media')
-                            ) {
-                                const [mediaId] = StringUtility.textBetween(
-                                    data.value.href,
-                                    'media:',
-                                    ':media',
-                                ).split(linkSplitChar);
-                                inputs.value = getInputs('media', {
-                                    mediaId,
-                                });
-                            } else {
-                                inputs.value = getInputs('url', {});
-                            }
-                        },
-                    ).catch((err) => console.error(err));
-                    data.value = event.data;
+                    if (
+                        data.value.href.startsWith('entry:') &&
+                        data.value.href.endsWith(':entry')
+                    ) {
+                        const [eid, tid] = StringUtility.textBetween(
+                            data.value.href,
+                            'entry:',
+                            ':entry',
+                        ).split(linkSplitChar);
+                        inputs.value = getInputs('entry', {
+                            entry: {
+                                eid,
+                                tid,
+                            },
+                        });
+                    } else if (
+                        data.value.href.startsWith('media:') &&
+                        data.value.href.endsWith(':media')
+                    ) {
+                        const [mediaId] = StringUtility.textBetween(
+                            data.value.href,
+                            'media:',
+                            ':media',
+                        ).split(linkSplitChar);
+                        inputs.value = getInputs('media', {
+                            mediaId,
+                        });
+                    } else {
+                        inputs.value = getInputs('url', {
+                            url: data.value.href,
+                        });
+                    }
+                    // Candidate loading must not reset values after the user starts editing.
+                    throwable(async () => {
+                        await sdk.entry.getAllLite();
+                        await sdk.media.getAll();
+                    }).catch((err) => console.error(err));
                 }
             };
             handler._onDone = async () => {
+                if (data.value.isCurrent && !data.value.isCurrent())
+                    return [false, { href: '' }];
                 if (!inputsValid()) {
                     return [false, { href: '' }];
                 }
@@ -192,6 +194,8 @@ export const ModalEntryContentLinkEdit = defineComponent({
                 case 'media': {
                     return (
                         <MediaSelect
+                            site={data.value.site}
+                            isCurrent={data.value.isCurrent}
                             label={t('modals.link.mediaFile')}
                             mediaId={inputs.value.mediaId.value}
                             error={inputs.value.mediaId.error}
@@ -213,30 +217,29 @@ export const ModalEntryContentLinkEdit = defineComponent({
                 doneText={t('modals.common.update')}
             >
                 <div class={`flex flex-col gap-4`}>
-                    <Select
-                        label={t('modals.link.linkType')}
-                        selected={inputs.value.type.value}
-                        options={[
-                            {
-                                label: 'URL',
-                                value: 'url',
-                            },
-                            {
-                                label: t('modals.link.entryPointer'),
-                                value: 'entry',
-                            },
-                            {
-                                label: t('modals.link.mediaPointer'),
-                                value: 'media',
-                            },
-                        ]}
-                        onChange={(option) => {
-                            if (option) {
-                                inputs.value.type.value =
-                                    option.value as LinkType;
-                            }
-                        }}
-                    />
+                    <div class="flex flex-col gap-2">
+                        <label for="entry-link-type">
+                            {t('modals.link.linkType')}
+                        </label>
+                        <select
+                            id="entry-link-type"
+                            class="cms-select-trigger"
+                            value={inputs.value.type.value}
+                            onChange={(event) => {
+                                inputs.value.type.value = (
+                                    event.target as HTMLSelectElement
+                                ).value as LinkType;
+                            }}
+                        >
+                            <option value="url">URL</option>
+                            <option value="entry">
+                                {t('modals.link.entryPointer')}
+                            </option>
+                            <option value="media">
+                                {t('modals.link.mediaPointer')}
+                            </option>
+                        </select>
+                    </div>
                     {getActiveSection(inputs.value.type.value)}
                 </div>
             </ModalWrapper>

@@ -19,7 +19,7 @@ import {
 import { MediaPreview } from '@bcms/selfhosted-ui/components/media-preview';
 import { prettyFileSize } from '@bcms/selfhosted-ui/util/file';
 import { Icon } from '@bcms/selfhosted-ui/components/icon';
-import { contentMediaSiteKey } from '../../studio/content-media-context';
+import { contentMediaSiteKey, type ContentMediaSite } from '../../studio/content-media-context';
 import { useI18n } from 'vue-i18n';
 
 export const MediaSelect = defineComponent({
@@ -29,6 +29,8 @@ export const MediaSelect = defineComponent({
             type: String,
             required: true,
         },
+        site: Object as PropType<ContentMediaSite>,
+        isCurrent: Function as PropType<() => boolean>,
         altText: String,
         caption: String,
         entrySync: Object as PropType<EntrySync>,
@@ -110,8 +112,8 @@ export const MediaSelect = defineComponent({
                         class={`w-full flex flex-col xs:flex-row gap-2`}
                         onClick={() => {
                             const context = sdk.context;
-                            const site = contentSite?.value;
-                            const isCurrent = () => alive && sdk.context === context && contentSite?.value?._id === site?._id;
+                            const site = props.site || contentSite?.value;
+                            const isCurrent = () => alive && sdk.context === context && (props.site || contentSite?.value)?._id === site?._id && (props.isCurrent?.() ?? true);
                             ownsPicker = true;
                             modal.handlers.mediaSelect.open({
                                 data: {

@@ -1,4 +1,7 @@
 import { defineComponent, ref, type PropType } from 'vue';
+import { StructuredField } from './structured-field';
+import { structuredValue } from './structured-value';
+import type { PropValue } from '@bcms/selfhosted-backend/prop/models/main';
 import type { StudioModel } from '../../sdk/handlers/studio';
 import type { StudioValue } from '@bcms/selfhosted-backend/studio/business';
 import type { Media } from '@bcms/selfhosted-backend/media/models/main';
@@ -42,34 +45,19 @@ export const StudioFields = defineComponent({
         values: { type: Object as PropType<Record<string, StudioValue>>, required: true },
         media: { type: Array as PropType<Media[]>, required: true },
         isNew: Boolean, disabled: Boolean,
-        onUpload: { type: Function as PropType<() => void>, required: false },
+        onUpload: Function as PropType<() => void>,
         onChange: { type: Function as PropType<(key: string, value: StudioValue) => void>, required: true },
     },
     setup(props) {
+        const sdk = window.bcms.sdk;
         return () => <div class="studio-fields">{props.model.fields.map(field => {
+            const template = sdk.store.template.findById(props.model.templateId);
+            const prop = template?.props.find(item => item.name === field.key);
             const value = props.values[field.key];
-            const editorField = props.model.editorFields?.find(item => item.key === field.key);
-            const label = editorField?.label || field.label;
-            const control = editorField?.control || '';
-            const fieldId = `studio-field-${field.key}`;
-            if (!field.editable && !(props.isNew && field.type === 'RICH_TEXT')) return <div id={fieldId} tabindex={-1} class="studio-field" key={field.key}><span class="studio-label">{label}</span><p class="studio-help">{field.type === 'RICH_TEXT' ? '富文本内容完整保留。请使用完整编辑器修改排版和正文。' : '此字段使用完整编辑器维护，保存时保留原值。'}</p></div>;
-            return <div class="studio-field" key={field.key}><label for={fieldId}>{label}{(editorField?.required ?? field.required) ? ' *' : ''}</label>{editorField?.description && <p class="studio-help">{editorField.description}</p>}
-                {control === 'enum' ? <select id={fieldId} disabled={props.disabled} required={field.required} value={String(value ?? '')} onChange={event => props.onChange(field.key, (event.target as HTMLSelectElement).value)}><option value="">未选择</option>{(editorField?.options || []).map(option => <option value={option}>{option}</option>)}</select>
-                    : control === 'date' ? <input id={fieldId} type="date" disabled={props.disabled} required={field.required} value={String(value ?? '')} onInput={event => props.onChange(field.key, (event.target as HTMLInputElement).value)} />
-                    : control === 'rich-text' || field.type === 'STRING' || field.type === 'RICH_TEXT' ? (control === 'rich-text' || field.type === 'RICH_TEXT' || ['description', 'summary', 'intro', 'seoDescription', 'announcement'].includes(field.key)
-                    ? <textarea id={fieldId} disabled={props.disabled} required={field.required} rows={4} value={String(value ?? '')} onInput={event => props.onChange(field.key, (event.target as HTMLTextAreaElement).value)} />
-                    : <input id={fieldId} disabled={props.disabled} required={field.required} value={String(value ?? '')} onInput={event => props.onChange(field.key, (event.target as HTMLInputElement).value)} />)
-                    : field.type === 'NUMBER' ? <input id={fieldId} type="number" step="any" min={field.key === 'price' ? 0 : undefined} required={field.required} disabled={props.disabled} value={typeof value === 'number' ? value : ''} onInput={event => { const raw = (event.target as HTMLInputElement).value; props.onChange(field.key, raw === '' ? '' : Number(raw)); }} />
-                    : field.type === 'BOOLEAN' ? <input id={fieldId} type="checkbox" disabled={props.disabled} checked={Boolean(value)} onChange={event => props.onChange(field.key, (event.target as HTMLInputElement).checked)} />
-                    : field.type === 'ENTRY_POINTER' ? <select id={fieldId} disabled={props.disabled} multiple={field.array} value={field.array ? (Array.isArray(value) ? value.flatMap(item => 'eid' in item ? [item.eid] : []) : []) : (Array.isArray(value) && value[0] && 'eid' in value[0] ? value[0].eid : '')}
-                        onChange={event => { const selected = Array.from((event.target as HTMLSelectElement).selectedOptions).filter(option => option.value); props.onChange(field.key, selected.map(option => ({ tid: option.dataset.template!, eid: option.value }))); }}>
-                        {!field.array && <option value="">未选择</option>}
-                        {props.models.filter(model => field.referenceTemplateIds.includes(model.templateId)).flatMap(model => model.entries.map(entry => <option value={entry.id} data-template={model.templateId}>{String((entry.fields.title as string[] | undefined)?.[0] || entry.id)}</option>))}
-                    </select>
-                    : field.type === 'MEDIA' ? <StudioMediaPicker fieldId={fieldId} fieldKey={field.key} value={(Array.isArray(value) ? value.filter(item => '_id' in item) : []) as Array<{ _id: string }>} media={props.media} multiple={field.array} disabled={props.disabled} onUpload={props.onUpload} onChange={items => props.onChange(field.key, items)} /> : null}
-                {field.type === 'RICH_TEXT' && props.isNew && <p class="studio-help">新正文按纯文本段落创建；保存后可在完整编辑器中排版。</p>}
-                {field.key === 'slug' && <p class="studio-help">使用小写英文、数字和短横线，例如 shipping-policy。</p>}
-            </div>;
+            if (!prop) return <p class="studio-help">{field.label}：此内容暂时只读，原有内容会完整保留。</p>;
+            const data = value && typeof value === 'object' && !Array.isArray(value) && value.kind === 'prop-data'
+                ? value.data : Array.isArray(value) ? value : value === undefined ? [] : [value];
+            return <StructuredField key={prop.id} prop={prop} value={{ id: prop.id, data: data as PropValue['data'] }} entryId="" languageIndex={0} disabled={props.disabled} onChange={nextData => props.onChange(field.key, structuredValue(nextData))} />;
         })}</div>;
     },
 });
