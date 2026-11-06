@@ -1,94 +1,161 @@
-// Snapshot source without environment files, generated data, or installed dependencies.
-import { mkdir, copyFile, lstat, open } from 'node:fs/promises';
+// Reproducible source contexts are extracted from exact Git commits, never dirty files.
+import { mkdir, open, writeFile } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { cmsRoot, gatewayRoot, runtimeDir } from './runtime.mjs';
-const templatesRoot = path.resolve(
-    process.env.E2E_TEMPLATES_ROOT ||
-        path.join(cmsRoot, '../Independent-Website-Templates'),
-);
-const runDir = path.join(runtimeDir, `build-${Date.now()}`);
-async function snapshot(root, name) {
-    const out = path.join(runDir, name);
+import { cmsRoot, gatewayRoot, runtimeDir, readEnv } from './runtime.mjs';
+export async function snapshotCommit(root, out) {
+    const git = (args) =>
+        execFileSync('git', args, {
+            cwd: root,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            maxBuffer: 128 * 1024 * 1024,
+        }).trim();
+    const commit = git(['rev-parse', 'HEAD']);
     await mkdir(out, { recursive: true });
-    const files = execFileSync(
-        'git',
-        ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
-        { cwd: root, encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 },
-    )
-        .split('\0')
-        .filter(Boolean);
-    for (const file of new Set(files)) {
-        if (
-            /(^|\/)(\.env[^/]*|\.npmrc|\.DS_Store|node_modules|\.git)(\/|$)|\.(pem|key)$|(^|\/)(id_rsa|id_ed25519)/.test(
-                file,
-            ) ||
-            /^(db|uploads|backups|deliverables|manual-assets|\.superpowers|backend\/(uploads|backups|dist)|ui\/dist|storefront\/(\.nuxt|\.output))\//.test(
-                file,
-            )
-        )
-            continue;
-        let info;
-        try {
-            info = await lstat(path.join(root, file));
-        } catch (error) {
-            if (error.code === 'ENOENT') continue;
-            throw error;
-        }
-        if (!info.isFile()) continue;
-        await mkdir(path.dirname(path.join(out, file)), { recursive: true });
-        await copyFile(path.join(root, file), path.join(out, file));
-    }
-    return out;
-}
-const contexts = {
-    cms: await snapshot(cmsRoot, 'cms'),
-    gateway: await snapshot(gatewayRoot, 'gateway'),
-    templates: await snapshot(templatesRoot, 'templates'),
-};
-for (const [name, args] of [
-    [
-        'cms',
-        [
-            '-t',
-            'local/cms-e2e:20261028',
-            '--build-arg',
-            'VITE_STOREFRONT_ORIGIN=http://127.0.0.1:13001',
-            '--build-arg',
-            'VITE_TEMPLATE_PREVIEW_ORIGIN=http://127.0.0.1:18081',
-            contexts.cms,
-        ],
-    ],
-    [
-        'storefront',
-        [
-            '-t',
-            'local/cms-storefront-e2e:20261028',
-            '-f',
-            path.join(contexts.cms, 'Dockerfile.storefront'),
-            contexts.cms,
-        ],
-    ],
-    ['gateway', ['-t', 'local/gateway-e2e:20261028', contexts.gateway]],
-    [
-        'template',
-        [
-            '-t',
-            'local/aeroframe:1.0.3',
-            '--build-arg',
-            'RELEASE_VERSION=1.0.3',
-            path.join(contexts.templates, 'templates/aeroframe/1.0.3'),
-        ],
-    ],
-]) {
-    console.log(`Building ${name}; log: ${path.join(runDir, name + '.log')}`);
-    const log = await open(path.join(runDir, name + '.log'), 'w');
-    const run = spawnSync('docker', ['build', ...args], {
-        cwd: cmsRoot,
-        stdio: ['ignore', log.fd, log.fd],
+    const archive = execFileSync('git', ['archive', '--format=tar', commit], {
+        cwd: root,
+        maxBuffer: 256 * 1024 * 1024,
     });
-    await log.close();
-    if (run.status !== 0)
-        throw new Error(`${name} image build failed (${run.status})`);
+    execFileSync('tar', ['-xf', '-', '-C', out], { input: archive });
+    let repository;
+    try {
+        repository = git(['remote', 'get-url', 'origin']);
+    } catch {
+        repository = root;
+    }
+    return { repository, commit };
 }
-console.log('All four local images built. No remote image was published.');
+export async function build() {
+    const e = await readEnv();
+    const templates = JSON.parse(e.E2E_TEMPLATES);
+    const roots = {
+        cms: cmsRoot,
+        gateway: gatewayRoot,
+        templates: path.resolve(
+            process.env.E2E_TEMPLATES_ROOT ||
+                path.join(cmsRoot, '../Independent-Website-Templates'),
+        ),
+        preview: path.resolve(
+            process.env.E2E_PREVIEW_ROOT ||
+                path.join(cmsRoot, '../Independent-Website-Preview'),
+        ),
+    };
+    const runDir = path.join(runtimeDir, `build-${Date.now()}`);
+    const repositories = {};
+    for (const [name, root] of Object.entries(roots))
+        repositories[name] = await snapshotCommit(
+            root,
+            path.join(runDir, name),
+        );
+    const context = (name) => path.join(runDir, name);
+    const images = {};
+    const jobs = [
+        [
+            'cms',
+            e.E2E_CMS_IMAGE,
+            [
+                '--build-arg',
+                'VITE_STOREFRONT_ORIGIN=http://127.0.0.1:13001',
+                '--build-arg',
+                'VITE_TEMPLATE_PREVIEW_ORIGIN=http://127.0.0.1:18081',
+                context('cms'),
+            ],
+            'cms',
+        ],
+        ['gateway', e.E2E_GATEWAY_IMAGE, [context('gateway')], 'gateway'],
+        [
+            'preview',
+            e.E2E_PREVIEW_IMAGE ||
+                `local/${e.COMPOSE_PROJECT_NAME}-preview:source`,
+            [context('preview')],
+            'preview',
+        ],
+        ...templates.map((t) => [
+            `${t.id}-${t.version}`,
+            t.image,
+            [
+                '--build-arg',
+                `RELEASE_VERSION=${t.version}`,
+                path.join(context('templates'), 'templates', t.id, t.version),
+            ],
+            'templates',
+        ]),
+    ];
+    for (const [name, tag, args, repo] of jobs) {
+        const logPath = path.join(runDir, `${name}.log`);
+        console.log(
+            `Building ${name} from ${repositories[repo].commit}; log: ${logPath}`,
+        );
+        const log = await open(logPath, 'w');
+        const run = spawnSync(
+            'docker',
+            [
+                'build',
+                '--build-arg',
+                `SOURCE_COMMIT=${repositories[repo].commit}`,
+                '-t',
+                tag,
+                ...args,
+            ],
+            { cwd: cmsRoot, stdio: ['ignore', log.fd, log.fd] },
+        );
+        await log.close();
+        if (run.status !== 0)
+            throw new Error(
+                `${name} clean image build failed (${run.status}); ${logPath}`,
+            );
+        const image = JSON.parse(
+            execFileSync('docker', ['image', 'inspect', tag], {
+                encoding: 'utf8',
+            }),
+        )[0];
+        images[name] = {
+            tag,
+            identityType: 'docker-engine-image-id',
+            imageId: image.Id,
+            sourceCommit: repositories[repo].commit,
+            imageRevisionLabel:
+                image.Config.Labels?.['org.opencontainers.image.revision'] ||
+                null,
+        };
+    }
+    const preview = spawnSync(
+        process.execPath,
+        [
+            '--test',
+            ...execFileSync('rg', ['--files', 'test', '-g', '*.test.mjs'], {
+                cwd: context('preview'),
+                encoding: 'utf8',
+            })
+                .trim()
+                .split('\n'),
+        ],
+        { cwd: context('preview'), encoding: 'utf8' },
+    );
+    await writeFile(
+        path.join(runDir, 'preview-tests.log'),
+        `${preview.stdout}\n${preview.stderr}`,
+    );
+    if (preview.status !== 0)
+        throw new Error('Clean preview source tests failed');
+    const result = {
+        schemaVersion: 1,
+        evidenceType: 'source-and-local-images-only',
+        formalLockAccepted: false,
+        pending: 'B2 public OCI and preview digests',
+        runDir,
+        repositories,
+        images,
+    };
+    await writeFile(
+        path.join(runtimeDir, 'build-evidence.json'),
+        `${JSON.stringify(result, null, 2)}\n`,
+    );
+    console.log(
+        'Clean four-repository verification complete; local images are not registry publication.',
+    );
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+    await build();

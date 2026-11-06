@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { open, mkdir } from 'node:fs/promises';
+import { open, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { cmsRoot, gatewayRoot, runtimeDir, readEnv } from './runtime.mjs';
@@ -13,16 +13,67 @@ if (process.argv[2] === 'platform-baseline') {
     const { collectPlatformBaseline } = await import('./platform-baseline.mjs');
     const document = await collectPlatformBaseline();
     if (!document.acceptance.publicArtifactRequestsRemainIndependent)
-        throw new Error('platform baseline failed: artifact availability changed during a control-plane outage');
+        throw new Error(
+            'platform baseline failed: artifact availability changed during a control-plane outage',
+        );
     if (!document.acceptance.hasFailureCodes)
-        throw new Error('platform baseline failed: one or more probe failures has no stable error code');
+        throw new Error(
+            'platform baseline failed: one or more probe failures has no stable error code',
+        );
     console.log('platform-baseline: PASS');
     process.exit(0);
 }
 if (process.argv[2] === 'analytics-isolation') {
     const { execFileSync } = await import('node:child_process');
-    execFileSync(process.execPath, ['ops/e2e/analytics-isolation.mjs'], { cwd: cmsRoot, stdio: 'inherit' });
+    execFileSync(process.execPath, ['ops/e2e/analytics-isolation.mjs'], {
+        cwd: cmsRoot,
+        stdio: 'inherit',
+    });
     process.exit(0);
+}
+if (
+    process.argv[2] === 'publication-control-plane' &&
+    process.env.E2E_LOCAL_CANDIDATES === '1'
+) {
+    await (
+        await import('./local-candidate-matrix.mjs')
+    ).runLocalCandidateMatrix({ faults: false });
+    console.log(
+        'publication-control-plane public-registry case: BLOCKED awaiting B2; local candidate proof passed separately',
+    );
+    process.exit(0);
+}
+if (process.argv[2] === 'publication-control-plane') {
+    try {
+        const { validatePlatformLock } = await import(
+            '../release/platform-lock.mjs'
+        );
+        validatePlatformLock(
+            JSON.parse(
+                await readFile(
+                    process.env.E2E_PLATFORM_LOCK ||
+                        path.join(cmsRoot, 'docs/releases/platform-lock.json'),
+                    'utf8',
+                ),
+            ),
+        );
+    } catch {
+        await mkdir(runtimeDir, { recursive: true });
+        await writeFile(
+            path.join(runtimeDir, 'public-registry-publication.json'),
+            JSON.stringify(
+                {
+                    status: 'blocked',
+                    reason: 'B2 verified public OCI/preview identities and complete PlatformLock are required; no local fallback is implied.',
+                },
+                null,
+                2,
+            ),
+        );
+        throw new Error(
+            'publication-control-plane BLOCKED awaiting B2 verified public identity lock',
+        );
+    }
 }
 const e = await readEnv();
 const templatesRoot = path.resolve(
@@ -45,10 +96,17 @@ const env = {
     STOREFRONT_E2E_PASSWORD: e.E2E_PASSWORD,
     STOREFRONT_E2E_PREVIEW_ORIGINS:
         'http://127.0.0.1:13001,http://127.0.0.1:18081',
-    E2E_CMS_IMAGE: 'local/cms-e2e:20261028',
-    RELEASE_IMAGE: 'local/aeroframe:1.0.3',
-    TEMPLATE_VERSION: '1.0.3',
-    RELEASE_VERSION: '1.0.3',
+    E2E_CMS_IMAGE: e.E2E_CMS_IMAGE,
+    RELEASE_IMAGE:
+        process.env.RELEASE_IMAGE || JSON.parse(e.E2E_TEMPLATES)[0].image,
+    TEMPLATE_ID:
+        process.env.E2E_TEMPLATE_ID || JSON.parse(e.E2E_TEMPLATES)[0].id,
+    TEMPLATE_VERSION:
+        process.env.E2E_TEMPLATE_VERSION ||
+        JSON.parse(e.E2E_TEMPLATES)[0].version,
+    RELEASE_VERSION:
+        process.env.E2E_TEMPLATE_VERSION ||
+        JSON.parse(e.E2E_TEMPLATES)[0].version,
     TEST_BUILT_TEMPLATE: '1',
 };
 const list = (root, pattern) =>
@@ -98,7 +156,10 @@ const suites = {
         cwd: cmsRoot,
         cmd: ['node', '--test', 'ops/e2e/gateway-flow.test.mjs'],
     },
-    retirement: { cwd: cmsRoot, cmd: ['node', '--test', 'ops/e2e/gateway-retirement.test.mjs'] },
+    retirement: {
+        cwd: cmsRoot,
+        cmd: ['node', '--test', 'ops/e2e/gateway-retirement.test.mjs'],
+    },
     recovery: {
         cwd: cmsRoot,
         cmd: ['node', '--test', 'ops/e2e/gateway-recovery.test.mjs'],
@@ -142,7 +203,9 @@ for (const name of names) {
         if (name === 'gateway') {
             // Worker claims are global. Never let unit/integration fixtures share
             // the running acceptance site's queue, credentials or routing state.
-            const { Pool } = createRequire(path.join(gatewayRoot, 'package.json'))('pg');
+            const { Pool } = createRequire(
+                path.join(gatewayRoot, 'package.json'),
+            )('pg');
             admin = new Pool({ connectionString: env.DATABASE_URL });
             const candidate = `gateway_test_${randomUUID().replaceAll('-', '')}`;
             await admin.query(`CREATE DATABASE "${candidate}"`);
@@ -151,10 +214,19 @@ for (const name of names) {
             url.pathname = `/${database}`;
             suiteEnv.DATABASE_URL = url.href;
             suiteEnv.GATEWAY_TEST_DATABASE_URL = url.href;
-            const migration = spawnSync('node', ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], {
-                cwd: gatewayRoot, env: suiteEnv, stdio: ['ignore', log.fd, log.fd],
-            });
-            if (migration.status !== 0) throw new Error('Gateway test database migration failed; see ignored log');
+            const migration = spawnSync(
+                'node',
+                ['node_modules/prisma/build/index.js', 'migrate', 'deploy'],
+                {
+                    cwd: gatewayRoot,
+                    env: suiteEnv,
+                    stdio: ['ignore', log.fd, log.fd],
+                },
+            );
+            if (migration.status !== 0)
+                throw new Error(
+                    'Gateway test database migration failed; see ignored log',
+                );
             console.log(`Isolated test database: ${database}`);
         }
         run = spawnSync(suite.cmd[0], suite.cmd.slice(1), {
@@ -165,7 +237,8 @@ for (const name of names) {
     } finally {
         try {
             // Only the fresh random database created by this invocation is removed.
-            if (database) await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);
+            if (database)
+                await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);
         } finally {
             if (admin) await admin.end();
             await log.close();

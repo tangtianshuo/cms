@@ -10,6 +10,10 @@ import {
     readEnv,
     saveEnv,
 } from './runtime.mjs';
+if (process.env.E2E_LOCAL_CANDIDATES === '1') {
+    await (await import('./local-bootstrap.mjs')).bootstrapLocal();
+    process.exit(0);
+}
 const e = await readEnv();
 async function api(route, body, scope = {}) {
     const response = await fetch(`http://127.0.0.1:18080/api/v4/${route}`, {
@@ -29,10 +33,14 @@ async function api(route, body, scope = {}) {
 }
 let token = '';
 if ((await api('auth/should-signup')).yes) {
-    const logs = execFileSync('docker', ['logs', 'cms-e2e-20261028-cms-1'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const logs = execFileSync(
+        'docker',
+        ['logs', `${e.COMPOSE_PROJECT_NAME}-cms-1`],
+        {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+        },
+    );
     const serverToken = /Server token: ([a-f0-9]{128})/.exec(logs)?.[1];
     if (!serverToken) throw new Error('Fresh administrator token unavailable');
     await api('auth/signup-admin', {
@@ -111,19 +119,56 @@ try {
         const catalog = await api('presets/catalog');
         const requestedVersion = process.env.E2E_PUBLIC_TEMPLATE_VERSION;
         const records = catalog.items
-            .filter((item) => item.id === 'aeroframe' && item.manifestChecksum)
-            .sort((a, b) => String(b.version).localeCompare(String(a.version), undefined, { numeric: true }));
-        let record = records.find((item) => !requestedVersion || item.version === requestedVersion);
+            .filter(
+                (item) =>
+                    item.id === (process.env.E2E_TEMPLATE_ID || 'aeroframe') &&
+                    item.manifestChecksum,
+            )
+            .sort((a, b) =>
+                String(b.version).localeCompare(String(a.version), undefined, {
+                    numeric: true,
+                }),
+            );
+        let record = records.find(
+            (item) => !requestedVersion || item.version === requestedVersion,
+        );
         let localRegistryFallback = false;
         let fallbackManifest;
         if (!record?.manifestChecksum) {
             let cachedSite;
-            try { cachedSite = JSON.parse(await readFile(path.join(runtimeDir, 'gateway-site.json'), 'utf8')); }
-            catch { cachedSite = null; }
-            const cached = cachedSite?.publishedTemplateRecord ? JSON.parse(cachedSite.publishedTemplateRecord) : JSON.parse(await readFile(path.join(runtimeDir, 'public-template.json'), 'utf8'));
-            if (cachedSite?.presetManifestSnapshot) fallbackManifest = JSON.parse(cachedSite.presetManifestSnapshot);
-            if (!cached?.id || !cached?.version || !cached?.manifestChecksum || !cached?.sourceCommit || !cached?.imageDigest || !cached?.imageRepository) {
-                throw new Error(`No verified public AeroFrame version available${requestedVersion ? ` for ${requestedVersion}` : ''}`);
+            try {
+                cachedSite = JSON.parse(
+                    await readFile(
+                        path.join(runtimeDir, 'gateway-site.json'),
+                        'utf8',
+                    ),
+                );
+            } catch {
+                cachedSite = null;
+            }
+            const cached = cachedSite?.publishedTemplateRecord
+                ? JSON.parse(cachedSite.publishedTemplateRecord)
+                : JSON.parse(
+                      await readFile(
+                          path.join(runtimeDir, 'public-template.json'),
+                          'utf8',
+                      ),
+                  );
+            if (cachedSite?.presetManifestSnapshot)
+                fallbackManifest = JSON.parse(
+                    cachedSite.presetManifestSnapshot,
+                );
+            if (
+                !cached?.id ||
+                !cached?.version ||
+                !cached?.manifestChecksum ||
+                !cached?.sourceCommit ||
+                !cached?.imageDigest ||
+                !cached?.imageRepository
+            ) {
+                throw new Error(
+                    `No verified public AeroFrame version available${requestedVersion ? ` for ${requestedVersion}` : ''}`,
+                );
             }
             record = {
                 schemaVersion: 1,
@@ -141,8 +186,13 @@ try {
         const installed = await api(
             'presets/import',
             {
-                presetId: 'aeroframe',
-                ...(localRegistryFallback ? {} : { presetVersion: record.version, manifestChecksum: record.manifestChecksum }),
+                presetId: process.env.E2E_TEMPLATE_ID || 'aeroframe',
+                ...(localRegistryFallback
+                    ? {}
+                    : {
+                          presetVersion: record.version,
+                          manifestChecksum: record.manifestChecksum,
+                      }),
                 siteName: 'Docker Gateway Store',
                 includeDemo: true,
             },
@@ -150,17 +200,23 @@ try {
         );
         if (localRegistryFallback) {
             const manifest = fallbackManifest;
-            if (!manifest) throw new Error('Public manifest fallback cache is missing');
-            await mongo.db().collection('bcms_site_installations').updateOne(
-                { _id: site._id, workspaceId: workspace._id },
-                { $set: {
-                    presetVersion: record.version,
-                    presetManifestSnapshot: JSON.stringify(manifest),
-                    publishedTemplateRecord: JSON.stringify(record),
-                    theme: manifest.presentation.theme,
-                    updatedAt: Date.now(),
-                } },
-            );
+            if (!manifest)
+                throw new Error('Public manifest fallback cache is missing');
+            await mongo
+                .db()
+                .collection('bcms_site_installations')
+                .updateOne(
+                    { _id: site._id, workspaceId: workspace._id },
+                    {
+                        $set: {
+                            presetVersion: record.version,
+                            presetManifestSnapshot: JSON.stringify(manifest),
+                            publishedTemplateRecord: JSON.stringify(record),
+                            theme: manifest.presentation.theme,
+                            updatedAt: Date.now(),
+                        },
+                    },
+                );
         }
         await writeFile(
             path.join(runtimeDir, 'gateway-site.json'),
