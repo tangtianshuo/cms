@@ -51,7 +51,7 @@ test('unsaved homepage values and CMS media are rendered in the installed theme'
     assert.equal(result.preset.demo.brand, 'My Store');
     assert.equal(result.preset.demo.hero.title, 'Changed before save');
     assert.equal(result.preset.demo.hero.image, 'http://cms.local/api/v4/media/image-1/bin/image');
-    assert.deepEqual(result.sections, ['hero-carousel', 'info-grid', 'faq']);
+    assert.deepEqual(result.sections, ['hero', 'feature']);
 });
 
 test('collection and product previews map their own Entry fields without catalog demo content', () => {
@@ -182,4 +182,17 @@ test('legacy public editor adapters retain carousel media capability resolution'
     const result = contractPreview(site, [{ ...contractMedia[0], workspaceId: undefined }]);
     assert.equal((result.sectionConfigs![0].data.slides as Array<{ image: string }>)[0].image,
         'http://cms.local/api/v4/media/hero/bin/image?cap=private-capability');
+});
+
+test('legacy renderers receive established section names from canonical editor configs', () => {
+    const site = installation();
+    const home = site.pages.find(page => page.key === 'home')!;
+    home.sectionConfigs = [
+        { type: 'hero-carousel', enabled: true, data: { slides: [{ image: { _id: 'image-1' }, title: 'Banner', order: 0 }] } },
+        { type: 'info-grid', enabled: true, data: { items: [] } },
+    ];
+    const media = [{ _id: 'image-1', siteId: 'site', mimetype: 'image/png' }] as Media[];
+    const result = previewPresetPage({ site, pageKey: 'home', language: 'en',
+        entry: entry('home', { title: ['Home'], slug: ['home'], headline: ['Hello'] }), ...options, media });
+    assert.deepEqual(result.sections, ['hero', 'feature']);
 });

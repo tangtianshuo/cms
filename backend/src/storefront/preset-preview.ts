@@ -119,6 +119,31 @@ function resolvedContractProps(type: string, props: Record<string, unknown>, ena
     return result;
 }
 
+function legacyRendererSections(layout: string, pageSections: string[], sectionConfigs?: SectionConfig[]): string[] {
+    const configured = sectionConfigs
+        ? sectionConfigs.filter(section => section.enabled).map(section => section.type)
+        : pageSections;
+    if (layout === 'home') {
+        return configured.flatMap(section => section === 'hero-carousel' ? ['hero'] :
+            section === 'info-grid' ? ['feature'] :
+            section === 'hero' || section === 'feature' ? [section] : []);
+    }
+    if (layout === 'collection-list') {
+        const hasGrid = configured.some(section => section === 'info-grid' || section === 'grid');
+        return hasGrid ? ['heading', 'grid'] : configured.filter(section => section === 'heading');
+    }
+    if (layout === 'product-detail') {
+        return configured.flatMap(section => section === 'product-gallery' ? ['gallery'] :
+            section === 'product-information' ? ['information'] :
+            section === 'product-description' ? ['description'] :
+            ['gallery', 'information', 'description'].includes(section) ? [section] : []);
+    }
+    if (layout === 'content-page') {
+        return configured.some(section => section === 'info-grid' || section === 'story') ? ['story'] : [];
+    }
+    return pageSections;
+}
+
 function pointer(site: SiteInstallation, modelKey: string, entry: Entry | undefined,
     language: string, fieldKey: string, targetKey: string, relatedEntries: Entry[]): Entry | undefined {
     const value = fieldData(site, modelKey, entry, language, fieldKey)[0];
@@ -227,7 +252,8 @@ export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePrev
         kind: 'preset-page', view,
         preset: { id: manifest.id, version: manifest.version, name: site.name, description: '',
             theme: site.theme, demo, showcase: manifest.showcase ? structuredClone(manifest.showcase) : undefined },
-        sections: page.sections,
+        sections: manifest.editor?.sections.length ? page.sections
+            : legacyRendererSections(page.layout, page.sections, page.sectionConfigs),
         sectionConfigs,
         ...(layoutDocument ? { layoutDocument } : {}),
         seo: { title: page.seoTitle || operations.seoTitle || (view === 'page' ? demo.page.title : site.name), description: seoDescription },

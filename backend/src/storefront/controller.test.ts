@@ -82,3 +82,63 @@ test('preview endpoint rejects requests without a CMS access token', async () =>
         );
     }
 });
+
+test('preview runtime endpoint rejects unauthenticated access', async () => {
+    const controller = await StorefrontController({} as never);
+    const runtime = (await controller.methods(controller)).find(method => method.name === 'previewRuntime')!;
+    assert.ok(runtime);
+    await assert.rejects(runtime.handler({ headers: {}, query: {} } as never, {} as never),
+        (error: unknown) => (error as { status?: number })?.status === 403);
+});
+
+test('preview runtime endpoint uses the authorized installation and keeps unavailable states safe and distinct', async (t) => {
+    const { RP } = await import('../security/route-protection/main');
+    const { Repo } = await import('../repo');
+    const { Config } = await import('../config');
+    const { verifiedWorkspace, workspaceContext } = await import('../workspaces/context');
+    const context = { workspaceId: 'workspace-a', siteId: 'site-a', actorId: 'user-a', admin: true,
+        instanceAdmin: true, role: 'admin' as const };
+    // Authentication is exercised above; this test fixes the verified principal at the auth boundary.
+    t.mock.method(RP, 'createJwtCheck', () => async () => ({ [verifiedWorkspace]: context }));
+    const installation = { status: 'ready', presetId: 'aeroframe', presetVersion: '1.0.4' };
+    const previousMethods = Object.getOwnPropertyDescriptor(Repo.siteInstallation, 'methods')!;
+    Object.defineProperty(Repo.siteInstallation, 'methods', { configurable: true, value: { findSelected: async () => {
+        assert.equal(workspaceContext()?.workspaceId, 'workspace-a');
+        assert.equal(workspaceContext()?.siteId, 'site-a');
+        return installation as never;
+    } } });
+    const previousService = Config.storefrontPreviewServiceUrl;
+    Object.defineProperty(Config, 'storefrontPreviewServiceUrl', { value: 'https://private.preview.invalid', configurable: true });
+    const controller = await StorefrontController({} as never);
+    const runtime = (await controller.methods(controller)).find(method => method.name === 'previewRuntime')!;
+    const headers: Record<string, string> = {};
+    const reply = { header: (key: string, value: string) => { headers[key] = value; } };
+    const request = (query: Record<string, string> = { templateId: 'aeroframe', templateVersion: '1.0.4' }) =>
+        runtime.handler({ headers: {}, query } as never, reply as never);
+    let calls = 0;
+    const fetchMock = t.mock.method(globalThis, 'fetch', async () => { calls++; return new Response(null, { status: 404 }); });
+    try {
+        await assert.rejects(request({ templateId: 'fireguard', templateVersion: '1.0.1' }),
+            (error: unknown) => (error as { status?: number })?.status === 400);
+        assert.equal(calls, 0);
+        assert.deepEqual(JSON.parse(await request()), { status: 'unavailable', configured: true, runtime: null,
+            templateId: 'aeroframe', templateVersion: '1.0.4' });
+        assert.equal(headers['Cache-Control'], 'no-store');
+        fetchMock.mock.mockImplementation(async () => { throw new Error('https://private.preview.invalid?secret=credential'); });
+        await assert.rejects(request(), (error: unknown) => {
+            const details = error as { status: number; message: { message: string } };
+            assert.equal(details.status, 503);
+            assert.deepEqual(details.message, { message: '预览服务暂时不可用，可重试' });
+            return true;
+        });
+        const descriptor = { templateId: 'aeroframe', templateVersion: '1.0.4', protocolVersion: 1,
+            digest: `sha256:${'e'.repeat(64)}`, url: 'https://private.preview.invalid/preview/aeroframe/1.0.4/' };
+        fetchMock.mock.mockImplementation(async () => Response.json(descriptor));
+        assert.deepEqual(JSON.parse(await request()), { status: 'ready', configured: true, runtime: descriptor });
+        Object.defineProperty(Config, 'storefrontPreviewServiceUrl', { value: '', configurable: true });
+        assert.deepEqual(JSON.parse(await request()), { status: 'legacy', configured: false, runtime: null });
+    } finally {
+        Object.defineProperty(Repo.siteInstallation, 'methods', previousMethods);
+        Object.defineProperty(Config, 'storefrontPreviewServiceUrl', { value: previousService, configurable: true });
+    }
+});

@@ -19,7 +19,7 @@ import type { NavigationNode } from '../../components/studio/navigation-editor';
 import { SiteOperations } from '../../components/studio/site-operations';
 import { VisualPageEditor } from '../../components/studio/visual-page-editor';
 import { PageCreateWizard, type PageBlueprintOption } from '../../components/studio/page-create-wizard';
-import { resolvePreviewTarget } from '../../util/template-preview';
+import { loadPreviewRuntime, resolvePreviewTarget, type PreviewRuntime } from '../../util/template-preview';
 import { canUseSectionEditor, sectionTypesForEditor } from '../../components/studio/page-options';
 
 type Section = 'overview' | 'operations' | 'products' | 'pages' | 'media' | 'settings' | 'release';
@@ -44,7 +44,15 @@ export const StudioView = defineComponent({
         const pageEditor = ref<PageDraft>();
         const pageWizardOpen = ref(false);
         const previewPayload = ref<unknown>();
+        const previewRuntime = ref<PreviewRuntime | null>(null);
         const previewLoading = ref(false);
+        const previewError = ref('');
+        let previewSequence = 0;
+        function clearPreview() {
+            previewSequence++;
+            previewPayload.value = undefined; previewRuntime.value = null;
+            previewError.value = ''; previewLoading.value = false;
+        }
         const editorTab = ref<'content' | 'page'>('content');
         const pageTitle = ref('');
         const pagePath = ref('');
@@ -69,14 +77,14 @@ export const StudioView = defineComponent({
             templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
             legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
             renderers: import.meta.env.VITE_TEMPLATE_PREVIEW_RENDERERS,
-        }));
-        const pagePreviewUrl = computed(() => pagePreviewTarget.value.origin ? `${pagePreviewTarget.value.origin}/preview` : '');
+        }, previewRuntime.value));
+        const pagePreviewUrl = computed(() => pagePreviewTarget.value.url || (pagePreviewTarget.value.origin ? `${pagePreviewTarget.value.origin}/preview` : ''));
         const canUpload = computed(() => sdk.context?.context.role !== 'viewer' && Boolean(sdk.context?.context.instanceAdmin || sdk.context?.context.mediaPermissions?.post));
         function canLeave() { return !busy.value && (!dirty.value || window.confirm('有尚未保存的修改。确定放弃这些修改吗？')); }
         function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || busy.value) { event.preventDefault(); event.returnValue = ''; } }
         onBeforeRouteLeave(() => canLeave());
-        onBeforeRouteUpdate(() => { if (!canLeave()) return false; editor.value = undefined; pageEditor.value = undefined; error.value = ''; });
-        onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
+        onBeforeRouteUpdate(() => { if (!canLeave()) return false; clearPreview(); editor.value = undefined; pageEditor.value = undefined; error.value = ''; });
+        onBeforeUnmount(() => { clearPreview(); window.removeEventListener('beforeunload', beforeUnload); });
         function resetSettings() {
             const current = state.value.site;
             if (current) settings.value = { name: current.name, background: current.theme.background, foreground: current.theme.foreground, accent: current.theme.accent, muted: current.theme.muted,
@@ -89,10 +97,18 @@ export const StudioView = defineComponent({
             catch (cause) { mediaError.value = userErrorMessage(cause); }
         }
         async function loadPreview() {
+            clearPreview();
+            const sequence = previewSequence;
             previewLoading.value = true;
-            try { previewPayload.value = await sdk.send({ url: '/api/v4/storefront/site-preview', method: 'GET' }); }
-            catch { previewPayload.value = undefined; }
-            finally { previewLoading.value = false; }
+            try {
+                const payload = await sdk.send({ url: '/api/v4/storefront/site-preview', method: 'GET' });
+                const runtime = await loadPreviewRuntime(payload, url => sdk.send({ url, method: 'GET' }));
+                if (sequence !== previewSequence) return;
+                previewRuntime.value = runtime;
+                previewPayload.value = payload;
+            } catch (cause) {
+                if (sequence === previewSequence) previewError.value = userErrorMessage(cause);
+            } finally { if (sequence === previewSequence) previewLoading.value = false; }
         }
         function overlayPagePreview(page: PageDraft) {
             if (!previewPayload.value || typeof previewPayload.value !== 'object' || !Array.isArray((previewPayload.value as any).pages)) return;
@@ -148,7 +164,7 @@ export const StudioView = defineComponent({
             original.value = snapshot(); error.value = ''; notice.value = '';
             void loadPreview();
         }
-        function closeEditor() { if (!canLeave()) return; editor.value = undefined; pageEditor.value = undefined; error.value = ''; }
+        function closeEditor() { if (!canLeave()) return; clearPreview(); editor.value = undefined; pageEditor.value = undefined; error.value = ''; }
         function applyDeepLink() {
             const requestedModel = typeof route.query.modelKey === 'string' ? route.query.modelKey : '';
             const requestedEntry = typeof route.query.entryId === 'string' ? route.query.entryId : '';
@@ -271,7 +287,7 @@ export const StudioView = defineComponent({
                 <div class="studio-fields"><label>页面名称<input required maxlength={120} v-model={page.title} /></label><label>访问路径<input required v-model={page.path} readonly={page.layout === 'home' || (!page.blueprintKey && page.path.includes(':'))} /><span class="studio-help">{page.layout === 'home' ? '首页路径固定为 /。' : !page.blueprintKey && page.path.includes(':') ? '动态详情页路径由模板固定。' : '使用小写字母、数字、连字符组成的唯一路径，例如 /about-us。'}</span></label><label>SEO 标题<input maxlength={120} v-model={page.seoTitle} /></label><label>SEO 描述<textarea maxlength={320} rows={3} v-model={page.seoDescription} /></label>
                     {canBind && <label>绑定内容<select disabled={entryDirty.value} v-model={page.entryId}><option value="">{page.blueprintKey ? '请选择内容' : '使用默认主页内容'}</option>{state.value.models.find(model => model.key === page.modelKey)?.entries.map(entry => <option value={entry.id}>{entryTitle(entry)}</option>)}</select>{entryDirty.value && <span class="studio-help">保存页面内容后可更换绑定。</span>}</label>}
                     {useSectionEditor ? <SectionEditor modelValue={editorConfigs as any} allowed={sectionAllowed as any} required={requiredSections as any} labels={effectiveOptions.labels} media={siteImages.value} onUpload={canUpload.value ? uploadMedia : undefined} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.sectionConfigs = value; page.sections = value.map((section: any) => section.type); overlayPagePreview(page); }} /> :
-                        <VisualPageEditor modelValue={visualLayout as any} pageTitle={page.title} pagePath={page.path} seoTitle={page.seoTitle} seoDescription={page.seoDescription} previewPayload={previewPayload.value as any} previewUrl={pagePreviewUrl.value} previewPath={page.path} pageKey={page.key} templateId={site.value?.presetId} templateVersion={site.value?.presetVersion} sectionLabels={effectiveOptions.labels} navigation={settings.value.navigation || site.value?.navigation || []} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.layoutDocument = value; page.sectionConfigs = value.root.map((node: any) => ({ type: node.type, enabled: node.enabled, data: node.props })); page.sections = value.root.map((node: any) => node.type); overlayPagePreview(page); }} onUpdate:navigation={(value: NavigationNode[]) => { settings.value.navigation = value; overlayPagePreview(page); }} onUpdate:seoTitle={(value: string) => { page.seoTitle = value; overlayPagePreview(page); }} onUpdate:seoDescription={(value: string) => { page.seoDescription = value; overlayPagePreview(page); }} />}
+                        <VisualPageEditor modelValue={visualLayout as any} pageTitle={page.title} pagePath={page.path} seoTitle={page.seoTitle} seoDescription={page.seoDescription} previewPayload={previewPayload.value as any} previewNotice={previewError.value || (previewLoading.value ? '正在加载网站预览…' : previewPayload.value ? pagePreviewTarget.value.notice : '')} previewUrl={pagePreviewUrl.value} previewPath={page.path} pageKey={page.key} templateId={site.value?.presetId} templateVersion={site.value?.presetVersion} sectionLabels={effectiveOptions.labels} navigation={settings.value.navigation || site.value?.navigation || []} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.layoutDocument = value; page.sectionConfigs = value.root.map((node: any) => ({ type: node.type, enabled: node.enabled, data: node.props })); page.sections = value.root.map((node: any) => node.type); overlayPagePreview(page); }} onUpdate:navigation={(value: NavigationNode[]) => { settings.value.navigation = value; overlayPagePreview(page); }} onUpdate:seoTitle={(value: string) => { page.seoTitle = value; overlayPagePreview(page); }} onUpdate:seoDescription={(value: string) => { page.seoDescription = value; overlayPagePreview(page); }} />}
                     <label class="studio-check"><input type="checkbox" disabled={page.layout === 'home'} checked={page.enabled !== false} onChange={event => { page.enabled = (event.target as HTMLInputElement).checked; }} />启用页面</label><label class="studio-check"><input type="checkbox" checked={page.navigation !== false} onChange={event => { page.navigation = (event.target as HTMLInputElement).checked; }} />加入导航</label>
                 </div>{!editor.value && <p class="studio-help">{page.path.includes(':') ? '此页面按商品或分类自动生成，请到对应内容分类编辑资料。' : '此页面尚未绑定可编辑内容，可在上方绑定内容后保存。'}</p>}</fieldset></form>;
         };
