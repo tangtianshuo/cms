@@ -59,7 +59,7 @@
 - Consumes: 已有 `resolvePreviewRuntime(serviceUrl, templateId, templateVersion, fetcher): Promise<PreviewRuntime|null>`；GET `/api/v1/renderers/:id/:version`。
 - Produces: 已有 `PreviewRuntime { templateId, templateVersion, protocolVersion:1, digest, url }`；CMS 仅返回当前已授权站点安装版本的 descriptor。现有 controller 路径保持不变，不新增平行 resolver。
 
-- [ ] **Step 1：保留现有测试，并加入协议漂移失败用例。** `preview-service.test.ts`：
+- [x] **Step 1：保留现有测试，并加入协议漂移失败用例。** `preview-service.test.ts`：
 
 ```ts
 import assert from 'node:assert/strict';
@@ -75,7 +75,7 @@ test('rejects renderer downgrade even when the origin is trusted', async () => {
 ```
 
 补充 service 404、503、超时、身份不同、非法 digest、不同 origin、重定向；UI 覆盖旧 iframe 的 ready 消息不能给新站发草稿、切站清理旧 descriptor。
-- [ ] **Step 2：运行 CMS 定向测试，记录当前通过项与失败项。**
+- [x] **Step 2：运行 CMS 定向测试，记录当前通过项与失败项。**
 
 ```sh
 TS_NODE_PROJECT=backend/tsconfig.json TS_NODE_TRANSPILE_ONLY=1 node -r ts-node/register -r tsconfig-paths/register --test backend/src/storefront/preview-service.test.ts backend/src/storefront/preset-preview.test.ts
@@ -83,7 +83,7 @@ node --test ui/test/template-preview.test.mjs
 ```
 
 已有实现若直接通过，不故意删除代码制造失败；只对新增未满足行为执行红绿循环。
-- [ ] **Step 3：完成 controller/UI 接线。** 安装版本从服务端 SiteInstallation 获取；404 显示“该模板版本尚未提供预览”，503 显示“预览服务暂时不可用，可重试”；不借用其他模板。保留 legacy 配置仅作显式迁移路径，统一服务已配置时不得静默降级到错误版本。
+- [x] **Step 3：完成 controller/UI 接线。** 安装版本从服务端 SiteInstallation 获取；404 显示“该模板版本尚未提供预览”，503 显示“预览服务暂时不可用，可重试”；不借用其他模板。保留 legacy 配置仅作显式迁移路径，统一服务已配置时不得静默降级到错误版本。
 
 ```ts
 const runtime = await resolvePreviewRuntime(serviceUrl, site.presetId, site.presetVersion);
@@ -93,8 +93,8 @@ return { status: 'ready', runtime };
 ```
 
 消息接受条件同时检查 origin、iframe.contentWindow、模板 ID/version、protocolVersion；只向 descriptor.url 的 origin 发送快照。服务端报错不附带 secret 或内部 URL。
-- [ ] **Step 4：重跑 Step 2，并执行 `npm run build:noEmit --prefix backend` 和 `npm run type-check --prefix ui`。** 预期全部通过；接口状态与 UI 提示一致。
-- [ ] **Step 5：提交。** `feat: resolve private preview by exact template version`；更新操作文档，说明后端环境变量生效需要重新部署 CMS 后端。
+- [x] **Step 4：重跑 Step 2，并执行 `npm run build:noEmit --prefix backend` 和 `npm run type-check --prefix ui`。** 预期全部通过；接口状态与 UI 提示一致。
+- [x] **Step 5：提交。** `feat: resolve private preview by exact template version`；更新操作文档，说明后端环境变量生效需要重新部署 CMS 后端。
 
 执行提交前先核对 staging 只包含本任务；下面命令在各自目标工作树根执行。若列出的规划文件没有生成，先核对任务实现，不用 `git add -A` 绕过。跨仓提交分别记录 SHA。
 

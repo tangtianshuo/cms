@@ -100,6 +100,16 @@ Independent review found stale image evidence, failed cleanup acceptance and for
 
 The historical CMS image accurately records source `0db4e29eae9b06f0c5479ce2fe8f7ecc577a4917`; later tooling commits do not relabel it. Local Docker configuration IDs are not public OCI manifest digests. Full public CMS→control→worker execution, final PlatformLock and formal evidence consumption await B2. A4 remains unchecked overall.
 
+## B1 — Exact-version CMS preview accepted
+
+CMS `a3bf2ed42e5161b2563221cac50bda6fc7ebed9f` connects the authorized installed version to the single resolver and guards iframe delivery by origin, window, template version and protocol. Missing renderer and temporary service failure remain distinct; a configured service cannot silently fall back. Switching sites clears the old descriptor and rejects stale messages while same-site edits retain a valid handshake.
+
+Templates `0db7ce5f309cd1c8e7bf7d52553e0fa34d7da84e` adds protocol 1 to the existing ready producers in both unpublished versions. Original sources and old published versions were preserved.
+
+Final focused checks: backend 20/20, UI 20/20, Templates protocol and actual CMS/Gateway/Templates projection 8/8, all zero skipped; backend/UI type checks passed. UI checking required the existing generated backend type declarations. Independent review approved specification and quality, with one deferred minor cleanup for new test non-null assertions. Backend lint reported zero errors and 238 warnings, including existing warnings; no pristine-lint claim. Source fingerprints: 154 unchanged.
+
+The Vue host-renderer tests are executable component tests, not real browser evidence. Final bundle/registry identity, embedding policy, browser acceptance and canvas selection remain B2/B3/B4/B7 work.
+
 ## Next task
 
-B1 integrates exact-version CMS preview resolution while preserving accepted A2 media/layout behavior and original uncommitted source changes. Continue B1 → B4 → B5 → B6 → B7; complete final public identities and A4 acceptance after B2.
+Build the explicitly early B3 browser fixture foundation, then continue B4 → B5 → B6 → B7. Keep full B3 and formal A4 acceptance pending their real B2/B7 dependencies.

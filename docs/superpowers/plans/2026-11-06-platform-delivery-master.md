@@ -139,7 +139,7 @@ interface AcceptanceEvidence {
 - [x] A2 Templates/CMS 整合及新不可变版本（Templates `c0e2e17`、`e1cb6c6`；CMS `0d29068`；实际跨仓与 HTTP 契约 16 项通过、零跳过；独立复审通过。外部产物发布留待 B2）。
 - [x] A3 独立询盘/事件服务与授权收口（Gateway `ca3c543`、`f71bbd0`；Templates `57b1233`；CMS `513b994`；真实进程故障演练及定向数据库 23 项通过，复审通过；管理身份授权由 C1 继续完成）。
 - [ ] A4 干净构建、运行隔离及组合锁定（本地阶段及修复复审通过：CMS `d68f194`、`c1ab0d1`；Gateway `58e615f`；Templates `ed63e4e`。正式公共产物身份、完整锁文件及公共链路验收待 B2，整项未完成）。
-- [ ] B1 精确版本 CMS 预览接入。
+- [x] B1 精确版本 CMS 预览接入（CMS `a3bf2ed`；Templates `0db7ce5`；后端/UI 各 20 项、跨仓 8 项通过，类型检查及独立审查通过；真实浏览器与公共产物由 B2/B3 验收）。
 - [ ] B2 预览包和 registry 发布事务。
 - [ ] B3 预览部署与浏览器一致性。
 - [ ] B4 模板声明驱动属性表单，消除普通用户 JSON 操作。
