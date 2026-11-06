@@ -88,6 +88,18 @@ The actual process drill ran production control, compiled ingest and both compil
 
 The complete Docker/traffic/TLS outage matrix belongs to A4. Shared service management authorization remains C1. Browser interaction, external publication and production acceptance are not claimed here. The 154 protected source fingerprints remain unchanged.
 
+## A4 — Local implementation accepted; formal acceptance pending
+
+Commits: CMS `d68f1943160259f82468c09d18dd8a0eed854412` and `c1ab0d1ddb0d9e6007f9b3ab089e6e9473cb7c23`; Gateway `58e615f10cc42cbffb711de65130d9ab9879de7a`; Templates `ed63e4e814d028f1ca64af98b2a1da37138a649c`.
+
+Four exact-source repositories produced five local Docker images. Two template runtimes each survived actual CMS, control, worker and ingest stops: eight scenarios preserved seven public responses and deployment authority. Separate local publication covered draft isolation, rollback, idempotency, conflicts, candidate artifact-integrity failure and worker restart. This is not evidence of an unhealthy-runtime injection or Internet DNS/TLS acceptance.
+
+The real Docker run exposed and corrected the strict worker Env consumer mismatch. Both new templates gained artifact-only sitemaps. Recorded checks include Gateway 228 passes/1 Linux-only skip, actual cross-repository and built-HTTP contract 16 passes, sitemap 2 passes and Docker adapter/client 29 passes. These scopes are not summed. All owned running resources were removed and the two disposable A1 database services restored; 154 protected source fingerprints remained unchanged.
+
+Independent review found stale image evidence, failed cleanup acceptance and formal/local evidence confusion. Fix regressions passed 10/10 with zero skips, historical evidence passed the stricter identity validation, and the archive test passed from a fresh cwd. Scoped re-review closed all three important and both minor findings. Formal mode now exits nonzero until authentic public-chain evidence is wired; a format-valid lock cannot turn local proof into formal acceptance.
+
+The historical CMS image accurately records source `0db4e29eae9b06f0c5479ce2fe8f7ecc577a4917`; later tooling commits do not relabel it. Local Docker configuration IDs are not public OCI manifest digests. Full public CMS→control→worker execution, final PlatformLock and formal evidence consumption await B2. A4 remains unchecked overall.
+
 ## Next task
 
-A4 implements reproducible clean builds, parameterized two-template runtime fault checks and strict platform-lock validation. Final lock acceptance remains pending until B2 supplies real image/preview digests; no placeholder identities will be used.
+B1 integrates exact-version CMS preview resolution while preserving accepted A2 media/layout behavior and original uncommitted source changes. Continue B1 → B4 → B5 → B6 → B7; complete final public identities and A4 acceptance after B2.
