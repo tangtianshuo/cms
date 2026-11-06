@@ -1,6 +1,6 @@
 # Platform delivery execution record
 
-Execution date: 2026-11-06 (Asia/Shanghai).
+Execution dates: 2026-11-06–2026-11-07 (Asia/Shanghai).
 
 ## Scope and isolation
 
@@ -144,6 +144,18 @@ The failed settings case exposed an existing operations-media roundtrip defect: 
 
 B5 accepts entry/component convergence only. B6 structured adapters, B7 unified session/unsaved preview/partial saves, final FireGuard validation after later changes, canonical publication and image pixels remain their later gates. No external push/publication or production change occurred.
 
+## B6 — Structured content accepted
+
+CMS `7d6fe77e27ee318eb517cac6b22f0b70bcbe1b7c` and fix `bea75a36f342c487e9dbc80ea33548f661a3441c` add the production StructuredField adapter to the existing local Entry draft. Metadata rich text, declared arrays/groups/widgets and section rich nodes retain structure; unknown schema-less section values stay readonly and required unavailable values block creation. Generic and Studio writes share structural validation and actual resource authorization. Rich links carry site/lifetime context through the global media picker. Controlled editor updates retain selection, and nested dialogs handle only the active layer's cancellation.
+
+The initial independent review found three Important gaps: known node types with invalid tree grammar were accepted; widgets inside rich text retained old string/path assumptions that prevented edits from reaching the draft; unbound historical content bypassed link workspace/read authorization. Fix1 adds parent/child rules, repairs canonical/string widget handling and relative paths with explicit array transactions, and validates internal links at the workspace repository write boundary. Site constraints remain additional to workspace/permission checks. No historical content is assigned a fabricated site.
+
+Initial evidence: UI 13/13, backend 35/35, full AeroFrame B6 browser 14/14, FireGuard focused 4/4; selected B4/B5 controls 6/6 were inside a retained mixed 16/20 run, not a passing combined run. Fix evidence: backend 7/7 (earlier affected compatibility scope 18/18), actual Vue/TipTap rich-widget consumers 5/5, actual AeroFrame/FireGuard desktop/mobile 4/4 each. Four invalid tree examples through generic create/update, Studio and section writes return 400 with stored Entry/site unchanged; empty and lawful nested controls succeed. Real HTTP plus Mongo coverage proves 10 foreign-workspace/unreadable/forged-reference denials with no persistence and four lawful unbound-content controls. Local Yjs provider/remote update compatibility is tested with an in-memory transport; two-user network acceptance is not claimed.
+
+Build:types, backend/UI type checks and normal commit hooks passed with 237 historical backend warnings/zero errors. Color-variable warnings remain a deferred Minor; output is not described as pristine. Original protected-source fingerprint check still reports 154 unchanged. The fix report distinguishes actual RED from fixture failures and preserves precise command/output/source provenance. Scoped independent re-review closed I1–I3 with no new Critical/Important findings; B6 is accepted with the documented Minor noise baseline. Controller checked the report, exact logs, commit scope and source fingerprints.
+
+B7 retains two mandatory dependencies: both new Templates need safe rich-node DOM rendering (current projection flattens marks/lists/hr), and a normal structured save of a nonexistent internal route can return 200 before Snapshot rejects preview. The lawful `/` test control does not fix the latter; B7 must use authoritative complete-site overlay validation with a locatable error and last-valid canvas. B6 storage fidelity is not formatted template/public rendering evidence. Existing settings repeated-save/null handling, unified partial saves/live preview, final B2 bundles and B3/public/image-pixel acceptance remain later gates.
+
 ## Next task
 
-B6 structured content editing and save adapters, followed by B7. Final B2 artifacts must include the amended Templates source; full B3, B4 public comparison and formal A4 acceptance retain those dependencies. D1 also carries the existing repeated-settings-save defect above.
+B7 unified draft session and live preview. Final B2 artifacts must include the amended Templates source; full B3, B4 public comparison and formal A4 acceptance retain those dependencies. D1 also carries the existing repeated-settings-save defect above.
