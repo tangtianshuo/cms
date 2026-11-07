@@ -8,7 +8,7 @@ export async function state(page) {
         return window.bcms.sdk.studio.getSite();
     });
 }
-export async function openContent(page, modelKey = 'home') {
+export async function openContent(page, modelKey = 'home', language) {
     const id = await page.evaluate(async (modelKey) => {
         const sdk = window.bcms.sdk;
         await sdk.ensureContext();
@@ -36,6 +36,7 @@ export async function openContent(page, modelKey = 'home') {
                     Object.entries({
                         section: 'content',
                         ...id,
+                        ...(language ? { language } : {}),
                         field:
                             modelKey === 'home'
                                 ? 'headline'
@@ -49,8 +50,11 @@ export async function openContent(page, modelKey = 'home') {
     );
     await expect(workspace(page)).toBeVisible();
 }
-export async function openHero(page) {
-    await openContent(page);
+export async function openHero(page, language) {
+    await openContent(page, 'home', language);
+    return selectHeroField(page);
+}
+export async function selectHeroField(page) {
     const hero = await page.evaluate(async () => {
         await window.bcms.sdk.ensureContext();
         const s = await window.bcms.sdk.studio.getSite(),

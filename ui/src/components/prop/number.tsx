@@ -65,7 +65,6 @@ export const PropNumberInput = defineComponent({
 
         function initializeErrors(itemCount: number) {
             callAndClearUnsubscribeFns(errorUnsubs);
-            const valueData = props.value.data as string[];
             errors.value = [];
             if (props.prop.required) {
                 if (props.prop.array) {
@@ -73,7 +72,7 @@ export const PropNumberInput = defineComponent({
                         errors.value.push('');
                         errorUnsubs.push(
                             props.propValidator.register(() => {
-                                if (!valueData[i]) {
+                                if (!(props.value.data as number[])[i]) {
                                     errors.value[i] =
                                         t('props.requiredNumber');
                                     return false;
@@ -87,7 +86,7 @@ export const PropNumberInput = defineComponent({
                     errors.value.push('');
                     errorUnsubs.push(
                         props.propValidator.register(() => {
-                            if (!valueData[0]) {
+                            if (!(props.value.data as number[])[0]) {
                                 errors.value[0] =
                                     t('props.requiredNumber');
                                 return false;

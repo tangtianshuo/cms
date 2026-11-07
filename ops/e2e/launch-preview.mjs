@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
-import { openHero } from './launch-workspace.mjs';
+import { openHero, selectHeroField, save } from './launch-workspace.mjs';
+import { selectLaunchSite } from './launch-sites.mjs';
+import { authorPreviewLanguage } from './launch-language.mjs';
 export async function runPreviewScenarios({
     page,
     capture,
@@ -10,6 +12,8 @@ export async function runPreviewScenarios({
     local,
     results,
     resultFile,
+    peerSite,
+    peerMarker,
 }) {
     // An unavailable exact renderer is an external prerequisite, never a fake canvas.
     const runtime = await page.evaluate(async () => {
@@ -26,6 +30,19 @@ export async function runPreviewScenarios({
     });
     proof.previewStatus = runtime.status;
     if (runtime.status === 'ready') {
+        expect(peerSite?.cmsSiteId).toBeTruthy();
+        expect(peerSite.cmsSiteId).not.toBe(proof.site.cmsSiteId);
+        const otherMarker = peerMarker + ' peer saved';
+        await selectLaunchSite(page, peerSite);
+        await (await openHero(page)).fill(otherMarker);
+        await save(page);
+        await selectLaunchSite(page, proof.site);
+        const languagePlan = await authorPreviewLanguage(
+            page,
+            marker + ' translated',
+        );
+        await openHero(page);
+
         if (!local) {
             const currentLock = JSON.parse(
                 await readFile(process.env.E2E_PLATFORM_LOCK, 'utf8'),
@@ -175,7 +192,7 @@ export async function runPreviewScenarios({
                         .frameLocator('iframe[title="草稿预览"]')
                         .getByText(marker, { exact: true }),
                 ).toBeVisible();
-                let release, arrive, finish, failSeen;
+                let release, arrive, finish, failSeen, settlement;
                 const held = new Promise((r) => (release = r)),
                     seen = new Promise((r, reject) => {
                         arrive = r;
@@ -191,10 +208,17 @@ export async function runPreviewScenarios({
                         await held;
                         await route.fulfill({ response });
                         const received = await route.request().response();
-                        if (received) await received.finished();
+                        if (received) {
+                            await received.finished();
+                            settlement = 'delivered';
+                        } else {
+                            expect(route.request().failure()).toBeTruthy();
+                            settlement = 'cancelled';
+                        }
                     } catch (error) {
                         failSeen(error);
                         if (!route.request().failure()) throw error;
+                        settlement = 'cancelled';
                     } finally {
                         finish();
                     }
@@ -215,6 +239,8 @@ export async function runPreviewScenarios({
                             ),
                     );
                     await verify();
+                    expect(['delivered', 'cancelled']).toContain(settlement);
+                    return settlement;
                 } finally {
                     release();
                     await page.unroute(
@@ -223,19 +249,28 @@ export async function runPreviewScenarios({
                     );
                 }
             };
-            const currentUrl = page.url();
-            const language = await page.evaluate(async () => {
-                const sdk = window.bcms.sdk;
-                const langs = await sdk.language.getAll();
-                if (!langs.some((l) => l.code === 'fr'))
-                    await sdk.language.create({
-                        name: 'French',
-                        code: 'fr',
-                        nativeName: 'Français',
-                    });
-                return 'fr';
-            });
-            await retiredResponse(
+            const languageMarker = marker + ' current language';
+            const canvas = () => page.frameLocator('iframe[title="草稿预览"]');
+            const assertCurrent = async (wanted, retired, site, language) => {
+                await expect(
+                    page.locator('iframe[title="草稿预览"]'),
+                ).toHaveCount(1);
+                await expect(
+                    canvas().getByText(wanted, { exact: true }),
+                ).toBeVisible();
+                await expect(
+                    canvas().getByText(retired, { exact: true }),
+                ).toHaveCount(0);
+                expect(
+                    await page.evaluate(
+                        () => window.bcms.sdk.context.context.siteId,
+                    ),
+                ).toBe(site.cmsSiteId);
+                expect(new URL(page.url()).searchParams.get('language')).toBe(
+                    language,
+                );
+            };
+            const languageSettlement = await retiredResponse(
                 marker + ' retired language',
                 async () => {
                     await page
@@ -244,65 +279,63 @@ export async function runPreviewScenarios({
                     page.once('dialog', (d) => d.accept());
                     await page
                         .getByLabel('内容语言', { exact: true })
-                        .selectOption(language);
+                        .selectOption(languagePlan.language);
                     await expect(
                         page.getByLabel('内容语言', { exact: true }),
-                    ).toHaveValue(language);
+                    ).toHaveValue(languagePlan.language);
+                    const current = await selectHeroField(page);
+                    const request = page.waitForRequest(
+                        (r) =>
+                            r.url().endsWith('/api/v4/studio/preview') &&
+                            r.postData()?.includes(languageMarker),
+                    );
+                    await current.fill(languageMarker);
+                    expect((await request).postDataJSON().language).toBe(
+                        languagePlan.language,
+                    );
+                    await assertCurrent(
+                        languageMarker,
+                        marker + ' retired language',
+                        proof.site,
+                        languagePlan.language,
+                    );
                 },
                 async () => {
-                    await expect(
-                        page.locator('.studio-content-workspace'),
-                    ).not.toContainText(marker + ' retired language');
+                    await assertCurrent(
+                        languageMarker,
+                        marker + ' retired language',
+                        proof.site,
+                        languagePlan.language,
+                    );
                 },
             );
-            await page.goto(currentUrl);
-            await retiredResponse(
+            page.once('dialog', (d) => d.accept());
+            await openHero(page);
+            const siteSettlement = await retiredResponse(
                 marker + ' retired site',
                 async () => {
                     page.once('dialog', (d) => d.accept());
-                    await Promise.all([
-                        page.waitForNavigation({
-                            waitUntil: 'domcontentloaded',
-                        }),
-                        page.evaluate(() =>
-                            window.bcms.sdk.selectContext(
-                                {
-                                    workspaceId:
-                                        window.bcms.sdk.context.context
-                                            .workspaceId,
-                                },
-                                '/d/studio',
-                            ),
-                        ),
-                    ]);
-                    await expect(page).toHaveURL(/\/d\/studio$/);
+                    await selectLaunchSite(page, peerSite);
+                    await openHero(page);
+                    await expect(
+                        canvas().getByText(otherMarker, { exact: true }),
+                    ).toBeVisible();
                 },
                 async () => {
-                    await expect(
-                        page.locator('iframe[title="草稿预览"]'),
-                    ).toHaveCount(0);
+                    const otherLanguage = await page.evaluate(
+                        async () =>
+                            (await window.bcms.sdk.studio.getSite()).site
+                                .language,
+                    );
+                    await assertCurrent(
+                        otherMarker,
+                        marker + ' retired site',
+                        peerSite,
+                        otherLanguage,
+                    );
                 },
             );
-            await Promise.all([
-                page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-                page.evaluate(
-                    (site) =>
-                        window.bcms.sdk.selectContext(
-                            {
-                                workspaceId: site.cmsWorkspaceId,
-                                siteId: site.cmsSiteId,
-                            },
-                            '/d/studio',
-                        ),
-                    proof.site,
-                ),
-            ]);
-            await page.waitForFunction(
-                (site) =>
-                    window.bcms?.sdk?.context?.context?.siteId ===
-                    site.cmsSiteId,
-                proof.site,
-            );
+            await selectLaunchSite(page, proof.site);
             const leaveField = await openHero(page);
             await leaveField.fill(marker + ' keep draft');
             page.once('dialog', (d) => d.dismiss());
@@ -322,6 +355,16 @@ export async function runPreviewScenarios({
             await leaveField.fill(marker);
             return {
                 retiredLanguageAndSite: true,
+                currentLanguageCanvas: {
+                    language: languagePlan.language,
+                    marker: languageMarker,
+                    settlement: languageSettlement,
+                },
+                currentSiteCanvas: {
+                    site: peerSite,
+                    marker: otherMarker,
+                    settlement: siteSettlement,
+                },
                 unsavedLeavePreserved: true,
                 delayedRealResponseRejected: true,
                 serviceFailureRecoverable: true,

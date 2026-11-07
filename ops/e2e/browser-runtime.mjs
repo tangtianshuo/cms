@@ -414,7 +414,10 @@ try {
         );
         await ready('http://127.0.0.1:18091/healthz', published);
     }
+    const d1FixturePath = path.join(runRoot, 'private/d1-site-fixture.json');
+    if (artifactTemplatesRoot) await writeFile(d1FixturePath, JSON.stringify({ dbUrl, database, baselineSiteId: site._id }), { mode: 0o600 });
     const testEnv = {
+        ...(artifactTemplatesRoot ? { STOREFRONT_E2E_D1_SITE_FIXTURE: d1FixturePath } : {}),
         ...process.env,
         ...sectionEnvironment,
         ...(localSnapshotPath

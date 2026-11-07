@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { workspace } from './launch-workspace.mjs';
+import { workspace, save } from './launch-workspace.mjs';
 async function openRichLink(page, rich, useKeyboard = false) {
     await rich.focus();
     await expect(rich).toBeFocused();
@@ -43,12 +43,17 @@ async function installed(page) {
     });
 }
 
-async function structuredFixture(page, ownMedia) {
-    return page.evaluate(async (ownMedia) => {
+async function structuredFixture(page) {
+    // Infrastructure only: schemas and language definitions; content is authored below.
+    return page.evaluate(async () => {
         const sdk = window.bcms.sdk;
         const state = await sdk.studio.getSite();
         const suffix = crypto.randomUUID().slice(0, 8);
-        const product = state.models.find((m) => m.key === 'product');
+        const reference = await sdk.template.create({
+            label: 'D1 reference ' + suffix,
+            desc: '',
+            singleEntry: false,
+        });
         let widget = await sdk.widget.create({
             label: 'B6 widget ' + suffix,
             desc: '',
@@ -129,7 +134,7 @@ async function structuredFixture(page, ownMedia) {
                         data: {
                             propEntryPointer: [
                                 {
-                                    templateId: product.templateId,
+                                    templateId: reference._id,
                                     entryIds: [],
                                     displayProp: 'title',
                                 },
@@ -157,147 +162,6 @@ async function structuredFixture(page, ownMedia) {
                 },
             ],
         });
-        const rich = [
-            {
-                nodes: [
-                    {
-                        type: 'paragraph',
-                        content: [
-                            {
-                                type: 'text',
-                                text: 'Keep bold',
-                                marks: [{ type: 'bold' }],
-                            },
-                            {
-                                type: 'text',
-                                text: ' link',
-                                marks: [
-                                    {
-                                        type: 'link',
-                                        attrs: {
-                                            href: '/',
-                                            target: '_self',
-                                        },
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        type: 'bulletList',
-                        content: [
-                            {
-                                type: 'listItem',
-                                content: [
-                                    {
-                                        type: 'paragraph',
-                                        content: [
-                                            { type: 'text', text: 'Keep list' },
-                                        ],
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            },
-        ];
-        const props = template.props.map((p, i) => ({
-            id: p.id,
-            data:
-                p.type === 'RICH_TEXT'
-                    ? rich
-                    : p.type === 'MEDIA'
-                      ? [
-                            {
-                                _id: ownMedia,
-                                alt_text: 'Preserve alt',
-                                caption: 'Preserve caption',
-                            },
-                        ]
-                      : p.type === 'ENTRY_POINTER'
-                        ? [
-                              {
-                                  tid: product.templateId,
-                                  eid: product.entries[0].id,
-                              },
-                          ]
-                        : p.type === 'GROUP_POINTER'
-                          ? {
-                                _id: group._id,
-                                items: [
-                                    {
-                                        props: [
-                                            {
-                                                id: group.props[0].id,
-                                                data: {
-                                                    _id: widget._id,
-                                                    props: [
-                                                        {
-                                                            id: widget.props[0]
-                                                                .id,
-                                                            data: [
-                                                                'Nested before',
-                                                            ],
-                                                        },
-                                                    ],
-                                                },
-                                            },
-                                        ],
-                                    },
-                                    {
-                                        props: [
-                                            {
-                                                id: group.props[0].id,
-                                                data: {
-                                                    _id: widget._id,
-                                                    props: [
-                                                        {
-                                                            id: widget.props[0]
-                                                                .id,
-                                                            data: [
-                                                                'Sibling preserved',
-                                                            ],
-                                                        },
-                                                    ],
-                                                },
-                                            },
-                                        ],
-                                    },
-                                ],
-                            }
-                          : p.type === 'WIDGET'
-                            ? {
-                                  _id: widget._id,
-                                  props: [
-                                      {
-                                          id: widget.props[0].id,
-                                          data: ['Widget before'],
-                                      },
-                                  ],
-                              }
-                            : p.array
-                              ? ['first', 'second', 'third']
-                              : [
-                                    i === 0
-                                        ? 'B6 rich ' + suffix
-                                        : 'b6-rich-' + suffix,
-                                ],
-        }));
-        const target = await sdk.entry.get({
-            templateId: product.templateId,
-            entryId: product.entries[0].id,
-            skipCache: true,
-        });
-        const targetMeta = structuredClone(target.meta);
-        for (const meta of targetMeta) {
-            meta.props[0].data = ['B6 referenced ' + suffix];
-            meta.props[1].data = ['b6-referenced-' + suffix];
-        }
-        const related = await sdk.entry.create({
-            templateId: product.templateId,
-            data: { statuses: [], meta: targetMeta, content: target.content },
-        });
         const language = state.site.language;
         const other = language === 'fr' ? 'de' : 'fr';
         if (!(await sdk.language.getAll()).some((l) => l.code === other))
@@ -306,52 +170,15 @@ async function structuredFixture(page, ownMedia) {
                 name: other,
                 nativeName: other,
             });
-        const entry = await sdk.entry.create({
-            templateId: template._id,
-            data: {
-                statuses: [],
-                meta: [
-                    { lng: language, props },
-                    {
-                        lng: other,
-                        props: structuredClone(props).map((p, i) =>
-                            i === 0
-                                ? { ...p, data: ['Other ' + suffix] }
-                                : i === 1
-                                  ? { ...p, data: ['other-' + suffix] }
-                                  : p,
-                        ),
-                    },
-                ],
-                content: [
-                    {
-                        lng: language,
-                        nodes: [
-                            {
-                                type: 'paragraph',
-                                content: [
-                                    {
-                                        type: 'text',
-                                        text: 'Main body preserved',
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                    { lng: other, nodes: [] },
-                ],
-            },
-        });
         const languages = await sdk.language.getAll();
         return {
             templateId: template._id,
-            entryId: entry._id,
             language,
             languageIndex: languages.findIndex((l) => l.code === language),
             workspaceId: sdk.context.context.workspaceId,
             other,
-            original: entry,
-            relatedId: related._id,
+            referenceTemplateId: reference._id,
+            title: 'D1 structured ' + suffix,
             relatedTitle: 'B6 referenced ' + suffix,
             paths: Object.fromEntries(
                 template.props.map((p, i) => [
@@ -360,27 +187,152 @@ async function structuredFixture(page, ownMedia) {
                 ]),
             ),
         };
-    }, ownMedia);
+    });
 }
 
 export async function editStructured(page, { ownMedia, filename }) {
-    const id = await structuredFixture(page, ownMedia);
-    await page.goto(
-        '/d/studio?' +
-            new URLSearchParams({
-                section: 'content',
-                templateId: id.templateId,
-                entryId: id.entryId,
-                language: id.language,
-                workspaceId: id.workspaceId,
-            }),
-    );
-    await expect(workspace(page)).toHaveCount(1);
+    const id = await structuredFixture(page);
+    const open = async (
+        templateId,
+        entryId = 'create',
+        language = id.language,
+    ) => {
+        await page.goto(
+            '/d/studio?' +
+                new URLSearchParams({
+                    section: 'content',
+                    templateId,
+                    entryId,
+                    language,
+                    workspaceId: id.workspaceId,
+                }),
+        );
+        await expect(workspace(page)).toHaveCount(1);
+    };
+    const title = () =>
+        page
+            .locator('.studio-workspace-content [contenteditable="true"]')
+            .first();
+    const saveCreated = async () => {
+        const response = page.waitForResponse(
+            (r) =>
+                r.request().method() === 'POST' &&
+                r.url().endsWith('/entry/create'),
+        );
+        await page
+            .getByRole('button', { name: '保存草稿', exact: true })
+            .click();
+        const createdResponse = await response;
+        expect(createdResponse.status()).toBe(200);
+        const created = (await createdResponse.json()).item;
+        expect(created._id).toBeTruthy();
+        await expect
+            .poll(() => new URL(page.url()).searchParams.get('entryId'))
+            .not.toBe('create');
+        expect(new URL(page.url()).searchParams.get('entryId')).toBe(
+            created._id,
+        );
+        expect(new URL(page.url()).searchParams.get('templateId')).toBe(
+            created.templateId,
+        );
+        const persisted = await page.evaluate(
+            async (created) =>
+                window.bcms.sdk.entry.get({
+                    templateId: created.templateId,
+                    entryId: created._id,
+                    skipCache: true,
+                }),
+            created,
+        );
+        expect(persisted.updatedAt).toBe(created.updatedAt);
+        expect(persisted.meta).toEqual(created.meta);
+        expect(persisted.content).toEqual(created.content);
+        await expect(
+            page.getByRole('button', { name: '保存草稿', exact: true }),
+        ).toBeDisabled();
+    };
+
+    await open(id.referenceTemplateId);
+    await title().fill(id.relatedTitle);
+    await saveCreated();
+    id.relatedId = new URL(page.url()).searchParams.get('entryId');
+    expect(id.relatedId).not.toBe('create');
+    await open(id.templateId);
+    await title().fill(id.title);
     const rich = page
         .locator('.studio-structured-field[data-field]')
         .filter({ has: page.locator('.bcmsEntryContentEditor') })
         .locator('.ProseMirror')
         .first();
+    await rich.focus();
+    await page.keyboard.type('**Keep bold** ');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('* Keep list');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('link');
+    await page.keyboard.press('ControlOrMeta+Shift+ArrowLeft');
+    await page.locator('div[style*="opacity: 1"] #link').click();
+    const initialLink = page.getByRole('dialog', {
+        name: '编辑链接',
+        exact: true,
+    });
+    await initialLink
+        .getByLabel('URL', { exact: true })
+        .fill('https://example.test/original');
+    await initialLink
+        .getByRole('button', { name: '更新', exact: true })
+        .click();
+    const initialTags = page.locator(`[id="${id.paths.STRING}"]`).first();
+    for (const value of ['first', 'second', 'third']) {
+        await initialTags
+            .getByRole('button', { name: /Ordered tags.*添加/ })
+            .click();
+        await initialTags
+            .locator('[contenteditable="true"]')
+            .last()
+            .fill(value);
+    }
+    const initialWidget = page
+        .locator('.studio-structured-field[data-field]')
+        .filter({ has: page.locator('legend') })
+        .locator('[contenteditable="true"]')
+        .first();
+    await initialWidget.fill('Widget before');
+    const initialGroup = page.locator(
+        `[data-bcms-prop-input-wrapper][id="${id.paths.GROUP_POINTER}"]`,
+    );
+    for (const value of ['Nested before', 'Sibling preserved']) {
+        await initialGroup
+            .getByRole('button', { name: /Grouped widgets.*添加/ })
+            .click();
+        await initialGroup
+            .locator('[contenteditable="true"]')
+            .last()
+            .fill(value);
+    }
+    await page
+        .locator(`[id="entry.content.${id.languageIndex}.nodes"] .ProseMirror`)
+        .fill('Main body preserved');
+    await saveCreated();
+    id.entryId = new URL(page.url()).searchParams.get('entryId');
+    expect(id.entryId).not.toBe('create');
+    await open(id.templateId, id.entryId, id.other);
+    await page
+        .getByRole('button', { name: '创建此语言版本', exact: true })
+        .click();
+    await title().fill('Other ' + id.title);
+    await save(page);
+    await open(id.templateId, id.entryId);
+    id.original = await page.evaluate(
+        async (id) =>
+            window.bcms.sdk.entry.get({
+                templateId: id.templateId,
+                entryId: id.entryId,
+                skipCache: true,
+            }),
+        id,
+    );
     await expect(rich).toContainText('Keep bold');
     await expect(rich.locator('strong')).toHaveText('Keep bold');
     await expect(rich.locator('ul li')).toContainText('Keep list');
@@ -481,6 +433,7 @@ export async function editStructured(page, { ownMedia, filename }) {
         id.original.meta.find((m) => m.lng === id.other),
     );
     expect(after.content).toEqual(id.original.content);
+    expect(JSON.stringify(after.content)).toContain('Main body preserved');
     const groupData = unchanged('GROUP_POINTER')[1].data;
     expect(groupData.items[0].props[0].data.props[0].data).toEqual([
         'Nested edited',
@@ -501,48 +454,6 @@ export async function editStructured(page, { ownMedia, filename }) {
 }
 export async function retireRichEditor(page, { ownMedia, filename }) {
     const id = await installed(page);
-    await page.evaluate(async (id) => {
-        const sdk = window.bcms.sdk;
-        const raw = await sdk.entry.get({
-            templateId: id.templateId,
-            entryId: id.entryId,
-            skipCache: true,
-        });
-        await sdk.studio.saveEntry(id.modelKey, {
-            entryId: id.entryId,
-            expectedUpdatedAt: raw.updatedAt,
-            operationId: crypto.randomUUID(),
-            fields: {
-                body: {
-                    kind: 'prop-data',
-                    data: [
-                        {
-                            nodes: [
-                                {
-                                    type: 'paragraph',
-                                    content: [
-                                        {
-                                            type: 'text',
-                                            text: 'Bound link',
-                                            marks: [
-                                                {
-                                                    type: 'link',
-                                                    attrs: {
-                                                        href: '/',
-                                                        target: '_self',
-                                                    },
-                                                },
-                                            ],
-                                        },
-                                    ],
-                                },
-                            ],
-                        },
-                    ],
-                },
-            },
-        });
-    }, id);
     await page.goto('/d/studio?section=content&modelKey=content-page');
     await page.locator('.studio-row-action').first().click();
     await expect(workspace(page)).toHaveCount(1);
@@ -552,6 +463,24 @@ export async function retireRichEditor(page, { ownMedia, filename }) {
             '.studio-structured-field .bcmsEntryContentEditor .ProseMirror',
         )
         .first();
+    await rich.fill('Bound link');
+    await openRichLink(page, rich, true);
+    const authoredLink = page.getByRole('dialog', {
+        name: '编辑链接',
+        exact: true,
+    });
+    await authoredLink
+        .getByLabel('URL', { exact: true })
+        .fill('https://example.test/bound');
+    await authoredLink
+        .getByRole('button', { name: '更新', exact: true })
+        .click();
+    await save(page);
+    await page.reload();
+    await expect(rich.locator('a')).toHaveAttribute(
+        'href',
+        'https://example.test/bound',
+    );
     await page.evaluate(() => {
         const handler = window.bcms.sdk.entry;
         const original = handler.getAllLite;

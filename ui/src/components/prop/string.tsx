@@ -69,7 +69,6 @@ export const PropStringInput = defineComponent({
 
         function initializeErrors(itemCount: number) {
             callAndClearUnsubscribeFns(errorUnsubs);
-            const valueData = props.value.data as string[];
             errors.value = [];
             if (props.prop.required) {
                 if (props.prop.array) {
@@ -77,7 +76,7 @@ export const PropStringInput = defineComponent({
                         errors.value.push('');
                         errorUnsubs.push(
                             props.propValidator.register(() => {
-                                if (!valueData[i]) {
+                                if (!(props.value.data as string[])[i]) {
                                     errors.value[i] =
                                         t('props.requiredText');
                                     return false;
@@ -91,7 +90,7 @@ export const PropStringInput = defineComponent({
                     errors.value.push('');
                     errorUnsubs.push(
                         props.propValidator.register(() => {
-                            if (!valueData[0]) {
+                            if (!(props.value.data as string[])[0]) {
                                 errors.value[0] =
                                     t('props.requiredText');
                                 return false;
