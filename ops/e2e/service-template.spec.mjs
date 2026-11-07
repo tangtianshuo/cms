@@ -41,18 +41,17 @@ function serviceRelease(stage) {
 
 async function ensureBuild() {
     try {
-        await stat(join(storefrontRoot, '.output/server/index.mjs'));
-        return;
+        await stat(join(storefrontRoot, 'node_modules/.package-lock.json'));
     } catch {
         execFileSync('npm', ['ci', '--no-audit', '--no-fund'], {
             cwd: storefrontRoot,
             stdio: 'inherit',
         });
-        execFileSync('npm', ['run', 'build'], {
-            cwd: storefrontRoot,
-            stdio: 'inherit',
-        });
     }
+    execFileSync('npm', ['run', 'build'], {
+        cwd: storefrontRoot,
+        stdio: 'inherit',
+    });
 }
 
 async function freePort() {
@@ -125,21 +124,41 @@ test(
     async () => {
         await ensureBuild();
         const directory = await mkdtemp(join(tmpdir(), 'service-studio-e2e-'));
-        const initialPath = join(directory, 'initial.json');
-        const updatedPath = join(directory, 'updated.json');
-        const initial = serviceRelease('initial');
-        const updated = serviceRelease('updated');
-        assert.deepEqual(initial.models, [
+        const activePath = join(directory, 'active.json');
+        const sequence = serviceRelease('updated');
+        const initial = sequence.initial;
+        const updated = sequence.updated;
+        const identity = {
+            workspaceId: sequence.workspaceId,
+            siteId: sequence.siteId,
+        };
+        assert.deepEqual(sequence.models, [
             'service',
             'site-settings',
             'team-member',
         ]);
-        assert.equal(initial.models.includes('product'), false);
-        assert.equal(initial.releasePages.length, 5);
-        assert.ok(updated.releasePages.includes('/services/strategy'));
+        assert.equal(sequence.models.includes('product'), false);
+        assert.equal(initial.pages.length, 5);
+        assert.ok(updated.pages.includes('/services/strategy'));
+        assert.ok(updated.pages.includes('/services/content-systems'));
         assert.notEqual(initial.checksum, updated.checksum);
-        await writeFile(initialPath, JSON.stringify(initial.snapshot));
-        await writeFile(updatedPath, JSON.stringify(updated.snapshot));
+        assert.equal(sequence.history.siteId, sequence.siteId);
+        assert.equal(sequence.history.releases.length, 2);
+        assert.equal(sequence.history.currentReleaseId, initial.releaseId);
+        assert.deepEqual(
+            new Set(sequence.history.publishedReleaseIds),
+            new Set([initial.releaseId, updated.releaseId]),
+        );
+        assert.deepEqual(sequence.history.audits, [
+            'publish',
+            'publish',
+            'rollback',
+        ]);
+        assert.deepEqual(
+            sequence.history.releases.map((release) => release.siteId),
+            [sequence.siteId, sequence.siteId],
+        );
+        await writeFile(activePath, JSON.stringify(initial.snapshot));
 
         const previewPort = await freePort();
         const adminPort = await freePort();
@@ -151,7 +170,7 @@ test(
                     'content-type': 'application/json',
                     'cache-control': 'no-store',
                 });
-                response.end(await readFile(initialPath));
+                response.end(await readFile(activePath));
                 return;
             }
             response.writeHead(200, {
@@ -178,10 +197,10 @@ test(
         });
 
         let runtime = await startStorefront(
-            initialPath,
+            activePath,
             previewOrigin,
             adminOrigin,
-            initial,
+            identity,
         );
         const browser = await chromium.launch({ headless: true });
         try {
@@ -225,11 +244,12 @@ test(
             );
 
             await runtime.stop();
+            await writeFile(activePath, JSON.stringify(updated.snapshot));
             runtime = await startStorefront(
-                updatedPath,
+                activePath,
                 previewOrigin,
                 adminOrigin,
-                updated,
+                identity,
             );
             response = await page.goto(previewOrigin + '/services/strategy');
             assert.equal(response?.status(), 200);
@@ -241,22 +261,47 @@ test(
                 await page.locator('body').innerText(),
                 /second published service update/i,
             );
+            response = await page.goto(
+                previewOrigin + '/services/content-systems',
+            );
+            assert.equal(response?.status(), 200);
+            assert.match(
+                await page.locator('body').innerText(),
+                /Content systems/,
+            );
+            await page.goto(previewOrigin + '/services');
+            assert.match(
+                await page.locator('body').innerText(),
+                /Strategy sprint/,
+            );
+            assert.match(
+                await page.locator('body').innerText(),
+                /Content systems/,
+            );
+            assert.equal(
+                await page
+                    .getByRole('navigation', { name: 'Main navigation' })
+                    .locator('a[href="/services/content-systems"]')
+                    .count(),
+                1,
+            );
             await page.goto(previewOrigin + '/team');
             assert.match(
                 await page.locator('body').innerText(),
                 /Mina Park, updated/,
             );
-            assert.match(
-                await page.locator('body').innerText(),
-                /Strategy sprint/,
-            );
+            assert.match(await page.locator('body').innerText(), /Arun Shah/);
 
             await runtime.stop();
+            await writeFile(
+                activePath,
+                JSON.stringify(sequence.rolledBack.snapshot),
+            );
             runtime = await startStorefront(
-                initialPath,
+                activePath,
                 previewOrigin,
                 adminOrigin,
-                initial,
+                identity,
             );
             response = await page.goto(previewOrigin + '/services/strategy');
             assert.equal(response?.status(), 404);

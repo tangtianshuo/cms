@@ -6,22 +6,38 @@ import type { Entry } from '../entry/models/main';
 import type { Media } from '../media/models/main';
 import { PropType } from '../prop/models/main';
 import type { Template } from '../template/models/main';
-import { previewPresetPage, type PresetPagePreview } from '../storefront/preset-preview';
+import {
+    previewPresetPage,
+    type PresetPagePreview,
+} from '../storefront/preset-preview';
 import { resolveInstalledPreset } from './installed';
 import { pageDraft, updatePageDraft } from './pages';
 import type { SiteInstallation } from './site-model';
 import { normalizeNavigation, type NavigationNode } from './navigation';
-import { validateSectionConfigs, validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
+import {
+    validateSectionConfigs,
+    validateSectionMediaReferences,
+    mediaAuthorizedForSite,
+} from '../storefront/section-schema';
 import { normalizeSiteOperations, type SiteOperations } from './operations';
 import type { LayoutDocument } from '../storefront/layout-document';
 
-export interface ReleaseLink { label: string; path: string }
-export interface ReleaseItem extends ReleaseLink { image: string; description: string; price: string }
+export interface ReleaseLink {
+    label: string;
+    path: string;
+}
+export interface ReleaseItem extends ReleaseLink {
+    image: string;
+    description: string;
+    price: string;
+}
 /** Normalize either a current tree or a legacy flat release navigation list. */
 export function normalizeReleaseNavigation(value: unknown): NavigationNode[] {
     return normalizeNavigation(value);
 }
-export interface PublishedContent extends PresetPagePreview { items?: ReleaseItem[] }
+export interface PublishedContent extends PresetPagePreview {
+    items?: ReleaseItem[];
+}
 export interface ReleasePage {
     path: string;
     pageKey: string;
@@ -91,18 +107,30 @@ export interface ReleaseIssue {
     language?: string;
 }
 export class ReleaseValidationError extends Error {
-    constructor(readonly issues: ReleaseIssue[]) { super(issues[0]?.message || 'Validation failed'); }
+    constructor(readonly issues: ReleaseIssue[]) {
+        super(issues[0]?.message || 'Validation failed');
+    }
 }
 
 export interface BuildReleaseOptions {
     preserveMediaCapabilities?: boolean;
 }
 
-function fieldValues(input: ReleaseInput, entry: Entry, key: string): unknown[] {
-    const model = input.site.models.find((item) => item.templateId === entry.templateId);
+function fieldValues(
+    input: ReleaseInput,
+    entry: Entry,
+    key: string,
+): unknown[] {
+    const model = input.site.models.find(
+        (item) => item.templateId === entry.templateId,
+    );
     const field = model?.fields.find((item) => item.key === key);
-    return entry.meta.find((meta) => meta.lng === input.language)?.props
-        .find((prop) => prop.id === field?.propId)?.data as unknown[] || [];
+    return (
+        (entry.meta
+            .find((meta) => meta.lng === input.language)
+            ?.props.find((prop) => prop.id === field?.propId)
+            ?.data as unknown[]) || []
+    );
 }
 
 function entryText(input: ReleaseInput, entry: Entry, key: string): string {
@@ -110,59 +138,142 @@ function entryText(input: ReleaseInput, entry: Entry, key: string): string {
     return typeof value === 'string' ? value.trim() : '';
 }
 
-export function buildRelease(input: ReleaseInput, options: BuildReleaseOptions = {}): ReleaseSnapshot {
+export function buildRelease(
+    input: ReleaseInput,
+    options: BuildReleaseOptions = {},
+): ReleaseSnapshot {
     return validatedRelease(input, options, false).snapshot;
 }
 /** Validate an incomplete language without exposing its partial projection as a renderable snapshot. */
-export function validateReleaseDraft(input: ReleaseInput): { missingTranslations: ReleaseIssue[] } {
-    return { missingTranslations: validatedRelease(input, {}, true).missingTranslations };
+export function validateReleaseDraft(input: ReleaseInput): {
+    missingTranslations: ReleaseIssue[];
+} {
+    return {
+        missingTranslations: validatedRelease(input, {}, true)
+            .missingTranslations,
+    };
 }
-function validatedRelease(input: ReleaseInput, options: BuildReleaseOptions, draftValidationOnly: boolean): { snapshot: ReleaseSnapshot; missingTranslations: ReleaseIssue[] } {
+function validatedRelease(
+    input: ReleaseInput,
+    options: BuildReleaseOptions,
+    draftValidationOnly: boolean,
+): { snapshot: ReleaseSnapshot; missingTranslations: ReleaseIssue[] } {
     const missingTranslations: ReleaseIssue[] = [];
-    const missingTranslation = (entry: Entry, modelKey: string, pageKey?: string) => {
-        const existing = missingTranslations.find(issue => issue.entryId === entry._id);
-        if (existing) { if (pageKey && !existing.pageKey) existing.pageKey = pageKey; return; }
-        missingTranslations.push({ code: 'missing-translation', message: `Missing translation for language ${input.language}: ${modelKey}`, modelKey, entryId: entry._id, language: input.language, ...(pageKey ? { pageKey } : {}) });
+    const missingTranslation = (
+        entry: Entry,
+        modelKey: string,
+        pageKey?: string,
+    ) => {
+        const existing = missingTranslations.find(
+            (issue) => issue.entryId === entry._id,
+        );
+        if (existing) {
+            if (pageKey && !existing.pageKey) existing.pageKey = pageKey;
+            return;
+        }
+        missingTranslations.push({
+            code: 'missing-translation',
+            message: `Missing translation for language ${input.language}: ${modelKey}`,
+            modelKey,
+            entryId: entry._id,
+            language: input.language,
+            ...(pageKey ? { pageKey } : {}),
+        });
     };
     // Public snapshots always contain stable URLs; editor capabilities must never be serialized.
     if (!options.preserveMediaCapabilities) {
-        input = { ...input, media: input.media.map(({ accessToken: _accessToken, accessTokenExpiresAt: _expiresAt, ...media }) => media) };
+        input = {
+            ...input,
+            media: input.media.map(
+                ({
+                    accessToken: _accessToken,
+                    accessTokenExpiresAt: _expiresAt,
+                    ...media
+                }) => media,
+            ),
+        };
     }
-    input = { ...input, site: { ...input.site, operations: normalizeSiteOperations(input.site.operations, undefined, { contactDeliveryConfigured: true }) } };
+    input = {
+        ...input,
+        site: {
+            ...input.site,
+            operations: normalizeSiteOperations(
+                input.site.operations,
+                undefined,
+                { contactDeliveryConfigured: true },
+            ),
+        },
+    };
     const { site, language } = input;
     if (site.status !== 'ready') throw new Error('Site import is not ready');
     const preset = resolveInstalledPreset(site);
-    if (!site.pages.some((page) => page.layout === 'home' && page.enabled !== false)) {
+    if (
+        !site.pages.some(
+            (page) => page.layout === 'home' && page.enabled !== false,
+        )
+    ) {
         throw new Error('Home page is required');
     }
-    for (const token of ['background', 'foreground', 'accent', 'muted'] as const) {
-        if (!/^#[a-f0-9]{6}$/i.test(site.theme[token])) throw new Error('Invalid theme color');
+    for (const token of [
+        'background',
+        'foreground',
+        'accent',
+        'muted',
+    ] as const) {
+        if (!/^#[a-f0-9]{6}$/i.test(site.theme[token]))
+            throw new Error('Invalid theme color');
     }
-    if (site.theme.font !== preset.theme.font) throw new Error('Unsupported theme font');
-    const scopedEntries = input.entries.filter((entry) => site.models.some((model) => model.templateId === entry.templateId));
-    const availableEntries = scopedEntries.filter((entry) => entry.meta.some((meta) => meta.lng === language));
+    if (site.theme.font !== preset.theme.font)
+        throw new Error('Unsupported theme font');
+    const scopedEntries = input.entries.filter((entry) =>
+        site.models.some((model) => model.templateId === entry.templateId),
+    );
+    const availableEntries = scopedEntries.filter((entry) =>
+        entry.meta.some((meta) => meta.lng === language),
+    );
     // Validate only content contributing to enabled pages and shared settings.
     const selectedIds = new Set<string>();
     for (const model of site.models) {
-        const activePages = site.pages.filter((page) => page.modelKey === model.key && page.enabled !== false);
-        const candidates = availableEntries.filter((entry) => entry.templateId === model.templateId);
+        const activePages = site.pages.filter(
+            (page) => page.modelKey === model.key && page.enabled !== false,
+        );
+        const candidates = availableEntries.filter(
+            (entry) => entry.templateId === model.templateId,
+        );
         for (const entry of candidates) {
-            if (model.key === 'site-settings' || activePages.some((page) => !page.entryId || page.entryId === entry._id)) {
+            if (
+                model.key === 'site-settings' ||
+                activePages.some(
+                    (page) => !page.entryId || page.entryId === entry._id,
+                )
+            ) {
                 selectedIds.add(entry._id);
             }
         }
     }
-    const pending = availableEntries.filter((entry) => selectedIds.has(entry._id));
+    const pending = availableEntries.filter((entry) =>
+        selectedIds.has(entry._id),
+    );
     for (let index = 0; index < pending.length; index++) {
         const entry = pending[index];
-        const model = site.models.find((item) => item.templateId === entry.templateId)!;
-        const definition = preset.models.find((item) => item.key === model.key)!;
-        for (const field of definition.fields.filter((item) => item.type === PropType.ENTRY_POINTER)) {
+        const model = site.models.find(
+            (item) => item.templateId === entry.templateId,
+        )!;
+        const definition = preset.models.find(
+            (item) => item.key === model.key,
+        )!;
+        for (const field of definition.fields.filter(
+            (item) => item.type === PropType.ENTRY_POINTER,
+        )) {
             const values = fieldValues(input, entry, field.key);
             if (!Array.isArray(values)) continue;
             for (const value of values) {
                 const pointer = value as { eid?: string; tid?: string } | null;
-                const related = availableEntries.find((item) => item._id === pointer?.eid && item.templateId === pointer?.tid);
+                const related = availableEntries.find(
+                    (item) =>
+                        item._id === pointer?.eid &&
+                        item.templateId === pointer?.tid,
+                );
                 if (related && !selectedIds.has(related._id)) {
                     selectedIds.add(related._id);
                     pending.push(related);
@@ -170,52 +281,150 @@ function validatedRelease(input: ReleaseInput, options: BuildReleaseOptions, dra
             }
         }
     }
-    const entries = availableEntries.filter((entry) => selectedIds.has(entry._id));
+    const entries = availableEntries.filter((entry) =>
+        selectedIds.has(entry._id),
+    );
     const issues: ReleaseIssue[] = [];
     for (const definition of preset.models) {
         const model = site.models.find((item) => item.key === definition.key);
-        const template = input.templates.find((item) => item._id === model?.templateId);
-        if (!model || !template) { issues.push({ code: 'model-binding', message: `Missing model binding: ${definition.key}`, modelKey: definition.key }); continue; }
+        const template = input.templates.find(
+            (item) => item._id === model?.templateId,
+        );
+        if (!model || !template) {
+            issues.push({
+                code: 'model-binding',
+                message: `Missing model binding: ${definition.key}`,
+                modelKey: definition.key,
+            });
+            continue;
+        }
         for (const field of definition.fields) {
             const mapping = model.fields.find((item) => item.key === field.key);
-            const prop = template.props.find((item) => item.id === mapping?.propId);
-            if (!prop || prop.type !== field.type || prop.array !== field.array) {
-                issues.push({ code: 'field-binding', message: `Invalid field binding: ${definition.key}.${field.key}`, modelKey: definition.key, field: field.key });
+            const prop = template.props.find(
+                (item) => item.id === mapping?.propId,
+            );
+            if (
+                !prop ||
+                prop.type !== field.type ||
+                prop.array !== field.array
+            ) {
+                issues.push({
+                    code: 'field-binding',
+                    message: `Invalid field binding: ${definition.key}.${field.key}`,
+                    modelKey: definition.key,
+                    field: field.key,
+                });
             }
         }
-        const modelEntries = entries.filter((entry) => entry.templateId === model.templateId);
+        const modelEntries = entries.filter(
+            (entry) => entry.templateId === model.templateId,
+        );
         if (definition.singleEntry) {
-            const boundEntries = scopedEntries.filter(entry => entry.templateId === model.templateId);
-            if (boundEntries.length !== 1) issues.push({ code: 'single-entry', message: `Exactly one ${definition.key} Entry is required for language ${language}`, modelKey: definition.key });
-            else if (!boundEntries[0].meta.some(meta => meta.lng === language)) missingTranslation(boundEntries[0], definition.key);
+            const boundEntries = scopedEntries.filter(
+                (entry) => entry.templateId === model.templateId,
+            );
+            if (boundEntries.length !== 1)
+                issues.push({
+                    code: 'single-entry',
+                    message: `Exactly one ${definition.key} Entry is required for language ${language}`,
+                    modelKey: definition.key,
+                });
+            else if (
+                !boundEntries[0].meta.some((meta) => meta.lng === language)
+            )
+                missingTranslation(boundEntries[0], definition.key);
         }
         for (const entry of modelEntries) {
             for (const field of definition.fields) {
                 const values = fieldValues(input, entry, field.key);
-                if (!Array.isArray(values) || (!field.array && values.length > 1) ||
-                    (field.required && (!values.length || values.some((value) =>
-                        value === null || value === undefined || typeof value === 'string' && !value.trim())))) {
-                    issues.push({ code: 'required-field', message: `Invalid required field ${definition.key}.${field.key} (${entry._id})`, modelKey: definition.key, entryId: entry._id, field: field.key });
+                if (
+                    !Array.isArray(values) ||
+                    (!field.array && values.length > 1) ||
+                    (field.required &&
+                        (!values.length ||
+                            values.some(
+                                (value) =>
+                                    value === null ||
+                                    value === undefined ||
+                                    (typeof value === 'string' &&
+                                        !value.trim()),
+                            )))
+                ) {
+                    issues.push({
+                        code: 'required-field',
+                        message: `Invalid required field ${definition.key}.${field.key} (${entry._id})`,
+                        modelKey: definition.key,
+                        entryId: entry._id,
+                        field: field.key,
+                    });
                     continue;
                 }
                 for (const value of values) {
-                    if (field.type === PropType.STRING && typeof value !== 'string' ||
-                        field.type === PropType.NUMBER && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
-                        issues.push({ code: 'field-value', message: `Invalid value ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
+                    if (
+                        (field.type === PropType.STRING &&
+                            typeof value !== 'string') ||
+                        (field.type === PropType.NUMBER &&
+                            (typeof value !== 'number' ||
+                                !Number.isFinite(value) ||
+                                value < 0))
+                    ) {
+                        issues.push({
+                            code: 'field-value',
+                            message: `Invalid value ${definition.key}.${field.key}`,
+                            modelKey: definition.key,
+                            entryId: entry._id,
+                            field: field.key,
+                        });
                     }
                     if (field.type === PropType.MEDIA) {
                         const id = (value as { _id?: string } | null)?._id;
-                        if (!input.media.some((media) => media._id === id && mediaAuthorizedForSite(media, site))) {
-                            issues.push({ code: 'media-missing', message: `Missing image media: ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
+                        if (
+                            !input.media.some(
+                                (media) =>
+                                    media._id === id &&
+                                    mediaAuthorizedForSite(media, site),
+                            )
+                        ) {
+                            issues.push({
+                                code: 'media-missing',
+                                message: `Missing image media: ${definition.key}.${field.key}`,
+                                modelKey: definition.key,
+                                entryId: entry._id,
+                                field: field.key,
+                            });
                         }
                     }
                     if (field.type === PropType.ENTRY_POINTER) {
-                        const pointer = value as { tid?: string; eid?: string } | null;
-                        const target = site.models.find((item) => item.key === field.referenceModel);
-                        const related = pointer && scopedEntries.find(item => item._id === pointer.eid && item.templateId === pointer.tid);
-                        if (!pointer || pointer.tid !== target?.templateId || !related) {
-                            issues.push({ code: 'entry-reference', message: `Invalid related Entry: ${definition.key}.${field.key}`, modelKey: definition.key, entryId: entry._id, field: field.key });
-                        } else if (!related.meta.some(meta => meta.lng === language)) missingTranslation(related, target!.key);
+                        const pointer = value as {
+                            tid?: string;
+                            eid?: string;
+                        } | null;
+                        const target = site.models.find(
+                            (item) => item.key === field.referenceModel,
+                        );
+                        const related =
+                            pointer &&
+                            scopedEntries.find(
+                                (item) =>
+                                    item._id === pointer.eid &&
+                                    item.templateId === pointer.tid,
+                            );
+                        if (
+                            !pointer ||
+                            pointer.tid !== target?.templateId ||
+                            !related
+                        ) {
+                            issues.push({
+                                code: 'entry-reference',
+                                message: `Invalid related Entry: ${definition.key}.${field.key}`,
+                                modelKey: definition.key,
+                                entryId: entry._id,
+                                field: field.key,
+                            });
+                        } else if (
+                            !related.meta.some((meta) => meta.lng === language)
+                        )
+                            missingTranslation(related, target!.key);
                     }
                 }
             }
@@ -226,8 +435,11 @@ function validatedRelease(input: ReleaseInput, options: BuildReleaseOptions, dra
     const untranslatedFixedPaths = new Set<string>();
     const routeEntries = new Set<string>();
     const concreteRoutes = new Map<string, Set<string>>();
-    for (const concrete of site.pages.filter(item => item.blueprintKey && !item.path.includes(':') && item.entryId)) {
-        const paths = concreteRoutes.get(concrete.entryId!) || new Set<string>();
+    for (const concrete of site.pages.filter(
+        (item) => item.blueprintKey && !item.path.includes(':') && item.entryId,
+    )) {
+        const paths =
+            concreteRoutes.get(concrete.entryId!) || new Set<string>();
         paths.add(concrete.path);
         concreteRoutes.set(concrete.entryId!, paths);
     }
@@ -235,182 +447,499 @@ function validatedRelease(input: ReleaseInput, options: BuildReleaseOptions, dra
         const page = pageDraft(site, sourcePage.key)!;
         const model = site.models.find((item) => item.key === page.modelKey);
         const bound = scopedEntries.find((entry) => entry._id === page.entryId);
-        const contractPage = Boolean(preset.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
+        const contractPage = Boolean(
+            preset.editor?.pages.some(
+                (item) => item.pageKey === (page.blueprintKey || page.key),
+            ),
+        );
         // A legacy import may not have saved section data yet. Keep its
         // preset demo publishable until an editor explicitly saves sections.
-        if (contractPage || sourcePage.sectionConfigs || sourcePage.layoutDocument) {
+        if (
+            contractPage ||
+            sourcePage.sectionConfigs ||
+            sourcePage.layoutDocument
+        ) {
             updatePageDraft(site, page.key, page, bound);
         }
         if (page.enabled === false) continue;
-        if (!page.seoTitle.trim()) throw new Error(`SEO title is required: ${page.title}`);
-        const boundCandidates = scopedEntries.filter(entry => entry.templateId === model?.templateId && (!page.entryId || entry._id === page.entryId));
-        if (!boundCandidates.length) throw new Error(`Missing content for ${page.title} in language ${language}`);
-        const candidates = entries.filter(entry => boundCandidates.some(boundEntry => boundEntry._id === entry._id));
+        if (!page.seoTitle.trim())
+            throw new Error(`SEO title is required: ${page.title}`);
+        const boundCandidates = scopedEntries.filter(
+            (entry) =>
+                entry.templateId === model?.templateId &&
+                (!page.entryId || entry._id === page.entryId),
+        );
+        if (!boundCandidates.length)
+            throw new Error(
+                `Missing content for ${page.title} in language ${language}`,
+            );
+        const candidates = entries.filter((entry) =>
+            boundCandidates.some((boundEntry) => boundEntry._id === entry._id),
+        );
         for (const candidate of boundCandidates) {
             routeEntries.add(candidate._id);
-            if (!candidate.meta.some(meta => meta.lng === language)) {
+            if (!candidate.meta.some((meta) => meta.lng === language)) {
                 missingTranslation(candidate, model!.key, page.key);
-                if (!page.path.includes(':')) untranslatedFixedPaths.add(page.path);
+                if (!page.path.includes(':'))
+                    untranslatedFixedPaths.add(page.path);
             }
         }
-        for (const entry of page.path.includes(':slug') ? candidates : candidates.slice(0, 1)) {
+        for (const entry of page.path.includes(':slug')
+            ? candidates
+            : candidates.slice(0, 1)) {
             const slug = entryText(input, entry, 'slug');
-            if (page.path.includes(':slug') && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+            if (
+                page.path.includes(':slug') &&
+                !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+            ) {
                 throw new Error(`Invalid slug: ${entry._id}`);
             }
             const path = page.path.replace(':slug', slug);
             // A concrete page owns its exact route. Do not also emit the same
             // Entry through the blueprint's parameterized route.
-            if (page.path.includes(':slug') && concreteRoutes.get(entry._id)?.has(path)) continue;
-            if (pages.some((item) => item.path === path)) throw new Error(`Duplicate page path: ${path}`);
+            if (
+                page.path.includes(':slug') &&
+                concreteRoutes.get(entry._id)?.has(path)
+            )
+                continue;
+            if (pages.some((item) => item.path === path))
+                throw new Error(`Duplicate page path: ${path}`);
             const content: PublishedContent = previewPresetPage({
-                ...input, site, pageKey: page.key, entry, availableLanguages: [language], relatedEntries: entries,
+                ...input,
+                site,
+                pageKey: page.key,
+                entry,
+                availableLanguages: [language],
+                relatedEntries: entries,
             });
             if (page.layout === 'collection-list' && !page.blueprintKey) {
-                content.preset.demo.collection = { title: page.title, description: '', image: '' };
+                content.preset.demo.collection = {
+                    title: page.title,
+                    description: '',
+                    image: '',
+                };
             }
-            pages.push({ path, pageKey: page.key, entryId: entry._id, content, ...(content.layoutDocument ? { layoutDocument: content.layoutDocument } : {}) });
+            pages.push({
+                path,
+                pageKey: page.key,
+                entryId: entry._id,
+                content,
+                ...(content.layoutDocument
+                    ? { layoutDocument: content.layoutDocument }
+                    : {}),
+            });
         }
     }
-    const pageForEntry = (id: string) => pages.find((page) => page.entryId === id && page.path !== '/collections');
+    const pageForEntry = (id: string) =>
+        pages.find(
+            (page) => page.entryId === id && page.path !== '/collections',
+        );
+    const mediaItemUrl = (entry: Entry, field: string) => {
+        const value = fieldValues(input, entry, field)[0] as
+            | { _id?: unknown }
+            | undefined;
+        const media = input.media.find(
+            (item) =>
+                item._id === value?._id && item.mimetype.startsWith('image/'),
+        );
+        if (!media) return '';
+        return `${new URL(input.mediaOrigin).origin}/api/v4/media/${encodeURIComponent(media._id)}/bin/image${media.accessToken ? '?cap=' + encodeURIComponent(media.accessToken) : ''}`;
+    };
     const card = (entry: Entry): ReleaseItem | null => {
         const target = pageForEntry(entry._id);
         if (!target) return null;
         const demo = target.content.preset.demo;
-        const data = target.content.view === 'product' ? demo.product : demo.page;
-        return { label: data.title, path: target.path, image: data.image,
+        const data =
+            target.content.view === 'product' ? demo.product : demo.page;
+        return {
+            label: data.title,
+            path: target.path,
+            image: data.image,
             description: 'description' in data ? data.description : data.body,
-            price: 'price' in data ? data.price : '' };
+            price: 'price' in data ? data.price : '',
+        };
     };
+    const serviceModel = site.models.find((model) => model.key === 'service');
+    const teamModel = site.models.find((model) => model.key === 'team-member');
     for (const page of pages) {
         const entry = entries.find((item) => item._id === page.entryId)!;
         let targets: Entry[] = [];
-        if (page.content.view === 'collection') {
-            const collectionModel = site.models.find((item) => item.key === 'collection');
-            const collections = site.pages.find((item) => item.key === page.pageKey)?.blueprintKey
-                ? [entry] : entries.filter((item) => item.templateId === collectionModel?.templateId);
-            const ids = collections.flatMap((item) => fieldValues(input, item, 'products')
-                .map((value) => (value as { eid: string }).eid));
+        if (serviceModel && ['home', 'services'].includes(page.content.view)) {
+            targets = scopedEntries.filter(
+                (item) => item.templateId === serviceModel.templateId,
+            );
+        } else if (teamModel && page.content.view === 'team') {
+            targets = scopedEntries.filter(
+                (item) => item.templateId === teamModel.templateId,
+            );
+        } else if (page.content.view === 'collection') {
+            const collectionModel = site.models.find(
+                (item) => item.key === 'collection',
+            );
+            const collections = site.pages.find(
+                (item) => item.key === page.pageKey,
+            )?.blueprintKey
+                ? [entry]
+                : entries.filter(
+                      (item) => item.templateId === collectionModel?.templateId,
+                  );
+            const ids = collections.flatMap((item) =>
+                fieldValues(input, item, 'products').map(
+                    (value) => (value as { eid: string }).eid,
+                ),
+            );
             targets = scopedEntries.filter((item) => ids.includes(item._id));
         } else if (page.content.view === 'home') {
-            const ids = fieldValues(input, entry, 'featuredProducts').map((value) => (value as { eid: string }).eid);
+            const ids = fieldValues(input, entry, 'featuredProducts').map(
+                (value) => (value as { eid: string }).eid,
+            );
             targets = scopedEntries.filter((item) => ids.includes(item._id));
         }
         page.content.items = targets.flatMap((item) => {
-            if (!item.meta.some(meta => meta.lng === language) && routeEntries.has(item._id)) return [];
+            if (!item.meta.some((meta) => meta.lng === language)) return [];
+            if (item.templateId === serviceModel?.templateId) {
+                const target = pages.find(
+                    (candidate) =>
+                        candidate.entryId === item._id &&
+                        candidate.path.startsWith('/services/'),
+                );
+                if (!target) return [];
+                const service = target.content.preset.demo;
+                return [
+                    {
+                        label: service.hero.title,
+                        path: target.path,
+                        image: service.hero.image,
+                        description: service.hero.subtitle,
+                        price: '',
+                    },
+                ];
+            }
+            if (item.templateId === teamModel?.templateId) {
+                return [
+                    {
+                        label: entryText(input, item, 'name'),
+                        path: '/team',
+                        image: mediaItemUrl(item, 'portrait'),
+                        description: entryText(input, item, 'role'),
+                        price: '',
+                    },
+                ];
+            }
+            if (
+                !item.meta.some((meta) => meta.lng === language) &&
+                routeEntries.has(item._id)
+            )
+                return [];
             const result = card(item);
-            if (!result) throw new Error(`Related Entry has no published page: ${item._id}`);
+            if (!result)
+                throw new Error(
+                    `Related Entry has no published page: ${item._id}`,
+                );
             return [result];
         });
     }
     const resolveEntryLinks = (value: unknown): void => {
-        if (Array.isArray(value)) { value.forEach(resolveEntryLinks); return; }
+        if (Array.isArray(value)) {
+            value.forEach(resolveEntryLinks);
+            return;
+        }
         if (!value || typeof value !== 'object') return;
         const object = value as Record<string, unknown>;
-        if (typeof object.href === 'string' && object.href.startsWith('entry:')) {
+        if (
+            typeof object.href === 'string' &&
+            object.href.startsWith('entry:')
+        ) {
             const match = /^entry:([^:]+)@\*_([^:]+):entry$/.exec(object.href);
-            const linked = match && scopedEntries.find(entry => entry._id === match[1] && entry.templateId === match[2]);
+            const linked =
+                match &&
+                scopedEntries.find(
+                    (entry) =>
+                        entry._id === match[1] && entry.templateId === match[2],
+                );
             const target = linked && pageForEntry(linked._id);
-            if (!target && linked && routeEntries.has(linked._id) && !linked.meta.some(meta => meta.lng === language)) return;
-            if (!target) throw new ReleaseValidationError([{ code: 'internal-link', message: 'Linked content has no website page', field: 'content' }]);
+            if (
+                !target &&
+                linked &&
+                routeEntries.has(linked._id) &&
+                !linked.meta.some((meta) => meta.lng === language)
+            )
+                return;
+            if (!target)
+                throw new ReleaseValidationError([
+                    {
+                        code: 'internal-link',
+                        message: 'Linked content has no website page',
+                        field: 'content',
+                    },
+                ]);
             object.href = target.path;
         }
         Object.values(object).forEach(resolveEntryLinks);
     };
-    for (const page of pages) { resolveEntryLinks(page.content.layoutDocument); resolveEntryLinks(page.content.sectionConfigs); resolveEntryLinks(page.layoutDocument); }
-    const legacyNavigation: ReleaseLink[] = pages.filter((page) => {
-        const draft = pageDraft(site, page.pageKey)!;
-        return draft.navigation && !draft.path.includes(':');
-    }).map((page) => ({ path: page.path, label: site.pages.find((item) => item.key === page.pageKey)!.title }));
-    const settings = entries.find((entry) => entry.templateId === site.models.find((model) => model.key === 'site-settings')?.templateId)!;
-    for (const value of settings ? fieldValues(input, settings, 'navigationPages') : []) {
+    for (const page of pages) {
+        resolveEntryLinks(page.content.layoutDocument);
+        resolveEntryLinks(page.content.sectionConfigs);
+        resolveEntryLinks(page.layoutDocument);
+    }
+    const legacyNavigation: ReleaseLink[] = pages
+        .filter((page) => {
+            const draft = pageDraft(site, page.pageKey)!;
+            return draft.navigation && !draft.path.includes(':');
+        })
+        .map((page) => ({
+            path: page.path,
+            label: site.pages.find((item) => item.key === page.pageKey)!.title,
+        }));
+    const settings = entries.find(
+        (entry) =>
+            entry.templateId ===
+            site.models.find((model) => model.key === 'site-settings')
+                ?.templateId,
+    )!;
+    for (const value of settings
+        ? fieldValues(input, settings, 'navigationPages')
+        : []) {
         const id = (value as { eid: string }).eid;
         const target = pageForEntry(id);
-        if (!target && routeEntries.has(id) && !availableEntries.some(entry => entry._id === id)) continue;
-        if (!target) throw new Error(`Navigation Entry has no published page: ${id}`);
+        if (
+            !target &&
+            routeEntries.has(id) &&
+            !availableEntries.some((entry) => entry._id === id)
+        )
+            continue;
+        if (!target)
+            throw new Error(`Navigation Entry has no published page: ${id}`);
         if (!legacyNavigation.some((link) => link.path === target.path)) {
-            legacyNavigation.push({ label: entryText(input, entries.find((entry) => entry._id === id)!, 'title'), path: target.path });
+            legacyNavigation.push({
+                label: entryText(
+                    input,
+                    entries.find((entry) => entry._id === id)!,
+                    'title',
+                ),
+                path: target.path,
+            });
         }
     }
     const redirects = new Map<string, string>();
-    const destination = (old: ReleasePage) => pages.find((page) =>
-        page.pageKey === old.pageKey && (page.entryId === old.entryId || !site.pages.find((draft) => draft.key === page.pageKey)?.path.includes(':')));
+    const destination = (old: ReleasePage) =>
+        pages.find(
+            (page) =>
+                page.pageKey === old.pageKey &&
+                (page.entryId === old.entryId ||
+                    !site.pages
+                        .find((draft) => draft.key === page.pageKey)
+                        ?.path.includes(':')),
+        );
     for (const redirect of input.previous?.redirects || []) {
-        const old = input.previous?.pages.find((page) => page.path === redirect.to);
+        const old = input.previous?.pages.find(
+            (page) => page.path === redirect.to,
+        );
         const target = old && destination(old);
-        if (target && target.path !== redirect.from && !pages.some((page) => page.path === redirect.from)) {
+        if (
+            target &&
+            target.path !== redirect.from &&
+            !pages.some((page) => page.path === redirect.from)
+        ) {
             redirects.set(redirect.from, target.path);
         }
     }
     for (const old of input.previous?.pages || []) {
         const target = destination(old);
-        if (target && target.path !== old.path && !pages.some((page) => page.path === old.path)) redirects.set(old.path, target.path);
+        if (
+            target &&
+            target.path !== old.path &&
+            !pages.some((page) => page.path === old.path)
+        )
+            redirects.set(old.path, target.path);
     }
-    const publishedPaths = new Set([...pages.map(page => page.path), ...untranslatedFixedPaths, ...redirects.keys()]);
+    const publishedPaths = new Set([
+        ...pages.map((page) => page.path),
+        ...untranslatedFixedPaths,
+        ...redirects.keys(),
+    ]);
     for (const page of site.pages) {
         if (page.sectionConfigs) {
-            const contractPage = Boolean(preset.editor?.pages.some(item => item.pageKey === (page.blueprintKey || page.key)));
+            const contractPage = Boolean(
+                preset.editor?.pages.some(
+                    (item) => item.pageKey === (page.blueprintKey || page.key),
+                ),
+            );
             if (!contractPage) {
-                validateSectionConfigs(page.layout, page.sectionConfigs, { publishedPaths });
-                validateSectionMediaReferences(page.layout, page.sectionConfigs, { publishedPaths, media: input.media, site });
+                validateSectionConfigs(page.layout, page.sectionConfigs, {
+                    publishedPaths,
+                });
+                validateSectionMediaReferences(
+                    page.layout,
+                    page.sectionConfigs,
+                    { publishedPaths, media: input.media, site },
+                );
             }
         }
     }
-    const navigation = normalizeNavigation(site.navigation === undefined ? legacyNavigation : site.navigation, { publishedPaths });
+    const navigation = normalizeNavigation(
+        site.navigation === undefined ? legacyNavigation : site.navigation,
+        { publishedPaths },
+    );
     // Keep enumerable `path` aliases in serialized snapshots so legacy
     // storefront readers continue to render releases created before the tree.
-    const legacyNode = (node: NavigationNode): NavigationNode => ({ ...node,
-        ...(node.href ? { path: node.href } : {}), children: node.children.map(legacyNode),
+    const legacyNode = (node: NavigationNode): NavigationNode => ({
+        ...node,
+        ...(node.href ? { path: node.href } : {}),
+        children: node.children.map(legacyNode),
     });
     const releaseNavigation = navigation.map(legacyNode);
     const linkIssues: ReleaseIssue[] = [];
-    const validateLinks = (value: unknown, location: Omit<ReleaseIssue, 'code' | 'message'>): void => {
-        if (Array.isArray(value)) { value.forEach(child => validateLinks(child, location)); return; }
+    const validateLinks = (
+        value: unknown,
+        location: Omit<ReleaseIssue, 'code' | 'message'>,
+    ): void => {
+        if (Array.isArray(value)) {
+            value.forEach((child) => validateLinks(child, location));
+            return;
+        }
         if (!value || typeof value !== 'object') return;
         const object = value as Record<string, unknown>;
-        if (typeof object.href === 'string' && object.href.startsWith('entry:')) {
+        if (
+            typeof object.href === 'string' &&
+            object.href.startsWith('entry:')
+        ) {
             const match = /^entry:([^:]+)@\*_([^:]+):entry$/.exec(object.href);
-            const linked = match && scopedEntries.find(entry => entry._id === match[1] && entry.templateId === match[2]);
-            if (!linked || !routeEntries.has(linked._id)) linkIssues.push({ ...location, code: 'internal-link', message: 'Linked content has no website page' });
-            else if (!linked.meta.some(meta => meta.lng === language)) missingTranslation(linked, site.models.find(model => model.templateId === linked.templateId)!.key);
+            const linked =
+                match &&
+                scopedEntries.find(
+                    (entry) =>
+                        entry._id === match[1] && entry.templateId === match[2],
+                );
+            if (!linked || !routeEntries.has(linked._id))
+                linkIssues.push({
+                    ...location,
+                    code: 'internal-link',
+                    message: 'Linked content has no website page',
+                });
+            else if (!linked.meta.some((meta) => meta.lng === language))
+                missingTranslation(
+                    linked,
+                    site.models.find(
+                        (model) => model.templateId === linked.templateId,
+                    )!.key,
+                );
         }
-        if (typeof object.href === 'string' && object.href.startsWith('/') && !object.href.startsWith('//')) {
+        if (
+            typeof object.href === 'string' &&
+            object.href.startsWith('/') &&
+            !object.href.startsWith('//')
+        ) {
             const path = object.href.split(/[?#]/)[0];
-            if (!publishedPaths.has(path)) linkIssues.push({ ...location, code: 'internal-link', message: `Broken internal link: ${path}` });
+            if (!publishedPaths.has(path))
+                linkIssues.push({
+                    ...location,
+                    code: 'internal-link',
+                    message: `Broken internal link: ${path}`,
+                });
         }
-        Object.values(object).forEach(child => validateLinks(child, location));
+        Object.values(object).forEach((child) =>
+            validateLinks(child, location),
+        );
     };
     for (const entry of entries) {
-        const model = site.models.find(model => model.templateId === entry.templateId);
-        for (const prop of entry.meta.find(meta => meta.lng === language)?.props || []) {
-            validateLinks(prop.data, { modelKey: model?.key, entryId: entry._id, field: model?.fields.find(field => field.propId === prop.id)?.key || prop.id });
+        const model = site.models.find(
+            (model) => model.templateId === entry.templateId,
+        );
+        for (const prop of entry.meta.find((meta) => meta.lng === language)
+            ?.props || []) {
+            validateLinks(prop.data, {
+                modelKey: model?.key,
+                entryId: entry._id,
+                field:
+                    model?.fields.find((field) => field.propId === prop.id)
+                        ?.key || prop.id,
+            });
         }
-        validateLinks(entry.content?.find(content => content.lng === language)?.nodes, { modelKey: model?.key, entryId: entry._id, field: 'content' });
+        validateLinks(
+            entry.content?.find((content) => content.lng === language)?.nodes,
+            { modelKey: model?.key, entryId: entry._id, field: 'content' },
+        );
     }
     for (const page of pages) {
-        for (const node of page.content.layoutDocument?.root || []) for (const [key, value] of Object.entries(node.props)) validateLinks(value, { entryId: page.entryId, pageKey: page.pageKey, field: `section.${node.id}.${key}` });
+        for (const node of page.content.layoutDocument?.root || [])
+            for (const [key, value] of Object.entries(node.props))
+                validateLinks(value, {
+                    entryId: page.entryId,
+                    pageKey: page.pageKey,
+                    field: `section.${node.id}.${key}`,
+                });
     }
     // Shared layout properties remain writable even while their page language is incomplete.
     for (const sourcePage of site.pages) {
         const page = pageDraft(site, sourcePage.key)!;
-        for (const node of page.layoutDocument?.root || []) for (const [key, value] of Object.entries(node.props)) validateLinks(value, { pageKey: page.key, field: `section.${node.id}.${key}` });
+        for (const node of page.layoutDocument?.root || [])
+            for (const [key, value] of Object.entries(node.props))
+                validateLinks(value, {
+                    pageKey: page.key,
+                    field: `section.${node.id}.${key}`,
+                });
     }
     if (linkIssues.length) throw new ReleaseValidationError(linkIssues);
-    if (!draftValidationOnly && missingTranslations.length) throw new ReleaseValidationError(missingTranslations);
-    return { missingTranslations, snapshot: structuredClone({ schemaVersion: 1 as const, workspaceId: ownerWorkspace(site), siteId: site._id, language,
-        templateVersion: site.presetVersion, mediaIds: input.media.map((media) => media._id).sort(), pages, navigation: releaseNavigation,
-        redirects: [...redirects].map(([from, to]) => ({ from, to })), operations: site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false } }) };
+    if (!draftValidationOnly && missingTranslations.length)
+        throw new ReleaseValidationError(missingTranslations);
+    return {
+        missingTranslations,
+        snapshot: structuredClone({
+            schemaVersion: 1 as const,
+            workspaceId: ownerWorkspace(site),
+            siteId: site._id,
+            language,
+            templateVersion: site.presetVersion,
+            mediaIds: input.media.map((media) => media._id).sort(),
+            pages,
+            navigation: releaseNavigation,
+            redirects: [...redirects].map(([from, to]) => ({ from, to })),
+            operations: site.operations || {
+                seoTitle: site.name,
+                seoDescription: '',
+                contactFormEnabled: false,
+            },
+        }),
+    };
 }
 
-export function releaseDiff(previous: ReleaseSnapshot | undefined, next: ReleaseSnapshot) {
-    const old = new Map(previous?.pages.map((page) => [page.path, JSON.stringify(page.content)]));
+export function releaseDiff(
+    previous: ReleaseSnapshot | undefined,
+    next: ReleaseSnapshot,
+) {
+    const old = new Map(
+        previous?.pages.map((page) => [
+            page.path,
+            JSON.stringify(page.content),
+        ]),
+    );
     return {
-        added: next.pages.filter((page) => !old.has(page.path)).map((page) => page.path),
-        changed: next.pages.filter((page) => old.has(page.path) && old.get(page.path) !== JSON.stringify(page.content)).map((page) => page.path),
-        removed: (previous?.pages || []).filter((page) => !next.pages.some((item) => item.path === page.path)).map((page) => page.path),
-        navigationChanged: JSON.stringify(previous?.navigation) !== JSON.stringify(next.navigation),
-        mediaChanged: Boolean(previous?.mediaIds) && JSON.stringify(previous?.mediaIds) !== JSON.stringify(next.mediaIds || []),
-        templateChanged: Boolean(previous?.templateVersion) && previous?.templateVersion !== next.templateVersion,
+        added: next.pages
+            .filter((page) => !old.has(page.path))
+            .map((page) => page.path),
+        changed: next.pages
+            .filter(
+                (page) =>
+                    old.has(page.path) &&
+                    old.get(page.path) !== JSON.stringify(page.content),
+            )
+            .map((page) => page.path),
+        removed: (previous?.pages || [])
+            .filter(
+                (page) => !next.pages.some((item) => item.path === page.path),
+            )
+            .map((page) => page.path),
+        navigationChanged:
+            JSON.stringify(previous?.navigation) !==
+            JSON.stringify(next.navigation),
+        mediaChanged:
+            Boolean(previous?.mediaIds) &&
+            JSON.stringify(previous?.mediaIds) !==
+                JSON.stringify(next.mediaIds || []),
+        templateChanged:
+            Boolean(previous?.templateVersion) &&
+            previous?.templateVersion !== next.templateVersion,
         templateVersion: next.templateVersion || '',
         redirects: next.redirects,
     };
@@ -419,60 +948,164 @@ export function releaseDiff(previous: ReleaseSnapshot | undefined, next: Release
 async function currentSite(source: ReleaseSource, expectedReleaseId: string) {
     const site = await source.findSite();
     if (!site || site.status !== 'ready') throw new Error('Site is not ready');
-    if ((site.currentReleaseId || '') !== expectedReleaseId) throw new Error('Published site changed; refresh before continuing');
+    if ((site.currentReleaseId || '') !== expectedReleaseId)
+        throw new Error('Published site changed; refresh before continuing');
     return site;
 }
 
-async function recordAudit(source: ReleaseSource, event: ReleaseAudit): Promise<void> {
-    try { await source.audit(event); }
-    catch (cause) { console.error('Storefront release audit failed', cause); }
+async function recordAudit(
+    source: ReleaseSource,
+    event: ReleaseAudit,
+): Promise<void> {
+    try {
+        await source.audit(event);
+    } catch (cause) {
+        console.error('Storefront release audit failed', cause);
+    }
 }
 
-export async function publishRelease(source: ReleaseSource, actorId: string, expectedReleaseId: string, snapshotHash?: string): Promise<ReleaseRecord> {
+export async function publishRelease(
+    source: ReleaseSource,
+    actorId: string,
+    expectedReleaseId: string,
+    snapshotHash?: string,
+): Promise<ReleaseRecord> {
     const site = await currentSite(source, expectedReleaseId);
     const now = Date.now();
     const releaseId = randomUUID();
     try {
-        const previous = site.currentReleaseId ? await source.findRelease(site.currentReleaseId) : null;
-        if (previous && (previous.siteId !== site._id || ownerWorkspace(previous) !== ownerWorkspace(site))) throw new Error('Release belongs to another site');
-        const prior = previous ? JSON.parse(previous.payload) as ReleaseSnapshot : undefined;
-        if (prior && (prior.siteId !== site._id || ownerWorkspace(prior) !== ownerWorkspace(site))) throw new Error('Release snapshot belongs to another site');
-        const snapshot = buildRelease({ ...await source.loadContent(site), site, previous: prior });
-        if (snapshotHash && snapshotHash !== snapshotFingerprint(snapshot)) throw new Error('Draft content changed after validation; check again before publishing');
-        const record: ReleaseRecord = { _id: releaseId, workspaceId: ownerWorkspace(site), siteId: site._id, createdAt: now, updatedAt: now,
-            createdBy: actorId, previousReleaseId: site.currentReleaseId || '', payload: JSON.stringify(snapshot) };
+        const previous = site.currentReleaseId
+            ? await source.findRelease(site.currentReleaseId)
+            : null;
+        if (
+            previous &&
+            (previous.siteId !== site._id ||
+                ownerWorkspace(previous) !== ownerWorkspace(site))
+        )
+            throw new Error('Release belongs to another site');
+        const prior = previous
+            ? (JSON.parse(previous.payload) as ReleaseSnapshot)
+            : undefined;
+        if (
+            prior &&
+            (prior.siteId !== site._id ||
+                ownerWorkspace(prior) !== ownerWorkspace(site))
+        )
+            throw new Error('Release snapshot belongs to another site');
+        const snapshot = buildRelease({
+            ...(await source.loadContent(site)),
+            site,
+            previous: prior,
+        });
+        if (snapshotHash && snapshotHash !== snapshotFingerprint(snapshot))
+            throw new Error(
+                'Draft content changed after validation; check again before publishing',
+            );
+        const record: ReleaseRecord = {
+            _id: releaseId,
+            workspaceId: ownerWorkspace(site),
+            siteId: site._id,
+            createdAt: now,
+            updatedAt: now,
+            createdBy: actorId,
+            previousReleaseId: site.currentReleaseId || '',
+            payload: JSON.stringify(snapshot),
+        };
         await source.insertRelease(record);
-        if (!await source.activate(site, releaseId)) throw new Error('Site changed during publication; refresh and retry');
-        await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'publish', releaseId, error: '' });
+        if (!(await source.activate(site, releaseId)))
+            throw new Error(
+                'Site changed during publication; refresh and retry',
+            );
+        await recordAudit(source, {
+            _id: randomUUID(),
+            createdAt: now,
+            updatedAt: now,
+            workspaceId: ownerWorkspace(site),
+            siteId: site._id,
+            actorId,
+            operation: 'publish',
+            releaseId,
+            error: '',
+        });
         return record;
     } catch (cause) {
-        await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'publish', releaseId,
-            error: cause instanceof Error ? cause.message : 'Publication failed' });
+        await recordAudit(source, {
+            _id: randomUUID(),
+            createdAt: now,
+            updatedAt: now,
+            workspaceId: ownerWorkspace(site),
+            siteId: site._id,
+            actorId,
+            operation: 'publish',
+            releaseId,
+            error:
+                cause instanceof Error ? cause.message : 'Publication failed',
+        });
         throw cause;
     }
 }
 
-export async function rollbackRelease(source: ReleaseSource, actorId: string, releaseId: string, expectedReleaseId: string): Promise<void> {
+export async function rollbackRelease(
+    source: ReleaseSource,
+    actorId: string,
+    releaseId: string,
+    expectedReleaseId: string,
+): Promise<void> {
     const site = await currentSite(source, expectedReleaseId);
     const now = Date.now();
     try {
         const target = await source.findRelease(releaseId);
-        if (!target || (target.siteId !== site._id || ownerWorkspace(target) !== ownerWorkspace(site))) throw new Error('Release does not belong to this site');
-        if (!(site.publishedReleaseIds || [site.currentReleaseId]).includes(releaseId)) throw new Error('Release was never published');
+        if (
+            !target ||
+            target.siteId !== site._id ||
+            ownerWorkspace(target) !== ownerWorkspace(site)
+        )
+            throw new Error('Release does not belong to this site');
+        if (
+            !(site.publishedReleaseIds || [site.currentReleaseId]).includes(
+                releaseId,
+            )
+        )
+            throw new Error('Release was never published');
         const snapshot = JSON.parse(target.payload) as ReleaseSnapshot;
-        if (snapshot.schemaVersion !== 1 || (snapshot.siteId !== site._id || ownerWorkspace(snapshot) !== ownerWorkspace(site))) throw new Error('Unsupported release snapshot');
-        if (!await source.activate(site, target._id)) throw new Error('Site changed during rollback; refresh and retry');
-        await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'rollback', releaseId, error: '' });
+        if (
+            snapshot.schemaVersion !== 1 ||
+            snapshot.siteId !== site._id ||
+            ownerWorkspace(snapshot) !== ownerWorkspace(site)
+        )
+            throw new Error('Unsupported release snapshot');
+        if (!(await source.activate(site, target._id)))
+            throw new Error('Site changed during rollback; refresh and retry');
+        await recordAudit(source, {
+            _id: randomUUID(),
+            createdAt: now,
+            updatedAt: now,
+            workspaceId: ownerWorkspace(site),
+            siteId: site._id,
+            actorId,
+            operation: 'rollback',
+            releaseId,
+            error: '',
+        });
     } catch (cause) {
-        await recordAudit(source, { _id: randomUUID(), createdAt: now, updatedAt: now,
-            workspaceId: ownerWorkspace(site), siteId: site._id, actorId, operation: 'rollback', releaseId,
-            error: cause instanceof Error ? cause.message : 'Rollback failed' });
+        await recordAudit(source, {
+            _id: randomUUID(),
+            createdAt: now,
+            updatedAt: now,
+            workspaceId: ownerWorkspace(site),
+            siteId: site._id,
+            actorId,
+            operation: 'rollback',
+            releaseId,
+            error: cause instanceof Error ? cause.message : 'Rollback failed',
+        });
         throw cause;
     }
 }
 
 export { toContractSnapshot } from '../release-contract/snapshot';
-export type { ContractAsset, ContractSnapshotV1, ContractTemplateIdentity } from '../release-contract/snapshot';
+export type {
+    ContractAsset,
+    ContractSnapshotV1,
+    ContractTemplateIdentity,
+} from '../release-contract/snapshot';
