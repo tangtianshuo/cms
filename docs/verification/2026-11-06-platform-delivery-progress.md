@@ -287,6 +287,16 @@ Independent review found incomplete complex-type validation, workspace-only medi
 
 Final rendered UI tests passed2/2, focused regressions38/38 and cross-repository AeroFrame/FireGuard/service-studio tests10/10 with zero skips; backend/UI typechecks passed. All12 task-file hashes match executed/committed bytes; protected original-source audit remains154 checked/0 changed. The plan's stale `templates.tsx` path was mapped to the actual `presets.tsx` upgrade screen. Formatter churn is deferred Minor. E3 owns candidate persistence, adoption and recovery; E2 makes no production claim.
 
+## E3 — Durable staged migration adoption accepted locally
+
+CMS final head `e238fe40c5eee99f5aec80538321174f472a2884`. Migration operations persist a scoped request key, complete previous/candidate installations, source and target identities, reviewed checksum and explicit Gateway/CAS/rollback phases in Mongo. Candidate templates and Entries use a unique namespace with rewritten references and retained media. Per-site renewable leases block normal Entry, template, page, release and Studio writes during publishing; all overlapping reads/validation/hash checks occur inside the same boundary.
+
+The existing Gateway release source publishes the candidate and verifies an authoritative state matching the expected release and route revision before a single SiteInstallation CAS writes the complete candidate namespace, model/page/manifest identity, content group, Gateway release history and active revision. Unknown results remain publishing and reconcile. Rollback confirms Gateway old-active identity, preserves later drafts, then restores the full previous site while retaining candidate and media references.
+
+Independent review exposed and two fix rounds closed six Critical issues: bypassed target compatibility, model/language-wide migration errors, stale operation publication overwrites, migration owner takeover, stale pre-lock controller writes, and unrecoverable post-CAS/rollback phases. The reviewed source checksum is now carried from UI preview into adoption.
+
+Final focused tests passed43/43; real Mongo/Studio concurrency and recovery passed4/4; cross-repository template tests10/10 and actual service browser update/rollback1/1. Backend/UI types passed. Real Mongo covers two concurrent site adoptions, an editable unrelated site, owner conflicts, Gateway-active/pre-CAS, post-CAS/save-failure and Gateway-rollback/site-restore interruption with complete identity/Entry/media/tuple assertions. All28 final-file hashes match committed bytes; source audit remains154/0. Public OCI adoption, deployed Gateway, production cutover and human UAT remain unperformed. Formatter churn is deferred Minor.
+
 ## F3 — Release-aware monitoring and durable alerts accepted locally
 
 Final implementation heads: CMS `bd12cd3fb6e6001c8a765ab6d60b929235197288`, Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`. Public probes bind a page marker and optional release header to the expected F1 template and verified F2 completion; representative assets, strict TLS, certificate age, backup age, public availability, control-plane availability and the authoritative 15-minute publish-failure count are reported separately. The Gateway database helper is read-only and does not participate in publish decisions.

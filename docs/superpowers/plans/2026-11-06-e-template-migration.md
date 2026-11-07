@@ -244,6 +244,12 @@ git diff --cached --check
 git commit -m "feat: adopt and recover staged template migrations"
 ```
 
+E3 本地实施及两轮限定复审记录（2026-11-07）：最终 CMS `e238fe40c5eee99f5aec80538321174f472a2884`；Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`、Templates `bf11776db84aa97c5eba3f4d538d14682e428469`、Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42` 未变。实现持久 MigrationOperation、requestKey 唯一性、候选 template/Entry namespace 与引用重写、站点级可续期写锁/publishing 409、reviewed sourceChecksum、Gateway authoritative release/route 确认、显式 CAS 阶段、完整 SiteInstallation/Gateway tuple 切换、崩溃 reconciliation、保留后续草稿的回滚及旧媒体保留。
+
+独立初审发现目标校验、跨模型多语言、发布结果覆盖、owner 抢占、锁前读取、CAS/回滚崩溃、checksum 与真实集成覆盖等6 Critical/2 Important。两轮修复后：同模板和 E2 target validation 在 staging/finalization 双重执行；迁移步按 model 和各自语言应用；Gateway 激活后才确定 target route revision；不同 operation 不能接管 publishing owner；Entry/template/page/Studio 写入在锁内重读并写新状态；CAS/rollback 使用持久阶段恢复；UI携带审阅 checksum。真实 Mongo 用例覆盖双站并发、无关站编辑、owner 冲突、Gateway-active/pre-CAS、post-CAS/save-failure、Gateway-rollback/pre-site-restore 和完整 identity/media/tuple。
+
+最终验证：focused 43/43、真实 Mongo/Studio 4/4、跨仓模板 10/10、实际 service browser 更新/回滚 1/1；后端/UI 类型检查通过。额外 Docker 本地升级/回滚快照演练通过并清理容器。28个任务文件当前/提交哈希一致，154个原始来源文件不变；任务进程/容器/`migration_*` Mongo数据库已清理，共享服务保持运行。公共 registry/OCI 采用、生产 Gateway 部署、生产切换及真人 UAT 未执行；格式化 churn 留最终 Minor 审查。
+
 ### Task E4：旧站迁移、灰度和兼容读取退出
 
 **Files:**
