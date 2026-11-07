@@ -113,6 +113,8 @@ jobs:
         run: python3 -m pip install PyYAML==6.0.3
       - name: Test cross-repository candidate workflow
         working-directory: cms
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
         run: python3 -m unittest ops.release.test_gateway_release_workflow -v
       - name: Materialize candidate inputs without shell interpolation
         env:

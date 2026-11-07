@@ -46,6 +46,7 @@ class PlatformGateWorkflowTests(unittest.TestCase):
         index = matches[0]
         regression = steps[index]
         self.assertEqual(regression['working-directory'], 'cms')
+        self.assertEqual(regression.get('env', {}).get('PYTHONDONTWRITEBYTECODE'), '1')
         self.assertNotIn('if', regression)
         self.assertNotIn('continue-on-error', regression)
         self.assertNotIn('continue-on-error', job)
