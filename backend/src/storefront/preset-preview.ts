@@ -5,19 +5,46 @@ import { type PresetManifest } from '../presets/catalog';
 import { resolveInstalledPreset } from '../presets/installed';
 import { pageDraft } from '../presets/pages';
 import type { SiteInstallation } from '../presets/site-model';
-import { mediaAuthorizedForSite, validateSectionMediaReferences, type SectionConfig } from './section-schema';
-import { sectionConfigsFromLayout, type LayoutDocument } from './layout-document';
+import {
+    mediaAuthorizedForSite,
+    validateSectionMediaReferences,
+    type SectionConfig,
+} from './section-schema';
+import {
+    sectionConfigsFromLayout,
+    type LayoutDocument,
+} from './layout-document';
 import type { SiteOperations } from '../presets/operations';
 
 export interface PresetPagePreview {
     kind: 'preset-page';
-    view: 'home' | 'collection' | 'product' | 'page';
-    preset: Pick<PresetManifest, 'id' | 'version' | 'name' | 'description' | 'theme' | 'demo' | 'showcase'>;
+    view:
+        | 'home'
+        | 'collection'
+        | 'product'
+        | 'page'
+        | 'services'
+        | 'service'
+        | 'team'
+        | 'contact';
+    preset: Pick<
+        PresetManifest,
+        | 'id'
+        | 'version'
+        | 'name'
+        | 'description'
+        | 'theme'
+        | 'demo'
+        | 'showcase'
+    >;
     sections: string[];
     sectionConfigs?: SectionConfig[];
     layoutDocument?: LayoutDocument;
     seo: { title: string; description: string };
-    operations?: SiteOperations & { socialImageUrl?: string; faviconUrl?: string };
+    operations?: SiteOperations & {
+        socialImageUrl?: string;
+        faviconUrl?: string;
+    };
 }
 
 export interface PresetPagePreviewInput {
@@ -32,8 +59,13 @@ export interface PresetPagePreviewInput {
     currency: string;
 }
 
-function fieldData(site: SiteInstallation, modelKey: string, entry: Entry | undefined,
-    language: string, fieldKey: string): unknown[] {
+function fieldData(
+    site: SiteInstallation,
+    modelKey: string,
+    entry: Entry | undefined,
+    language: string,
+    fieldKey: string,
+): unknown[] {
     if (!entry) return [];
     const mapping = site.models.find((model) => model.key === modelKey);
     const field = mapping?.fields.find((item) => item.key === fieldKey);
@@ -44,267 +76,748 @@ function fieldData(site: SiteInstallation, modelKey: string, entry: Entry | unde
     if (!meta) throw new Error('Entry has no data for selected language');
     const value = meta.props.find((item) => item.id === field.propId);
     const preset = resolveInstalledPreset(site);
-    const required = preset?.models.find((model) => model.key === modelKey)?.fields
-        .find((item) => item.key === fieldKey)?.required;
+    const required = preset?.models
+        .find((model) => model.key === modelKey)
+        ?.fields.find((item) => item.key === fieldKey)?.required;
     if (!value && required) throw new Error(`Missing bound field ${fieldKey}`);
-    return Array.isArray(value?.data) ? value.data as unknown[] : [];
+    return Array.isArray(value?.data) ? (value.data as unknown[]) : [];
 }
 
-function text(site: SiteInstallation, modelKey: string, entry: Entry | undefined,
-    language: string, fieldKey: string): string {
+function text(
+    site: SiteInstallation,
+    modelKey: string,
+    entry: Entry | undefined,
+    language: string,
+    fieldKey: string,
+): string {
     const value = fieldData(site, modelKey, entry, language, fieldKey)[0];
     return typeof value === 'string' ? value.trim() : '';
 }
 
 function richText(value: unknown): string {
     if (typeof value === 'string') return value;
-    if (Array.isArray(value)) return value.map(richText).filter(Boolean).join(' ');
+    if (Array.isArray(value))
+        return value.map(richText).filter(Boolean).join(' ');
     if (value && typeof value === 'object') {
-        const node = value as { text?: unknown; content?: unknown; nodes?: unknown };
+        const node = value as {
+            text?: unknown;
+            content?: unknown;
+            nodes?: unknown;
+        };
         if (typeof node.text === 'string') return node.text;
         return richText(node.content ?? node.nodes);
     }
     return '';
 }
 
-function image(site: SiteInstallation, modelKey: string, entry: Entry | undefined,
-    language: string, fieldKey: string, media: Media[], mediaOrigin: string): string {
+function image(
+    site: SiteInstallation,
+    modelKey: string,
+    entry: Entry | undefined,
+    language: string,
+    fieldKey: string,
+    media: Media[],
+    mediaOrigin: string,
+): string {
     const value = fieldData(site, modelKey, entry, language, fieldKey)[0];
-    if (!value || typeof value !== 'object' || !('_id' in value) || typeof value._id !== 'string') return '';
-    const found = media.find((item) => item._id === value._id && item.mimetype.startsWith('image/'));
+    if (
+        !value ||
+        typeof value !== 'object' ||
+        !('_id' in value) ||
+        typeof value._id !== 'string'
+    )
+        return '';
+    const found = media.find(
+        (item) => item._id === value._id && item.mimetype.startsWith('image/'),
+    );
     if (!found) return '';
     return mediaUrl(found._id, media, mediaOrigin);
 }
 
 function mediaUrl(id: unknown, media: Media[], origin: string): string {
-    const found = media.find(item => item._id === id && item.mimetype.startsWith('image/'));
-    return found ? `${new URL(origin).origin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image${found.accessToken ? '?cap=' + encodeURIComponent(found.accessToken) : ''}` : '';
+    const found = media.find(
+        (item) => item._id === id && item.mimetype.startsWith('image/'),
+    );
+    return found
+        ? `${new URL(origin).origin}/api/v4/media/${encodeURIComponent(found._id)}/bin/image${found.accessToken ? '?cap=' + encodeURIComponent(found.accessToken) : ''}`
+        : '';
 }
 
-function resolvedSections(sections: SectionConfig[] | undefined, media: Media[], origin: string): SectionConfig[] | undefined {
-    return sections?.map(section => {
+function resolvedSections(
+    sections: SectionConfig[] | undefined,
+    media: Media[],
+    origin: string,
+): SectionConfig[] | undefined {
+    return sections?.map((section) => {
         const result = structuredClone(section);
         if (!result.enabled) return result;
-        if (result.type === 'hero-carousel') result.data.slides = (result.data.slides as Array<Record<string, unknown>>).map(slide => ({ ...slide, image: mediaUrl((slide.image as { _id: string })._id, media, origin) }));
-        if (result.type === 'product-gallery') result.data.images = (result.data.images as Array<{ _id: string }>).map(imageValue => mediaUrl(imageValue._id, media, origin));
+        if (result.type === 'hero-carousel')
+            result.data.slides = (
+                result.data.slides as Array<Record<string, unknown>>
+            ).map((slide) => ({
+                ...slide,
+                image: mediaUrl(
+                    (slide.image as { _id: string })._id,
+                    media,
+                    origin,
+                ),
+            }));
+        if (result.type === 'product-gallery')
+            result.data.images = (
+                result.data.images as Array<{ _id: string }>
+            ).map((imageValue) => mediaUrl(imageValue._id, media, origin));
         return result;
     });
 }
 
 // Contract media controls use the same site authorization boundary as legacy
 // section media. Only declared controls are interpreted as media references.
-function projectedRichNodes(value: unknown, input: PresetPagePreviewInput): EntryContentNode[] {
-    if (typeof value === 'string') return value ? [{ type: 'paragraph', content: [{ type: 'text', text: value }] }] as EntryContentNode[] : [];
-    const nodes = Array.isArray(value) ? value : value && typeof value === 'object' && 'nodes' in value ? value.nodes : [];
+function projectedRichNodes(
+    value: unknown,
+    input: PresetPagePreviewInput,
+): EntryContentNode[] {
+    if (typeof value === 'string')
+        return value
+            ? ([
+                  {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: value }],
+                  },
+              ] as EntryContentNode[])
+            : [];
+    const nodes = Array.isArray(value)
+        ? value
+        : value && typeof value === 'object' && 'nodes' in value
+          ? value.nodes
+          : [];
     if (!Array.isArray(nodes)) throw new Error('Invalid rich content');
     // Follow only validated rich-node and widget/group property envelopes.
     // Ordinary strings, media values, pointers and unknown stored values stay data.
     const widgetValues = <T>(widgetData: T): T => {
-        if (!widgetData || typeof widgetData !== 'object' || Array.isArray(widgetData)) return structuredClone(widgetData);
+        if (
+            !widgetData ||
+            typeof widgetData !== 'object' ||
+            Array.isArray(widgetData)
+        )
+            return structuredClone(widgetData);
         const data = structuredClone(widgetData) as Record<string, any>;
-        if (Array.isArray(data.props)) data.props = data.props.map((prop: { id: string; data: unknown }) => ({ ...prop, data: propertyData(prop.data) }));
-        if (Array.isArray(data.items)) data.items = data.items.map(widgetValues);
+        if (Array.isArray(data.props))
+            data.props = data.props.map(
+                (prop: { id: string; data: unknown }) => ({
+                    ...prop,
+                    data: propertyData(prop.data),
+                }),
+            );
+        if (Array.isArray(data.items))
+            data.items = data.items.map(widgetValues);
         return data as T;
     };
-    const propertyData = (propertyValue: unknown): unknown => Array.isArray(propertyValue)
-        ? propertyValue.map(item => item && typeof item === 'object' && Array.isArray(item.nodes)
-            ? { ...structuredClone(item), nodes: projectedRichNodes(item.nodes, input) } : structuredClone(item))
-        : widgetValues(propertyValue);
+    const propertyData = (propertyValue: unknown): unknown =>
+        Array.isArray(propertyValue)
+            ? propertyValue.map((item) =>
+                  item && typeof item === 'object' && Array.isArray(item.nodes)
+                      ? {
+                            ...structuredClone(item),
+                            nodes: projectedRichNodes(item.nodes, input),
+                        }
+                      : structuredClone(item),
+              )
+            : widgetValues(propertyValue);
     return structuredClone(nodes).map((node: EntryContentNode) => {
-        if (node.marks) node.marks = node.marks.map(mark => {
-            if (mark.type !== 'link' || !mark.attrs?.href.startsWith('media:')) return mark;
-            const match = /^media:([^:]+)@\*_@\*_:media$/.exec(mark.attrs.href);
-            const media = match && input.media.find(item => item._id === match[1] && mediaAuthorizedForSite(item, input.site));
-            if (!media) throw new Error('Rich content media not available');
-            return { ...mark, attrs: { ...mark.attrs, href: mediaUrl(media._id, input.media, input.mediaOrigin) } };
-        });
-        if (node.type === 'widget' && node.attrs && 'data' in node.attrs) node.attrs = { ...node.attrs, data: widgetValues(node.attrs.data) };
-        if (node.content) node.content = projectedRichNodes(node.content, input);
+        if (node.marks)
+            node.marks = node.marks.map((mark) => {
+                if (
+                    mark.type !== 'link' ||
+                    !mark.attrs?.href.startsWith('media:')
+                )
+                    return mark;
+                const match = /^media:([^:]+)@\*_@\*_:media$/.exec(
+                    mark.attrs.href,
+                );
+                const media =
+                    match &&
+                    input.media.find(
+                        (item) =>
+                            item._id === match[1] &&
+                            mediaAuthorizedForSite(item, input.site),
+                    );
+                if (!media) throw new Error('Rich content media not available');
+                return {
+                    ...mark,
+                    attrs: {
+                        ...mark.attrs,
+                        href: mediaUrl(
+                            media._id,
+                            input.media,
+                            input.mediaOrigin,
+                        ),
+                    },
+                };
+            });
+        if (node.type === 'widget' && node.attrs && 'data' in node.attrs)
+            node.attrs = { ...node.attrs, data: widgetValues(node.attrs.data) };
+        if (node.content)
+            node.content = projectedRichNodes(node.content, input);
         return node;
     });
 }
-function resolvedContractProps(type: string, props: Record<string, unknown>, enabled: boolean,
-    manifest: PresetManifest, input: PresetPagePreviewInput): Record<string, unknown> {
+function resolvedContractProps(
+    type: string,
+    props: Record<string, unknown>,
+    enabled: boolean,
+    manifest: PresetManifest,
+    input: PresetPagePreviewInput,
+): Record<string, unknown> {
     const result = structuredClone(props);
-    const declared = manifest.editor?.sections.find(section => section.type === type)?.props || {};
+    const declared =
+        manifest.editor?.sections.find((section) => section.type === type)
+            ?.props || {};
     for (const [key, schema] of Object.entries(declared)) {
         if (!(key in result)) continue;
-        if (schema.control === 'rich-text') { result[key] = { nodes: projectedRichNodes(result[key], input) }; continue; }
+        if (schema.control === 'rich-text') {
+            result[key] = { nodes: projectedRichNodes(result[key], input) };
+            continue;
+        }
         if (schema.control !== 'media') continue;
         const value = result[key];
         if (typeof value === 'string') {
-            if (value && !/^(?:https?:\/\/|\/(?!\/))/.test(value)) throw new Error('Invalid contract media URL');
+            if (value && !/^(?:https?:\/\/|\/(?!\/))/.test(value))
+                throw new Error('Invalid contract media URL');
             continue;
         }
-        if (!value || typeof value !== 'object' || Array.isArray(value) ||
-            Object.keys(value).some(field => field !== '_id') ||
-            typeof (value as { _id?: unknown })._id !== 'string' || !(value as { _id: string })._id) {
+        if (
+            !value ||
+            typeof value !== 'object' ||
+            Array.isArray(value) ||
+            Object.keys(value).some((field) => field !== '_id') ||
+            typeof (value as { _id?: unknown })._id !== 'string' ||
+            !(value as { _id: string })._id
+        ) {
             throw new Error('Invalid contract media reference');
         }
         if (!enabled) continue;
         const id = (value as { _id: string })._id;
-        const media = input.media.find(item => item._id === id);
-        if (!media || !mediaAuthorizedForSite(media, input.site, { requireSiteBinding: true })) {
-            throw new Error(`Contract media is not available for this site: ${id}`);
+        const media = input.media.find((item) => item._id === id);
+        if (
+            !media ||
+            !mediaAuthorizedForSite(media, input.site, {
+                requireSiteBinding: true,
+            })
+        ) {
+            throw new Error(
+                `Contract media is not available for this site: ${id}`,
+            );
         }
         result[key] = mediaUrl(id, input.media, input.mediaOrigin);
     }
     return result;
 }
 
-function legacyRendererSections(layout: string, pageSections: string[], sectionConfigs?: SectionConfig[]): string[] {
+function legacyRendererSections(
+    layout: string,
+    pageSections: string[],
+    sectionConfigs?: SectionConfig[],
+): string[] {
     const configured = sectionConfigs
-        ? sectionConfigs.filter(section => section.enabled).map(section => section.type)
+        ? sectionConfigs
+              .filter((section) => section.enabled)
+              .map((section) => section.type)
         : pageSections;
     if (layout === 'home') {
-        return configured.flatMap(section => section === 'hero-carousel' ? ['hero'] :
-            section === 'info-grid' ? ['feature'] :
-            section === 'hero' || section === 'feature' ? [section] : []);
+        return configured.flatMap((section) =>
+            section === 'hero-carousel'
+                ? ['hero']
+                : section === 'info-grid'
+                  ? ['feature']
+                  : section === 'hero' || section === 'feature'
+                    ? [section]
+                    : [],
+        );
     }
     if (layout === 'collection-list') {
-        const hasGrid = configured.some(section => section === 'info-grid' || section === 'grid');
-        return hasGrid ? ['heading', 'grid'] : configured.filter(section => section === 'heading');
+        const hasGrid = configured.some(
+            (section) => section === 'info-grid' || section === 'grid',
+        );
+        return hasGrid
+            ? ['heading', 'grid']
+            : configured.filter((section) => section === 'heading');
     }
     if (layout === 'product-detail') {
-        return configured.flatMap(section => section === 'product-gallery' ? ['gallery'] :
-            section === 'product-information' ? ['information'] :
-            section === 'product-description' ? ['description'] :
-            ['gallery', 'information', 'description'].includes(section) ? [section] : []);
+        return configured.flatMap((section) =>
+            section === 'product-gallery'
+                ? ['gallery']
+                : section === 'product-information'
+                  ? ['information']
+                  : section === 'product-description'
+                    ? ['description']
+                    : ['gallery', 'information', 'description'].includes(
+                            section,
+                        )
+                      ? [section]
+                      : [],
+        );
     }
     if (layout === 'content-page') {
-        return configured.some(section => section === 'info-grid' || section === 'story') ? ['story'] : [];
+        return configured.some(
+            (section) => section === 'info-grid' || section === 'story',
+        )
+            ? ['story']
+            : [];
     }
     return pageSections;
 }
 
-function pointer(site: SiteInstallation, modelKey: string, entry: Entry | undefined,
-    language: string, fieldKey: string, targetKey: string, relatedEntries: Entry[]): Entry | undefined {
+function pointer(
+    site: SiteInstallation,
+    modelKey: string,
+    entry: Entry | undefined,
+    language: string,
+    fieldKey: string,
+    targetKey: string,
+    relatedEntries: Entry[],
+): Entry | undefined {
     const value = fieldData(site, modelKey, entry, language, fieldKey)[0];
     const target = site.models.find((model) => model.key === targetKey);
-    if (!target || !value || typeof value !== 'object' ||
-        !('tid' in value) || !('eid' in value) || value.tid !== target.templateId ||
-        typeof value.eid !== 'string') return undefined;
-    return relatedEntries.find((item) => item._id === value.eid && item.templateId === target.templateId);
+    if (
+        !target ||
+        !value ||
+        typeof value !== 'object' ||
+        !('tid' in value) ||
+        !('eid' in value) ||
+        value.tid !== target.templateId ||
+        typeof value.eid !== 'string'
+    )
+        return undefined;
+    return relatedEntries.find(
+        (item) =>
+            item._id === value.eid && item.templateId === target.templateId,
+    );
 }
 
-export function previewPresetPage(input: PresetPagePreviewInput): PresetPagePreview {
+export function previewPresetPage(
+    input: PresetPagePreviewInput,
+): PresetPagePreview {
     const { site, entry, language } = input;
     if (site.status !== 'ready') throw new Error('Site import is not ready');
     const manifest = resolveInstalledPreset(site);
     const page = pageDraft(site, input.pageKey);
     if (!page) throw new Error('Unknown preset page');
-    const editorPage = manifest.editor?.pages.find(item => item.pageKey === (page.blueprintKey || page.key));
-    const contractPage = Boolean(editorPage && (editorPage.sections.length > 0 ||
-        manifest.editor?.sections.some(section => section.allowedPages.includes(editorPage.pageKey))));
-    if (page.sectionConfigs && !contractPage) validateSectionMediaReferences(page.layout, page.sectionConfigs, {
-        media: input.media, site,
-        publishedPaths: new Set(site.pages.filter(item => item.enabled !== false && !item.path.includes(':')).map(item => item.path)),
-    });
-    if (!input.availableLanguages.includes(language)) throw new Error('Invalid preview language');
-    const selectedModel = site.models.find((model) => model.templateId === entry.templateId);
-    if (!selectedModel || (selectedModel.key !== page.modelKey && selectedModel.key !== 'site-settings')) {
+    const editorPage = manifest.editor?.pages.find(
+        (item) => item.pageKey === (page.blueprintKey || page.key),
+    );
+    const contractPage = Boolean(
+        editorPage &&
+            (editorPage.sections.length > 0 ||
+                manifest.editor?.sections.some((section) =>
+                    section.allowedPages.includes(editorPage.pageKey),
+                )),
+    );
+    if (page.sectionConfigs && !contractPage)
+        validateSectionMediaReferences(page.layout, page.sectionConfigs, {
+            media: input.media,
+            site,
+            publishedPaths: new Set(
+                site.pages
+                    .filter(
+                        (item) =>
+                            item.enabled !== false && !item.path.includes(':'),
+                    )
+                    .map((item) => item.path),
+            ),
+        });
+    if (!input.availableLanguages.includes(language))
+        throw new Error('Invalid preview language');
+    const selectedModel = site.models.find(
+        (model) => model.templateId === entry.templateId,
+    );
+    if (
+        !selectedModel ||
+        (selectedModel.key !== page.modelKey &&
+            selectedModel.key !== 'site-settings')
+    ) {
         throw new Error('Entry template does not match the selected page');
     }
     const pageModel = site.models.find((model) => model.key === page.modelKey);
-    const pageEntry = selectedModel.key === page.modelKey ? entry :
-        input.relatedEntries.find((item) => item.templateId === pageModel?.templateId &&
-            (!page.entryId || item._id === page.entryId));
-    const settingsModel = site.models.find((model) => model.key === 'site-settings');
-    const settingsEntry = selectedModel.key === 'site-settings' ? entry :
-        input.relatedEntries.find((item) => item.templateId === settingsModel?.templateId);
+    const pageEntry =
+        selectedModel.key === page.modelKey
+            ? entry
+            : input.relatedEntries.find(
+                  (item) =>
+                      item.templateId === pageModel?.templateId &&
+                      (!page.entryId || item._id === page.entryId),
+              );
+    const settingsModel = site.models.find(
+        (model) => model.key === 'site-settings',
+    );
+    const settingsEntry =
+        selectedModel.key === 'site-settings'
+            ? entry
+            : input.relatedEntries.find(
+                  (item) => item.templateId === settingsModel?.templateId,
+              );
     const brand = settingsEntry
-        ? text(site, 'site-settings', settingsEntry, language, 'brandName') || site.name : site.name;
-    const demo: PresetManifest['demo'] = {
+        ? text(site, 'site-settings', settingsEntry, language, 'brandName') ||
+          site.name
+        : site.name;
+    const demo: NonNullable<PresetManifest['demo']> = {
         brand,
-        contactEmail: settingsEntry ? text(site, 'site-settings', settingsEntry, language, 'contactEmail') : manifest.demo.contactEmail,
+        contactEmail: settingsEntry
+            ? text(
+                  site,
+                  'site-settings',
+                  settingsEntry,
+                  language,
+                  'contactEmail',
+              )
+            : manifest.demo.contactEmail,
         hero: { title: '', subtitle: '', image: '' },
         product: { title: '', price: '', image: '', description: '' },
         collection: { title: '', description: '', image: '' },
         page: { title: '', body: '', image: '' },
     };
-    const view = page.layout === 'collection-list' ? 'collection' :
-        page.layout === 'product-detail' ? 'product' :
-        page.layout === 'content-page' ? 'page' : 'home';
-    if (view === 'home') {
+    const serviceModel = site.models.some((model) => model.key === 'service');
+    const view: PresetPagePreview['view'] =
+        page.layout === 'collection-list'
+            ? 'collection'
+            : page.layout === 'product-detail'
+              ? 'product'
+              : page.layout === 'content-page'
+                ? 'page'
+                : page.layout === 'services'
+                  ? 'services'
+                  : page.layout === 'service-detail'
+                    ? 'service'
+                    : page.layout === 'team'
+                      ? 'team'
+                      : page.layout === 'contact'
+                        ? 'contact'
+                        : 'home';
+    if (view === 'home' && page.modelKey === 'home') {
         demo.hero = {
             title: text(site, 'home', pageEntry, language, 'headline'),
             subtitle: text(site, 'home', pageEntry, language, 'intro'),
-            image: image(site, 'home', pageEntry, language, 'heroImage', input.media, input.mediaOrigin),
+            image: image(
+                site,
+                'home',
+                pageEntry,
+                language,
+                'heroImage',
+                input.media,
+                input.mediaOrigin,
+            ),
         };
-        const collection = pointer(site, 'home', pageEntry, language, 'featuredCollections',
-            'collection', input.relatedEntries);
-        if (collection) demo.collection = {
-            title: text(site, 'collection', collection, language, 'title'),
-            description: text(site, 'collection', collection, language, 'description'),
-            image: image(site, 'collection', collection, language, 'cover', input.media, input.mediaOrigin),
-        };
+        const collection = pointer(
+            site,
+            'home',
+            pageEntry,
+            language,
+            'featuredCollections',
+            'collection',
+            input.relatedEntries,
+        );
+        if (collection)
+            demo.collection = {
+                title: text(site, 'collection', collection, language, 'title'),
+                description: text(
+                    site,
+                    'collection',
+                    collection,
+                    language,
+                    'description',
+                ),
+                image: image(
+                    site,
+                    'collection',
+                    collection,
+                    language,
+                    'cover',
+                    input.media,
+                    input.mediaOrigin,
+                ),
+            };
     } else if (view === 'collection') {
         demo.collection = {
             title: text(site, 'collection', pageEntry, language, 'title'),
-            description: text(site, 'collection', pageEntry, language, 'description'),
-            image: image(site, 'collection', pageEntry, language, 'cover', input.media, input.mediaOrigin),
+            description: text(
+                site,
+                'collection',
+                pageEntry,
+                language,
+                'description',
+            ),
+            image: image(
+                site,
+                'collection',
+                pageEntry,
+                language,
+                'cover',
+                input.media,
+                input.mediaOrigin,
+            ),
         };
-        const product = pointer(site, 'collection', pageEntry, language, 'products',
-            'product', input.relatedEntries);
-        if (product) demo.product = {
-            title: text(site, 'product', product, language, 'title'),
-            price: '', description: text(site, 'product', product, language, 'description'),
-            image: image(site, 'product', product, language, 'images', input.media, input.mediaOrigin),
-        };
+        const product = pointer(
+            site,
+            'collection',
+            pageEntry,
+            language,
+            'products',
+            'product',
+            input.relatedEntries,
+        );
+        if (product)
+            demo.product = {
+                title: text(site, 'product', product, language, 'title'),
+                price: '',
+                description: text(
+                    site,
+                    'product',
+                    product,
+                    language,
+                    'description',
+                ),
+                image: image(
+                    site,
+                    'product',
+                    product,
+                    language,
+                    'images',
+                    input.media,
+                    input.mediaOrigin,
+                ),
+            };
     } else if (view === 'product') {
-        const price = fieldData(site, 'product', pageEntry, language, 'price')[0];
+        const price = fieldData(
+            site,
+            'product',
+            pageEntry,
+            language,
+            'price',
+        )[0];
         demo.product = {
             title: text(site, 'product', pageEntry, language, 'title'),
-            description: text(site, 'product', pageEntry, language, 'description'),
-            image: image(site, 'product', pageEntry, language, 'images', input.media, input.mediaOrigin),
-            price: typeof price === 'number' && Number.isFinite(price)
-                ? new Intl.NumberFormat(language, { style: 'currency', currency: input.currency }).format(price) : '',
+            description: text(
+                site,
+                'product',
+                pageEntry,
+                language,
+                'description',
+            ),
+            image: image(
+                site,
+                'product',
+                pageEntry,
+                language,
+                'images',
+                input.media,
+                input.mediaOrigin,
+            ),
+            price:
+                typeof price === 'number' && Number.isFinite(price)
+                    ? new Intl.NumberFormat(language, {
+                          style: 'currency',
+                          currency: input.currency,
+                      }).format(price)
+                    : '',
         };
-    } else {
-        const body = fieldData(site, 'content-page', pageEntry, language, 'body')[0];
+    } else if (view === 'page') {
+        const body = fieldData(
+            site,
+            'content-page',
+            pageEntry,
+            language,
+            'body',
+        )[0];
         demo.page = {
             title: text(site, 'content-page', pageEntry, language, 'title'),
-            body: richText(body) || text(site, 'content-page', pageEntry, language, 'summary'),
-            image: image(site, 'content-page', pageEntry, language, 'cover', input.media, input.mediaOrigin),
+            body:
+                richText(body) ||
+                text(site, 'content-page', pageEntry, language, 'summary'),
+            image: image(
+                site,
+                'content-page',
+                pageEntry,
+                language,
+                'cover',
+                input.media,
+                input.mediaOrigin,
+            ),
         };
+    } else if (view === 'team') {
+        const title = text(site, 'team-member', pageEntry, language, 'name');
+        const summary = text(site, 'team-member', pageEntry, language, 'role');
+        const portrait = image(
+            site,
+            'team-member',
+            pageEntry,
+            language,
+            'portrait',
+            input.media,
+            input.mediaOrigin,
+        );
+        demo.hero = { title, subtitle: summary, image: portrait };
+        demo.page = { title, body: summary, image: portrait };
+    } else if (view === 'contact') {
+        const title = text(site, 'site-settings', pageEntry, language, 'title');
+        demo.page = {
+            title: title || page.title,
+            body: demo.contactEmail || '',
+            image: '',
+        };
+    } else {
+        const title = text(site, 'service', pageEntry, language, 'title');
+        const summaryValue = fieldData(
+            site,
+            'service',
+            pageEntry,
+            language,
+            'summary',
+        )[0];
+        const summary = richText(summaryValue);
+        const cover = image(
+            site,
+            'service',
+            pageEntry,
+            language,
+            'cover',
+            input.media,
+            input.mediaOrigin,
+        );
+        demo.hero = { title, subtitle: summary, image: cover };
+        demo.product = { title, description: summary, image: cover, price: '' };
+        demo.page = { title, body: summary, image: cover };
     }
-    const operations = site.operations || { seoTitle: site.name, seoDescription: '', contactFormEnabled: false };
-    const seoDescription = page.seoDescription || operations.seoDescription || (view === 'page'
-        ? text(site, 'content-page', pageEntry, language, 'seoDescription') : '');
+    const operations = site.operations || {
+        seoTitle: site.name,
+        seoDescription: '',
+        contactFormEnabled: false,
+    };
+    const seoDescription =
+        page.seoDescription ||
+        operations.seoDescription ||
+        (view === 'page'
+            ? text(site, 'content-page', pageEntry, language, 'seoDescription')
+            : view === 'team'
+              ? text(site, 'team-member', pageEntry, language, 'role')
+              : serviceModel && ['home', 'services', 'service'].includes(view)
+                ? richText(
+                      fieldData(
+                          site,
+                          'service',
+                          pageEntry,
+                          language,
+                          'summary',
+                      )[0],
+                  )
+                : '');
     // A declared body override owns the primary content. The ordinary Entry body follows it.
     // This is a projection only; the independent stored sources remain unchanged.
-    const bodyNodes = pageEntry?.content?.find(content => content.lng === language)?.nodes || [];
-    const mappedBody = view === 'page' ? fieldData(site, 'content-page', pageEntry, language, 'body')[0] || demo.page.body : demo.product.description;
-    const richBodyType = view === 'page' ? 'story' : view === 'product' ? 'description' : '';
+    const bodyNodes =
+        pageEntry?.content?.find((content) => content.lng === language)
+            ?.nodes || [];
+    const mappedBody =
+        view === 'page'
+            ? fieldData(site, 'content-page', pageEntry, language, 'body')[0] ||
+              demo.page.body
+            : serviceModel && ['home', 'services', 'service'].includes(view)
+              ? fieldData(site, 'service', pageEntry, language, 'summary')[0] ||
+                demo.page.body
+              : demo.product.description;
+    const richBodyType =
+        view === 'page' ? 'story' : view === 'product' ? 'description' : '';
     const fillBody = (type: string, props: Record<string, unknown>) => {
-        const declared = manifest.editor?.sections.find(section => section.type === type)?.props.body;
-        if (type !== richBodyType || declared?.control !== 'rich-text') return props;
-        const primary = Object.prototype.hasOwnProperty.call(props, 'body') ? props.body : mappedBody;
+        const declared = manifest.editor?.sections.find(
+            (section) => section.type === type,
+        )?.props.body;
+        if (type !== richBodyType || declared?.control !== 'rich-text')
+            return props;
+        const primary = Object.prototype.hasOwnProperty.call(props, 'body')
+            ? props.body
+            : mappedBody;
         const primaryNodes = projectedRichNodes(primary, input);
         const extra = projectedRichNodes(bodyNodes, input);
         // An empty editor paragraph is not an additional visible body.
-        const hasBody = extra.some(node => node.type !== 'paragraph' || Boolean(node.content?.length));
-        return { ...props, body: { nodes: [...primaryNodes, ...(hasBody ? extra : [])] } };
+        const hasBody = extra.some(
+            (node) =>
+                node.type !== 'paragraph' || Boolean(node.content?.length),
+        );
+        return {
+            ...props,
+            body: { nodes: [...primaryNodes, ...(hasBody ? extra : [])] },
+        };
     };
-    const layoutDocument = page.layoutDocument ? structuredClone(page.layoutDocument) as LayoutDocument : undefined;
+    const layoutDocument = page.layoutDocument
+        ? (structuredClone(page.layoutDocument) as LayoutDocument)
+        : undefined;
     if (contractPage && layoutDocument) {
-        layoutDocument.root = layoutDocument.root.map(node => ({ ...node,
-            props: resolvedContractProps(node.type, fillBody(node.type, node.props), node.enabled, manifest, input) }));
+        layoutDocument.root = layoutDocument.root.map((node) => ({
+            ...node,
+            props: resolvedContractProps(
+                node.type,
+                fillBody(node.type, node.props),
+                node.enabled,
+                manifest,
+                input,
+            ),
+        }));
     }
     const sectionConfigs = contractPage
-        ? layoutDocument ? sectionConfigsFromLayout(layoutDocument) as SectionConfig[]
-            : page.sectionConfigs?.map(section => ({ ...section,
-                data: resolvedContractProps(section.type, fillBody(section.type, section.data), section.enabled, manifest, input) }))
+        ? layoutDocument
+            ? (sectionConfigsFromLayout(layoutDocument) as SectionConfig[])
+            : page.sectionConfigs?.map((section) => ({
+                  ...section,
+                  data: resolvedContractProps(
+                      section.type,
+                      fillBody(section.type, section.data),
+                      section.enabled,
+                      manifest,
+                      input,
+                  ),
+              }))
         : resolvedSections(page.sectionConfigs, input.media, input.mediaOrigin);
     return {
-        kind: 'preset-page', view,
-        preset: { id: manifest.id, version: manifest.version, name: site.name, description: '',
-            theme: site.theme, demo, showcase: manifest.showcase ? structuredClone(manifest.showcase) : undefined },
-        sections: manifest.editor?.sections.length ? page.sections
-            : legacyRendererSections(page.layout, page.sections, page.sectionConfigs),
+        kind: 'preset-page',
+        view,
+        preset: {
+            id: manifest.id,
+            version: manifest.version,
+            name: site.name,
+            description: '',
+            theme: site.theme,
+            demo,
+            showcase: manifest.showcase
+                ? structuredClone(manifest.showcase)
+                : undefined,
+        },
+        sections: manifest.editor?.sections.length
+            ? page.sections
+            : legacyRendererSections(
+                  page.layout,
+                  page.sections,
+                  page.sectionConfigs,
+              ),
         sectionConfigs,
         ...(layoutDocument ? { layoutDocument } : {}),
-        seo: { title: page.seoTitle || operations.seoTitle || (view === 'page' ? demo.page.title : site.name), description: seoDescription },
-        operations: { ...structuredClone(operations), socialImageUrl: mediaUrl(operations.socialImage?._id, input.media, input.mediaOrigin), faviconUrl: mediaUrl(operations.favicon?._id, input.media, input.mediaOrigin) },
+        seo: {
+            title:
+                page.seoTitle ||
+                operations.seoTitle ||
+                (['page', 'team', 'contact'].includes(view)
+                    ? demo.page.title
+                    : demo.hero.title || site.name),
+            description: seoDescription,
+        },
+        operations: {
+            ...structuredClone(operations),
+            socialImageUrl: mediaUrl(
+                operations.socialImage?._id,
+                input.media,
+                input.mediaOrigin,
+            ),
+            faviconUrl: mediaUrl(
+                operations.favicon?._id,
+                input.media,
+                input.mediaOrigin,
+            ),
+        },
     };
 }
