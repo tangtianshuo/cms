@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { randomUUID, createHash } from 'node:crypto';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { request } from 'node:http';
+import { request, createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runOwnedFixture } from './owned-runtime.mjs';
@@ -101,7 +101,10 @@ const result = await runOwnedFixture({
             restoredMongo,
             traffic,
             restoredWorker,
-            restoredCms;
+            restoredCms,
+            sourcePool,
+            intake;
+        let intakeOrigin;
         let sourceWorker = worker,
             sourceCms = cmsChild;
         const gatewayRequire = createRequire(
@@ -111,6 +114,7 @@ const result = await runOwnedFixture({
             path.join(cmsRoot, 'backend/package.json'),
         );
         const { MongoClient } = backendRequire('mongodb');
+        const { Pool } = gatewayRequire('pg');
         const { toContractSnapshot } = backendRequire(
             path.join(cmsRoot, 'backend/src/release-contract/snapshot.ts'),
         );
@@ -208,11 +212,14 @@ const result = await runOwnedFixture({
             preset,
             sections:
                 view === 'home'
-                    ? ['hero']
+                    ? ['hero', 'feature']
                     : ['gallery', 'information', 'description'],
             sectionConfigs:
                 view === 'home'
-                    ? [{ type: 'hero', enabled: true, data: { title } }]
+                    ? [
+                          { type: 'hero', enabled: true, data: { title } },
+                          { type: 'feature', enabled: true, data: {} },
+                      ]
                     : [
                           {
                               type: 'gallery',
@@ -266,7 +273,7 @@ const result = await runOwnedFixture({
                 operations: {
                     seoTitle: 'F2',
                     seoDescription: '',
-                    contactFormEnabled: false,
+                    contactFormEnabled: true,
                 },
             },
             [
@@ -350,16 +357,13 @@ const result = await runOwnedFixture({
             );
         containerIds.add(oldRoute.containerId);
         assert.equal((await publicGet(host)).status, 200);
-        await mongo
-            .db()
-            .collection('f2_content')
-            .insertOne({
-                _id: 'product',
-                title: 'F2 recovery widget',
-                image: 'dr.png',
-                draft: 'original draft',
-                requestKey: 'restore-preserve',
-            });
+        await mongo.db().collection('f2_content').insertOne({
+            _id: 'product',
+            title: 'F2 recovery widget',
+            image: 'dr.png',
+            draft: 'original draft',
+            requestKey: 'restore-preserve',
+        });
         await mongo
             .db()
             .collection('f2_jobs')
@@ -455,6 +459,18 @@ const result = await runOwnedFixture({
                     env: {
                         ...process.env,
                         DATABASE_URL: url,
+                        GATEWAY_RUNTIME_SCOPE:
+                            root === runRoot
+                                ? undefined
+                                : JSON.parse(
+                                      fs.readFileSync(
+                                          path.join(
+                                              root,
+                                              'restore-private.json',
+                                          ),
+                                      ),
+                                  ).runtimeScope,
+                        NUXT_PUBLIC_INGEST_ORIGIN: intakeOrigin || '',
                         GATEWAY_CONTROL_URL: `http://host.docker.internal:${report.gatewayPort}`,
                         DOCKER_SOCKET_PATH:
                             process.env.DOCKER_SOCKET_PATH ||
@@ -611,12 +627,21 @@ const result = await runOwnedFixture({
                 'worker/reconciliation/domain-retry',
             ];
             proof.resumedOriginalSet = true;
+            // Source worker and source active/previous runtimes stay live for the
+            // entire recovery, including both retirement loops and later publication.
             await context.setMaintenance(true);
             await stop(sourceCms);
-            await stop(sourceWorker);
             await context.disconnectDatabase();
+            sourcePool = new Pool({ connectionString: context.databaseUrl });
+            intake = createServer((_request, response) => {
+                response.writeHead(200, { 'content-type': 'application/json' });
+                response.end(JSON.stringify({ isolated: true }));
+            });
+            await new Promise((resolve) =>
+                intake.listen(0, '127.0.0.1', resolve),
+            );
+            intakeOrigin = 'http://127.0.0.1:' + intake.address().port;
             const restoreStarted = Date.now();
-            context.docker(['rm', '-f', oldRoute.containerId]);
             const receipt = JSON.parse(
                 await run(
                     'python3',
@@ -658,6 +683,139 @@ const result = await runOwnedFixture({
             assert.equal(job.provisioning.status, 'pending');
             assert.equal(job.provisioning.requestKey, 'retained');
             assert.equal(job.provisioning.leaseToken, undefined);
+            const recoveryEnv = {
+                ...process.env,
+                DATABASE_URL: restoredUrl,
+                GATEWAY_CONTROL_URL: `http://host.docker.internal:${report.gatewayPort}`,
+                DOCKER_SOCKET_PATH:
+                    process.env.DOCKER_SOCKET_PATH ||
+                    path.join(process.env.HOME, '.docker/run/docker.sock'),
+                PLATFORM_RESTORE_LOCAL_IMAGE: image.Id,
+                GATEWAY_RUNTIME_SCOPE: receipt.runtimeScope,
+                NUXT_PUBLIC_INGEST_ORIGIN: intakeOrigin,
+            };
+            for (const scope of [undefined, 'restore-' + '0'.repeat(24)]) {
+                const guardedEnv = {
+                    ...recoveryEnv,
+                    GATEWAY_RUNTIME_SCOPE: scope,
+                    GATEWAY_ROUTE_STATE_PATH: path.join(
+                        restore,
+                        'must-not-exist.json',
+                    ),
+                };
+                await assert.rejects(
+                    run(
+                        process.execPath,
+                        [
+                            path.join(
+                                gatewayRoot,
+                                'packages/worker/dist/index.js',
+                            ),
+                        ],
+                        { cwd: gatewayRoot, env: guardedEnv },
+                    ),
+                    /scope_mismatch/,
+                );
+                await assert.rejects(
+                    run(
+                        process.execPath,
+                        [
+                            path.join(
+                                gatewayRoot,
+                                'packages/worker/dist/restore-deployments.js',
+                            ),
+                            restore,
+                        ],
+                        { cwd: gatewayRoot, env: guardedEnv },
+                    ),
+                    /isolated_reconstruction_failed/,
+                );
+                assert.equal(
+                    fs.existsSync(path.join(restore, 'must-not-exist.json')),
+                    false,
+                );
+                assert.equal(
+                    fs.existsSync(path.join(restore, '.reconstruction-owner')),
+                    false,
+                );
+            }
+            const { createDockerEngineClient } = await import(
+                pathToFileURL(
+                    path.join(
+                        gatewayRoot,
+                        'packages/worker/dist/docker-client.js',
+                    ),
+                )
+            );
+            const { createDockerCandidateAdapter } = await import(
+                pathToFileURL(
+                    path.join(gatewayRoot, 'packages/worker/dist/docker.js'),
+                )
+            );
+            const { artifactSnapshotPath } = await import(
+                pathToFileURL(
+                    path.join(gatewayRoot, 'packages/worker/dist/artifacts.js'),
+                )
+            );
+            const heldCandidate = async (
+                pool,
+                root,
+                runtimeScope,
+                revision,
+            ) => {
+                const op = randomUUID();
+                await pool.query(
+                    'INSERT INTO "PublishOperation" (id,"workspaceId","siteId","idempotencyKey","releaseId","expectedRevision","desiredRevision","leaseOwner","leaseUntil","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now()+interval \'1 hour\',now())',
+                    [
+                        op,
+                        binding.workspaceId,
+                        binding.siteId,
+                        randomUUID(),
+                        releaseId,
+                        revision,
+                        revision + 1,
+                        'owned-drill-candidate',
+                    ],
+                );
+                const engine = createDockerEngineClient({
+                    socketPath: recoveryEnv.DOCKER_SOCKET_PATH,
+                    approvedImages: [image.Id],
+                    runtimeScope,
+                });
+                const renderer = { repository: 'local', digest: image.Id };
+                const adapter = createDockerCandidateAdapter(engine, {
+                    network: 'gateway-sites',
+                    images: [renderer],
+                    runtimeScope,
+                    ingestOrigin: intakeOrigin,
+                });
+                const port = await freePort();
+                const id = await adapter.startCandidate({
+                    siteId: binding.siteId,
+                    workspaceId: binding.workspaceId,
+                    releaseId,
+                    image: renderer,
+                    credential: 'b'.repeat(64),
+                    gatewayUrl: recoveryEnv.GATEWAY_CONTROL_URL,
+                    hostPort: port,
+                    snapshotRef: artifactSnapshotPath(
+                        path.join(
+                            root,
+                            root === runRoot ? 'snapshots' : 'artifacts',
+                        ),
+                        binding.siteId,
+                        releaseId,
+                    ),
+                });
+                containerIds.add(id);
+                return { id, op, port };
+            };
+            const sourceCandidate = await heldCandidate(
+                sourcePool,
+                runRoot,
+                undefined,
+                2,
+            );
             await run(
                 process.execPath,
                 [
@@ -669,18 +827,7 @@ const result = await runOwnedFixture({
                 ],
                 {
                     cwd: gatewayRoot,
-                    env: {
-                        ...process.env,
-                        DATABASE_URL: restoredUrl,
-                        GATEWAY_CONTROL_URL: `http://host.docker.internal:${report.gatewayPort}`,
-                        DOCKER_SOCKET_PATH:
-                            process.env.DOCKER_SOCKET_PATH ||
-                            path.join(
-                                process.env.HOME,
-                                '.docker/run/docker.sock',
-                            ),
-                        PLATFORM_RESTORE_LOCAL_IMAGE: image.Id,
-                    },
+                    env: recoveryEnv,
                 },
             );
             const route = JSON.parse(
@@ -701,6 +848,8 @@ const result = await runOwnedFixture({
             report.additionalPorts = {
                 restoredTraffic: traffic.port(),
                 restoredRuntime: route.port,
+                intake: intake.address().port,
+                sourceCandidate: sourceCandidate.port,
             };
             for (const [url, marker] of [
                 ['/', 'F2 active home'],
@@ -716,6 +865,40 @@ const result = await runOwnedFixture({
                     sha256: hash(response.body),
                 });
             }
+            const restoredHtml = (
+                await get(traffic.port(), host)
+            ).body.toString();
+            assert.match(
+                restoredHtml,
+                /<form[^>]*id="contact-form"|id="contact-form"[^>]*>/,
+            );
+            assert.ok(restoredHtml.includes(intakeOrigin));
+            const reconstructed = JSON.parse(
+                context.docker(['inspect', route.containerId]),
+            )[0];
+            assert.ok(
+                reconstructed.Config.Env.includes(
+                    'NUXT_PUBLIC_INGEST_ORIGIN=' + intakeOrigin,
+                ),
+            );
+            assert.equal(
+                reconstructed.Config.Labels['gateway.runtime-scope'],
+                receipt.runtimeScope,
+            );
+            assert.equal(
+                reconstructed.Config.Labels['gateway.site-id'],
+                undefined,
+            );
+            assert.equal(
+                reconstructed.Config.Labels['gateway.release-id'],
+                undefined,
+            );
+            assert.equal((await fetch(intakeOrigin)).status, 200);
+            proof.checks.push({
+                restoredContactForm: true,
+                explicitIsolatedIntake: true,
+                missingOrMismatchedScopeRejectedBeforeMutation: true,
+            });
             const imageResponse = await get(
                 traffic.port(),
                 host,
@@ -837,6 +1020,143 @@ const result = await runOwnedFixture({
                     .toString()
                     .includes('F2 original home'),
             );
+            const recoveredRoutes = JSON.parse(
+                fs.readFileSync(path.join(restore, 'routes.json')),
+            );
+            const recoveryCandidate = await heldCandidate(
+                sql,
+                restore,
+                receipt.runtimeScope,
+                4,
+            );
+            report.additionalPorts.recoveryCandidate = recoveryCandidate.port;
+            const sourceProtected = [
+                ...oldRoutes.routes,
+                ...oldRoutes.previous,
+            ].map((r) => r.containerId);
+            const recoveryProtected = [
+                ...recoveredRoutes.routes,
+                ...recoveredRoutes.previous,
+            ].map((r) => r.containerId);
+            const coexistenceStart = Date.now();
+            const verifyProtected = async (candidates = true) => {
+                assert.equal(sourceWorker.exitCode, null);
+                assert.equal(sourceWorker.signalCode, null);
+                assert.equal(restoredWorker.exitCode, null);
+                assert.equal(restoredWorker.signalCode, null);
+                for (const id of [
+                    ...sourceProtected,
+                    ...recoveryProtected,
+                    ...(candidates
+                        ? [sourceCandidate.id, recoveryCandidate.id]
+                        : []),
+                ]) {
+                    assert.equal(
+                        JSON.parse(context.docker(['inspect', id]))[0].State
+                            .Running,
+                        true,
+                    );
+                }
+                assert.ok(
+                    (await publicGet(host)).body
+                        .toString()
+                        .includes('F2 active home'),
+                );
+                assert.ok(
+                    (await get(traffic.port(), host)).body
+                        .toString()
+                        .includes('F2 original home'),
+                );
+                const sourceListing = context
+                    .docker([
+                        'ps',
+                        '-q',
+                        '--no-trunc',
+                        '--filter',
+                        'label=gateway.site-id=' + binding.siteId,
+                    ])
+                    .split('\n');
+                for (const id of recoveryProtected)
+                    assert.equal(sourceListing.includes(id), false);
+                for (const id of [...recoveryProtected, recoveryCandidate.id]) {
+                    const inspected = JSON.parse(
+                        context.docker(['inspect', id]),
+                    )[0];
+                    assert.equal(
+                        inspected.Config.Labels['gateway.runtime-scope'],
+                        receipt.runtimeScope,
+                    );
+                    assert.equal(
+                        inspected.Config.Labels['gateway.site-id'],
+                        undefined,
+                    );
+                    assert.ok(
+                        inspected.Config.Env.includes(
+                            'NUXT_PUBLIC_INGEST_ORIGIN=' + intakeOrigin,
+                        ),
+                    );
+                }
+            };
+            for (let cycle = 0; cycle < 3; cycle++) {
+                await delay(5500);
+                await verifyProtected();
+            }
+            // End only the synthetic task-owned leases. Both real worker collectors
+            // must now remove their own candidate garbage while preserving both sites.
+            await sourcePool.query(
+                'UPDATE "PublishOperation" SET status=\'failed\',"leaseUntil"=NULL,"leaseOwner"=NULL WHERE id=$1',
+                [sourceCandidate.op],
+            );
+            await sql.query(
+                'UPDATE "PublishOperation" SET status=\'failed\',"leaseUntil"=NULL,"leaseOwner"=NULL WHERE id=$1',
+                [recoveryCandidate.op],
+            );
+            await until(
+                async () => {
+                    const remaining = context
+                        .docker(['ps', '-aq', '--no-trunc'])
+                        .split('\n');
+                    return (
+                        !remaining.includes(sourceCandidate.id) &&
+                        !remaining.includes(recoveryCandidate.id)
+                    );
+                },
+                'both live collectors retire their own garbage',
+                20000,
+            );
+            // Do not inspect the now-retired candidates in this final protection check.
+            for (const id of [...sourceProtected, ...recoveryProtected])
+                assert.equal(
+                    JSON.parse(context.docker(['inspect', id]))[0].State
+                        .Running,
+                    true,
+                );
+            assert.equal(sourceWorker.exitCode, null);
+            assert.equal(restoredWorker.exitCode, null);
+            assert.ok(
+                (await publicGet(host)).body
+                    .toString()
+                    .includes('F2 active home'),
+            );
+            assert.ok(
+                (await get(traffic.port(), host)).body
+                    .toString()
+                    .includes('F2 original home'),
+            );
+            proof.coexistence = {
+                sourceWorkerPid: sourceWorker.pid,
+                recoveryWorkerPid: restoredWorker.pid,
+                durationMs: Date.now() - coexistenceStart,
+                collectorIntervalMs: 5000,
+                protectedCycles: 3,
+                sourceActiveAndPrevious: sourceProtected,
+                recoveryActiveAndPrevious: recoveryProtected,
+                sourceCandidate: sourceCandidate.id,
+                recoveryCandidate: recoveryCandidate.id,
+                bothCandidatesPreservedWhilePending: true,
+                bothOwnedGarbageRetired: true,
+                scope: receipt.runtimeScope,
+            };
             proof.checks.push({
                 imageBytes: true,
                 uploadsBytes: true,
@@ -878,6 +1198,11 @@ const result = await runOwnedFixture({
             )
                 await stop(sourceWorker);
             if (traffic) await traffic.close();
+            if (intake) {
+                intake.closeAllConnections();
+                await new Promise((resolve) => intake.close(resolve));
+            }
+            if (sourcePool) await sourcePool.end();
             if (restoredMongo) {
                 await restoredMongo.db().dropDatabase();
                 await restoredMongo.close();
@@ -901,6 +1226,19 @@ const result = await runOwnedFixture({
             const receiptPath = path.join(restore, 'restore-private.json');
             if (fs.existsSync(receiptPath)) {
                 const receipt = JSON.parse(fs.readFileSync(receiptPath));
+                if (receipt.runtimeScope)
+                    for (const id of context
+                        .docker([
+                            'ps',
+                            '-aq',
+                            '--filter',
+                            'label=gateway.runtime-scope=' +
+                                receipt.runtimeScope,
+                        ])
+                        .split('\n')
+                        .filter(Boolean))
+                        containerIds.add(id);
+
                 if (!restoredMongo) {
                     const cleanupUri = new URL(context.mongoUrl);
                     cleanupUri.pathname = '/' + receipt.mongoDatabase;

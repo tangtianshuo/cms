@@ -117,13 +117,26 @@ them to manufacture quiescence. Credentials and route tokens remain private.
 Do not start writers or traffic against the new directory until `restore-private.json`
 says `ready`. Inject the same database container credentials and a `DATABASE_URL` pointing
 to the supported PostgreSQL server. Also set `DOCKER_SOCKET_PATH`,
-`GATEWAY_CONTROL_URL` (a valid new isolated control address), and optionally
-`GATEWAY_RESTORE_NETWORK` (an existing `gateway-*` network). This command generates fresh
+`GATEWAY_CONTROL_URL` (a valid new isolated control address), and explicitly set
+`NUXT_PUBLIC_INGEST_ORIGIN` to the isolated intake origin. It uses the normal candidate
+validation: an exact HTTPS origin or loopback HTTP origin, without credentials or paths.
+An explicitly empty value disables intake; omission is rejected. Use a task-owned loopback
+intake for local drills. The existing `gateway-sites` network is required. This command generates fresh
 random `platform_restore_<24 hex>` PostgreSQL/Mongo databases and a private new directory:
 
 ```sh
 python3 ops/restore/platform_restore.py --backup /srv/backups/platform/2026-11-07T030000Z --target isolated --directory /srv/drills/2026-11-07
 ```
+
+The restore assigns a fresh `runtimeScope` in the private receipt and a singleton
+`public."GatewayRuntimeScope"` database marker, replacing any marker copied from an earlier
+recovery. Reconstructed containers carry only `gateway.restore.site-id`,
+`gateway.restore.release-id`, and `gateway.runtime-scope` ownership labels, with no ordinary
+`gateway.site-id` or `gateway.release-id` labels. Thus even an older ordinary collector cannot
+enumerate recovery containers on the same daemon. Scoped worker creation, route inspection,
+listing and retirement reinspection all require the matching scope. Each collector still
+retires its own unprotected containers; active/previous routes and pending candidates remain
+protected. This boundary is enforced by label validation and the persisted database marker.
 
 Restore validates every file, exact file inventory, size, SHA256, lock checksum and paths
 before mutation. It rejects absolute paths, traversal, symlinks, non-regular files, duplicate
@@ -153,7 +166,13 @@ its previous array; use it only under the single-owner/offline rule.
 Start an isolated CMS with `DB_URL` targeting the receipt's Mongo database and its working
 media directory at `<restore>/uploads`; start control/worker with the new SQL URL and
 `SNAPSHOT_STORAGE_PATH`/`GATEWAY_SNAPSHOT_HOST_DIR=<restore>/artifacts`. Set
-`GATEWAY_ROUTE_STATE_PATH=<restore>/routes.json` and domain state path beside it. Use new
+`GATEWAY_ROUTE_STATE_PATH=<restore>/routes.json` and domain state path beside it. On the worker,
+set `GATEWAY_RUNTIME_SCOPE` to exactly the receipt's `runtimeScope` and preserve the explicit
+`NUXT_PUBLIC_INGEST_ORIGIN` used for reconstruction. Missing/mismatched scope rejects startup
+before router mutation, Docker inspection or collection. The marker survives database
+renaming; a restored database name without a marker also fails closed. Never remove the
+marker to run an ordinary worker on restored data. The native CLI passes the new scope to
+reconstruction automatically; a manually invoked reconstructor also requires it. Use new
 listeners/ports and explicit isolated host resolution. Preserve the CMS instance identity
 and secret references used by restored source bindings. Do not automatically repoint
 production DNS or ports. Compare actual home/product/image bytes, redirects and sitemap;
@@ -230,7 +249,11 @@ node ops/e2e/disaster-recovery.mjs
 It checks page availability through maintenance, both native database tools, corruption
 rejection (unit suite), independent directory/DB recovery, complete source bindings and
 lease fencing, archived unresolved snapshots, domain retry convergence, old-release
-rollback, actual bytes/Host checks and task-owned cleanup. The process-fixture supervisor is
+rollback, actual bytes/Host checks and task-owned cleanup. The source worker and its
+active/previous/candidate containers remain live while recovery publication and rollback run.
+Both collectors must preserve the other scope across multiple cycles and then retire their
+own disposable candidate garbage. A restored contact-enabled form and the actual container
+intake environment are checked against a local task-owned intake origin. The process-fixture supervisor is
 explicitly local; the production CLI uses the concrete Compose supervisor. Local identity
 bytes are labeled `source-only-local`, never forged into a formal PlatformLock. The normal
 restore CLI rejects them. Internet wildcard DNS/TLS, public OCI identities, off-host copy,

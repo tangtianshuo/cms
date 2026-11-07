@@ -45,7 +45,7 @@ def restore_platform(backup, target, config, *, allow_local=False):
         raise ValueError('restore_database_exists')
     if admin.mongo('print(d.getSiblingDB("admin").adminCommand({listDatabases:1,nameOnly:true}).databases.some(x=>x.name===' + json.dumps(name) + '));') != 'false':
         raise ValueError('restore_database_exists')
-    receipt = dict(schemaVersion=1, backupId=manifest['backupId'], lockChecksum=manifest['lockChecksum'], evidenceType=manifest['evidenceType'], postgresDatabase=name, mongoDatabase=name, status='restoring')
+    receipt = dict(schemaVersion=1, backupId=manifest['backupId'], lockChecksum=manifest['lockChecksum'], evidenceType=manifest['evidenceType'], postgresDatabase=name, mongoDatabase=name, runtimeScope='restore-' + name.removeprefix('platform_restore_'), status='restoring')
     (target / 'restore-private.json').write_text(json.dumps(receipt))
     try:
         for label in ('artifacts', 'uploads', 'domains.json', 'platform-lock.json'):
@@ -59,6 +59,15 @@ def restore_platform(backup, target, config, *, allow_local=False):
         if result.returncode:
             raise RuntimeError('postgres_restore_failed')
         restored.mongo_tool('mongorestore', backup / 'databases/mongo.archive', restore=True, source_database=source['mongoDatabase'])
+        # Assign new physical ownership even when this is a backup of a restored DB.
+        # The marker follows later DB renames and prevents accidental default workers.
+        restored.pg(
+            'CREATE TABLE IF NOT EXISTS public."GatewayRuntimeScope" '
+            "(id integer PRIMARY KEY CHECK (id=1), scope text NOT NULL CHECK (scope ~ '^restore-[a-f0-9]{24}$')); "
+            'DELETE FROM public."GatewayRuntimeScope"; '
+            'INSERT INTO public."GatewayRuntimeScope" (id, scope) VALUES (1, '
+            "'" + receipt['runtimeScope'] + "')"
+        )
         # Preserve request keys, attempts, bindings and pending intent; expire only authority.
         restored.pg('UPDATE "PublishOperation" SET "leaseOwner"=NULL,"leaseUntil"=NULL,"candidateCredentialHash"=NULL,"attempts"="attempts"+1 WHERE "leaseOwner" IS NOT NULL OR "candidateCredentialHash" IS NOT NULL')
         restored.mongo('for(const c of d.getCollectionNames()) d.getCollection(c).updateMany({"provisioning.status":"running"},{$set:{"provisioning.status":"pending","provisioning.nextAttemptAt":0},$unset:{"provisioning.leaseToken":"","provisioning.leaseUntil":""}}); print("fenced");')
@@ -87,6 +96,7 @@ def main():
     from urllib.parse import urlsplit, urlunsplit
     uri = urlsplit(env['DATABASE_URL'])
     env['DATABASE_URL'] = urlunsplit(uri._replace(path='/' + receipt['postgresDatabase']))
+    env['GATEWAY_RUNTIME_SCOPE'] = receipt['runtimeScope']
     command(['node', str(Path(config['gatewayRoot']) / 'packages/worker/dist/restore-deployments.js'), str(root)], env=env)
     print(json.dumps({'backupId': receipt['backupId'], 'directory': str(root), 'status': 'ready'}))
 

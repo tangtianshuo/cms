@@ -50,3 +50,29 @@ class RestoreIntegrityTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'unsafe_restore_target'):
                 restore_platform(root,root/'child',{},allow_local=True)
             self.assertFalse((root/'child').exists())
+
+    def test_each_native_restore_replaces_copied_scope_with_fresh_receipt_binding(self):
+        import json
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        from ops.backup.manifest import create_manifest
+        from ops.restore.platform_restore import restore_platform
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / 'backup'; root.mkdir()
+            for name in ['platform-lock.json', 'databases/postgres.dump', 'databases/mongo.archive', 'databases/source.json', 'routes.json', 'domains.json', 'artifacts/release.snapshot', 'uploads/image.png']:
+                file = root / name; file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text(json.dumps({'mongoDatabase': 'owned_source'}) if name.endswith('source.json') else '{}')
+            (root / 'manifest.json').write_text(json.dumps(create_manifest(root, 'test', [], 'source-only-local')))
+            scopes = []
+            for attempt in range(2):
+                admin, restored = MagicMock(), MagicMock()
+                admin.pg.return_value = '0'; admin.mongo.return_value = 'false'; restored.env = {}
+                with patch('ops.restore.platform_restore.DockerDatabases', side_effect=[admin, restored]), patch('ops.restore.platform_restore.subprocess.run', return_value=SimpleNamespace(returncode=0)):
+                    receipt = restore_platform(root, Path(d) / f'restore-{attempt}', {'postgresContainer': 'owned-test'}, allow_local=True)
+                sql = restored.pg.call_args_list[0].args[0]
+                self.assertIn('DELETE FROM public."GatewayRuntimeScope"', sql)
+                self.assertIn("VALUES (1, '" + receipt['runtimeScope'] + "')", sql)
+                self.assertRegex(receipt['runtimeScope'], r'^restore-[a-f0-9]{24}$')
+                self.assertEqual(receipt['status'], 'databases-restored')
+                scopes.append(receipt['runtimeScope'])
+            self.assertNotEqual(scopes[0], scopes[1])
