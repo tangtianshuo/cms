@@ -59,8 +59,10 @@ test('supporting local artifact renderer executes D1 effective-field and retirem
             proof.checks[name] = await test.step(name, operation);
         },
     });
+    const proofFile = test.info().outputPath('local-preview-proof.json');
+    await writeFile(proofFile, JSON.stringify(proof, null, 2), { mode: 0o600 });
     await test.info().attach('local-preview-proof', {
-        body: JSON.stringify(proof, null, 2),
+        path: proofFile,
         contentType: 'application/json',
     });
     expect(proof.previewStatus).toBe('ready');
