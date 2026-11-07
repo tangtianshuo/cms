@@ -101,6 +101,7 @@ export async function runOwnedFixture(options = {}) {
         checks: [],
         cleanup: {},
     };
+    let maintenance = false;
     let sql,
         admin,
         mongo,
@@ -401,6 +402,12 @@ export async function runOwnedFixture(options = {}) {
             : 'Actual local HTTPS, certificate/hostname checks and HMAC; explicit loopback DNS resolver/address policy and fixture TXT; no Internet DNS claim.';
         app = Fastify();
         app.all('/api/v1/*', async (req, reply) => {
+            if (maintenance)
+                return reply
+                    .code(503)
+                    .send({
+                        error: 'Content maintenance and inquiries temporarily unavailable',
+                    });
             const body =
                 req.method === 'GET'
                     ? undefined
@@ -771,6 +778,21 @@ export async function runOwnedFixture(options = {}) {
                 publicGet,
                 serviceSecret,
                 identity,
+                databaseUrl: databaseUrl.href,
+                mongoUrl,
+                cmsEnv: env,
+                cmsToken: token,
+                async setMaintenance(value) {
+                    maintenance = value;
+                },
+                async disconnectDatabase() {
+                    await sql.end();
+                    sql = undefined;
+                },
+                reconnectDatabase(url = databaseUrl.href) {
+                    sql = new Pool({ connectionString: url });
+                    return sql;
+                },
             });
             report.assertionsPassed = true;
             return;
@@ -1470,6 +1492,7 @@ export async function runOwnedFixture(options = {}) {
             gateway: report.gatewayPort,
             tls: report.tlsPort,
             preview: report.previewPort,
+            ...(report.additionalPorts || {}),
         })) {
             if (port)
                 report.cleanup.portsClosed[kind] = await new Promise(
