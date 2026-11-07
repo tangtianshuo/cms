@@ -849,156 +849,182 @@ export const StudioController = createController({
                             'Invalid Studio content request',
                         );
                     try {
-                        const site = await selectedSite();
-                        return await withSiteMutation(site._id, async () => {
-                            const key = (request.params as { modelKey: string })
-                                .modelKey;
-                            const template = await installedModel(site, key);
-                            assertStudioWrite(
-                                template._id,
-                                parsed.data.entryId ? 'put' : 'post',
-                            );
-                            const previous = parsed.data.entryId
-                                ? await Repo.entry.findById(parsed.data.entryId)
-                                : null;
-                            if (parsed.data.entryId && !previous)
-                                throw new Error('Entry not found');
-                            if (
-                                previous &&
-                                previous.updatedAt !==
-                                    parsed.data.expectedUpdatedAt
-                            )
-                                throw conflict();
-                            const language =
-                                parsed.data.language || site.language || 'en';
-                            const overlay = overlayBody.parse(
-                                parsed.data.overlay || {},
-                            ) as StudioDraftOverlay;
-                            if (overlay.entry)
-                                throw new Error('Duplicate content overlay');
-                            const prepared = await validatedOverlay(
-                                site,
-                                {
-                                    ...overlay,
-                                    entry: {
-                                        modelKey: key,
-                                        entryId: parsed.data.entryId,
-                                        operationId: parsed.data.operationId,
-                                        ...(parsed.data.entry !== undefined
-                                            ? { entry: parsed.data.entry }
-                                            : { fields: parsed.data.fields }),
-                                    },
-                                },
-                                language,
-                                'save',
-                            );
-                            const id = studioEntryId(
-                                site._id,
-                                key,
-                                parsed.data.operationId,
-                                template.singleEntry,
-                            );
-                            if (
-                                !previous &&
-                                template.singleEntry &&
-                                (
-                                    await Repo.entry.methods.findAllByTemplateId(
-                                        template._id,
-                                    )
-                                ).some((entry) => entry._id !== id)
-                            )
-                                throw new Error(
-                                    'This model already has content; refresh and edit it',
+                        const selected = await selectedSite();
+                        return await withSiteMutation(
+                            selected._id,
+                            async () => {
+                                // A request can wait for a migration lease. Re-read
+                                // auth-scoped site state before resolving any write.
+                                const site = await selectedSite();
+                                if (site._id !== selected._id) throw conflict();
+                                const key = (
+                                    request.params as { modelKey: string }
+                                ).modelKey;
+                                const template = await installedModel(
+                                    site,
+                                    key,
                                 );
-                            const value = prepared.overlay.entry!;
-                            const updated = value.entry
-                                ? previous
-                                    ? mergeStudioEntry(
-                                          previous,
-                                          value.entry,
-                                          language,
+                                assertStudioWrite(
+                                    template._id,
+                                    parsed.data.entryId ? 'put' : 'post',
+                                );
+                                const previous = parsed.data.entryId
+                                    ? await Repo.entry.findById(
+                                          parsed.data.entryId,
                                       )
-                                    : {
-                                          ...EntryFactory.create({
-                                              templateId: template._id,
-                                              workspaceId: ownerWorkspace(site),
-                                              siteId: site._id,
-                                              userId: workspaceContext()!
-                                                  .actorId,
-                                              groupId:
-                                                  value.entry.groupId ||
-                                                  site.contentGroupId ||
-                                                  site._id,
-                                              ...value.entry,
-                                          }),
-                                          _id: id,
-                                      }
-                                : patchEntry(
-                                      { ...site, language },
-                                      template,
-                                      key,
-                                      previous,
-                                      value.fields!,
-                                      workspaceContext()!.actorId,
-                                      id,
-                                  );
-                            const same = (existing: Entry) =>
-                                existing.templateId === updated.templateId &&
-                                existing.groupId === updated.groupId &&
-                                JSON.stringify(existing.meta) ===
-                                    JSON.stringify(updated.meta) &&
-                                JSON.stringify(existing.content) ===
-                                    JSON.stringify(updated.content) &&
-                                JSON.stringify(existing.statuses) ===
-                                    JSON.stringify(updated.statuses);
-                            let saved;
-                            let changed = true;
-                            if (previous)
-                                saved = await Repo.entry.update(
-                                    updated,
-                                    false,
-                                    parsed.data.expectedUpdatedAt,
+                                    : null;
+                                if (parsed.data.entryId && !previous)
+                                    throw new Error('Entry not found');
+                                if (
+                                    previous &&
+                                    previous.updatedAt !==
+                                        parsed.data.expectedUpdatedAt
+                                )
+                                    throw conflict();
+                                const language =
+                                    parsed.data.language ||
+                                    site.language ||
+                                    'en';
+                                const overlay = overlayBody.parse(
+                                    parsed.data.overlay || {},
+                                ) as StudioDraftOverlay;
+                                if (overlay.entry)
+                                    throw new Error(
+                                        'Duplicate content overlay',
+                                    );
+                                const prepared = await validatedOverlay(
+                                    site,
+                                    {
+                                        ...overlay,
+                                        entry: {
+                                            modelKey: key,
+                                            entryId: parsed.data.entryId,
+                                            operationId:
+                                                parsed.data.operationId,
+                                            ...(parsed.data.entry !== undefined
+                                                ? { entry: parsed.data.entry }
+                                                : {
+                                                      fields: parsed.data
+                                                          .fields,
+                                                  }),
+                                        },
+                                    },
+                                    language,
+                                    'save',
                                 );
-                            else {
-                                const existing = await Repo.entry.findById(id);
-                                if (existing) {
-                                    if (!same(existing)) throw conflict();
-                                    saved = existing;
-                                    changed = false;
-                                } else {
-                                    try {
-                                        saved = await Repo.entry.add(updated);
-                                    } catch (cause) {
-                                        const retry =
-                                            await Repo.entry.findById(id);
-                                        if (!retry || !same(retry)) throw cause;
-                                        saved = retry;
+                                const id = studioEntryId(
+                                    site._id,
+                                    key,
+                                    parsed.data.operationId,
+                                    template.singleEntry,
+                                );
+                                if (
+                                    !previous &&
+                                    template.singleEntry &&
+                                    (
+                                        await Repo.entry.methods.findAllByTemplateId(
+                                            template._id,
+                                        )
+                                    ).some((entry) => entry._id !== id)
+                                )
+                                    throw new Error(
+                                        'This model already has content; refresh and edit it',
+                                    );
+                                const value = prepared.overlay.entry!;
+                                const updated = value.entry
+                                    ? previous
+                                        ? mergeStudioEntry(
+                                              previous,
+                                              value.entry,
+                                              language,
+                                          )
+                                        : {
+                                              ...EntryFactory.create({
+                                                  templateId: template._id,
+                                                  workspaceId:
+                                                      ownerWorkspace(site),
+                                                  siteId: site._id,
+                                                  userId: workspaceContext()!
+                                                      .actorId,
+                                                  groupId:
+                                                      value.entry.groupId ||
+                                                      site.contentGroupId ||
+                                                      site._id,
+                                                  ...value.entry,
+                                              }),
+                                              _id: id,
+                                          }
+                                    : patchEntry(
+                                          { ...site, language },
+                                          template,
+                                          key,
+                                          previous,
+                                          value.fields!,
+                                          workspaceContext()!.actorId,
+                                          id,
+                                      );
+                                const same = (existing: Entry) =>
+                                    existing.templateId ===
+                                        updated.templateId &&
+                                    existing.groupId === updated.groupId &&
+                                    JSON.stringify(existing.meta) ===
+                                        JSON.stringify(updated.meta) &&
+                                    JSON.stringify(existing.content) ===
+                                        JSON.stringify(updated.content) &&
+                                    JSON.stringify(existing.statuses) ===
+                                        JSON.stringify(updated.statuses);
+                                let saved;
+                                let changed = true;
+                                if (previous)
+                                    saved = await Repo.entry.update(
+                                        updated,
+                                        false,
+                                        parsed.data.expectedUpdatedAt,
+                                    );
+                                else {
+                                    const existing =
+                                        await Repo.entry.findById(id);
+                                    if (existing) {
+                                        if (!same(existing)) throw conflict();
+                                        saved = existing;
                                         changed = false;
+                                    } else {
+                                        try {
+                                            saved =
+                                                await Repo.entry.add(updated);
+                                        } catch (cause) {
+                                            const retry =
+                                                await Repo.entry.findById(id);
+                                            if (!retry || !same(retry))
+                                                throw cause;
+                                            saved = retry;
+                                            changed = false;
+                                        }
                                     }
                                 }
-                            }
-                            if (changed) {
-                                SocketManager.channelEmit(
-                                    ['global'],
-                                    'entry',
-                                    {
-                                        type: 'update',
-                                        templateId: template._id,
-                                        entryId: saved._id,
-                                    },
-                                    [workspaceContext()!.actorId],
-                                );
-                                EventManager.trigger(
-                                    previous ? 'update' : 'add',
-                                    'entry',
-                                    saved,
-                                ).catch((cause) => console.error(cause));
-                            }
-                            return {
-                                id: saved._id,
-                                updatedAt: saved.updatedAt,
-                            };
-                        });
+                                if (changed) {
+                                    SocketManager.channelEmit(
+                                        ['global'],
+                                        'entry',
+                                        {
+                                            type: 'update',
+                                            templateId: template._id,
+                                            entryId: saved._id,
+                                        },
+                                        [workspaceContext()!.actorId],
+                                    );
+                                    EventManager.trigger(
+                                        previous ? 'update' : 'add',
+                                        'entry',
+                                        saved,
+                                    ).catch((cause) => console.error(cause));
+                                }
+                                return {
+                                    id: saved._id,
+                                    updatedAt: saved.updatedAt,
+                                };
+                            },
+                        );
                     } catch (cause) {
                         throw errorHandler(
                             (cause as { status?: number }).status ||

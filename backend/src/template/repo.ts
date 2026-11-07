@@ -54,6 +54,7 @@ export const TemplateRepo = createMongoDBRepository<
             );
             if (
                 site?.models.length &&
+                site.status !== 'importing' &&
                 site.migrationState !== 'publishing' &&
                 !site.models.some((model) => model.templateId === item._id)
             ) {

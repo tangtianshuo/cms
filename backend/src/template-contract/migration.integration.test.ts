@@ -15,6 +15,7 @@ import { PropType } from '../prop/models/main';
 import {
     initMigrationRepository,
     mongoMigrationRepository,
+    type MigrationRepository,
     type MigrationOperation,
 } from './migration-repo';
 import {
@@ -660,5 +661,627 @@ test(
             repository.find(operation.id),
         );
         assert.equal(retained?.media?.length, 1);
+    },
+);
+
+test(
+    'real Mongo serializes concurrent site migrations and settles every authority boundary',
+    {
+        skip: !process.env.STOREFRONT_TEST_MONGO,
+        timeout: 60_000,
+    },
+    async (context) => {
+        const app = Fastify();
+        await app.register(fastifyMongo, {
+            url: process.env.STOREFRONT_TEST_MONGO!,
+            database: `migration_recovery_${randomUUID().replaceAll('-', '')}`,
+            forceClose: true,
+        });
+        context.after(async () => {
+            await app.mongo.db?.dropDatabase();
+            await app.close();
+        });
+        for (const repo of [
+            Repo.siteInstallation,
+            Repo.template,
+            Repo.entry,
+            Repo.entryGroup,
+            Repo.workspace,
+        ]) {
+            await new Promise<void>((resolve, reject) =>
+                repo.init().initialize({
+                    fastify: app,
+                    next: (error?: Error) =>
+                        error ? reject(error) : resolve(),
+                } as never),
+            );
+        }
+        await initMigrationRepository(app);
+        setSiteMutationStore(Repo.siteInstallation.methods);
+
+        const workspaceId = randomUUID();
+        const workspace = {
+            workspaceId,
+            actorId: 'migration-recovery',
+            admin: true,
+            instanceAdmin: true,
+            role: 'admin' as const,
+        };
+        await Repo.workspace.add({
+            _id: workspaceId,
+            name: 'Recovery matrix',
+            members: [{ userId: 'migration-recovery', role: 'admin' }],
+            createdAt: 1,
+            updatedAt: 1,
+        });
+
+        type Fixture = {
+            label: string;
+            siteId: string;
+            workspaceId: string;
+            oldSite: SiteInstallation;
+            oldTemplate: Template;
+            oldEntry: Entry;
+            newTemplate: Template;
+            newEntry: Entry;
+            operation: MigrationOperation;
+            oldRelease: string;
+            newRelease: string;
+            oldRevision: number;
+            newRevision: number;
+        };
+
+        async function seed(label: string, ordinal: number): Promise<Fixture> {
+            const siteId = randomUUID();
+            const oldTemplate: Template = {
+                _id: randomUUID(),
+                createdAt: 1,
+                updatedAt: 1,
+                workspaceId,
+                siteId,
+                name: `${label}-service-old`,
+                label: 'Service',
+                desc: '',
+                singleEntry: false,
+                props: [
+                    {
+                        id: `${label}-old-title`,
+                        name: 'title',
+                        label: 'Title',
+                        type: PropType.STRING,
+                        required: true,
+                        array: false,
+                        data: {},
+                    },
+                ],
+            };
+            const oldEntry: Entry = {
+                _id: randomUUID(),
+                createdAt: 1,
+                updatedAt: 1,
+                workspaceId,
+                siteId,
+                templateId: oldTemplate._id,
+                userId: 'user',
+                groupId: `${label}-old-group`,
+                statuses: [],
+                meta: [
+                    {
+                        lng: 'en',
+                        props: [
+                            {
+                                id: `${label}-old-title`,
+                                data: [`${label} service`] as never,
+                            },
+                        ],
+                    },
+                    {
+                        lng: 'fr',
+                        props: [
+                            {
+                                id: `${label}-old-title`,
+                                data: [`service ${label}`] as never,
+                            },
+                        ],
+                    },
+                ],
+                content: [],
+            };
+            const oldRelease = `release-old-${ordinal}`;
+            const newRelease = `release-new-${ordinal}`;
+            const oldRevision = ordinal * 2;
+            const newRevision = oldRevision + 1;
+            const oldSite: SiteInstallation = {
+                _id: siteId,
+                workspaceId,
+                contentGroupId: `${label}-old-group`,
+                templateNamespace: `${label}-old-namespace`,
+                slot: `slot-${ordinal}`,
+                createdAt: 1,
+                updatedAt: 1,
+                name: `${label} site`,
+                presetId: 'service-studio',
+                presetVersion: '1.0.0',
+                status: 'ready',
+                importError: '',
+                includeDemo: false,
+                demoSeeded: false,
+                gatewayCurrentReleaseId: oldRelease,
+                gatewayPublishedReleaseIds: [oldRelease],
+                gatewayActiveRevision: oldRevision,
+                theme: {
+                    background: '#fff',
+                    foreground: '#111',
+                    accent: '#06c',
+                    muted: '#eee',
+                    font: 'Arial',
+                },
+                models: [
+                    {
+                        key: 'service',
+                        templateId: oldTemplate._id,
+                        fields: [
+                            { key: 'title', propId: `${label}-old-title` },
+                        ],
+                    },
+                ],
+                pages: [
+                    {
+                        key: 'services',
+                        title: 'Services',
+                        path: '/services',
+                        modelKey: 'service',
+                        layout: 'content-page',
+                        status: 'draft',
+                        entryId: oldEntry._id,
+                        sections: [],
+                        enabled: true,
+                    },
+                ],
+            };
+            const newTemplate: Template = {
+                ...oldTemplate,
+                _id: randomUUID(),
+                name: `${label}-service-new`,
+                props: [
+                    {
+                        ...oldTemplate.props[0],
+                        id: `${label}-new-title`,
+                    },
+                ],
+            };
+            const newEntry: Entry = {
+                ...oldEntry,
+                _id: randomUUID(),
+                templateId: newTemplate._id,
+                groupId: `${label}-new-group`,
+                meta: oldEntry.meta.map((meta) => ({
+                    ...meta,
+                    props: meta.props.map((prop) => ({
+                        ...prop,
+                        id: `${label}-new-title`,
+                    })),
+                })),
+            };
+            const candidateSite: SiteInstallation = {
+                ...oldSite,
+                presetVersion: '1.0.1',
+                templateNamespace: `${label}-new-namespace`,
+                contentGroupId: newEntry.groupId,
+                models: [
+                    {
+                        key: 'service',
+                        templateId: newTemplate._id,
+                        fields: [
+                            { key: 'title', propId: `${label}-new-title` },
+                        ],
+                    },
+                ],
+                pages: [
+                    {
+                        ...oldSite.pages[0],
+                        entryId: newEntry._id,
+                    },
+                ],
+                updatedAt: 2,
+            };
+            const operation: MigrationOperation = {
+                id: randomUUID(),
+                cmsWorkspaceId: workspaceId,
+                cmsSiteId: siteId,
+                requestKey: randomUUID(),
+                expectedUpdatedAt: oldSite.updatedAt,
+                sourceChecksum: `sha256:${String(ordinal).repeat(64).slice(0, 64)}`,
+                targetManifestChecksum: `sha256:${String(ordinal + 3)
+                    .repeat(64)
+                    .slice(0, 64)}`,
+                status: 'staged',
+                previousSite: oldSite,
+                candidateSite,
+                previousReleaseId: oldRelease,
+                previousRouteRevision: oldRevision,
+                actorId: 'migration-recovery',
+                previousTemplates: [oldTemplate],
+                candidateTemplates: [newTemplate],
+                previousEntries: [oldEntry],
+                candidateEntries: [newEntry],
+                media: [
+                    {
+                        _id: randomUUID(),
+                        workspaceId,
+                        siteId,
+                        mimetype: 'image/png',
+                        type: 'IMG',
+                    } as never,
+                ],
+                createdAt: ordinal,
+                updatedAt: ordinal,
+            };
+            await runWithWorkspace(workspace, async () => {
+                // The mutation store cannot claim a site before its document
+                // exists; seed the complete installation atomically first.
+                await app.mongo
+                    .db!.collection(Repo.siteInstallation.collection)
+                    .insertOne(oldSite as never);
+                await Repo.template.add(oldTemplate, true);
+                await Repo.entry.add(oldEntry, true);
+                await mongoMigrationRepository().save(operation);
+            });
+            return {
+                label,
+                siteId,
+                workspaceId,
+                oldSite,
+                oldTemplate,
+                oldEntry,
+                newTemplate,
+                newEntry,
+                operation,
+                oldRelease,
+                newRelease,
+                oldRevision,
+                newRevision,
+            };
+        }
+
+        function stateFor(fixture: Fixture, old: boolean): GatewayState {
+            return {
+                revision: old ? fixture.oldRevision : fixture.newRevision,
+                active: {
+                    releaseId: old ? fixture.oldRelease : fixture.newRelease,
+                    imageDigest: `sha256:${(old ? 'c' : 'd').repeat(64)}`,
+                    routeRevision: old
+                        ? fixture.oldRevision
+                        : fixture.newRevision,
+                    metadata: {},
+                    snapshot: {
+                        schemaVersion: 1,
+                        siteId: fixture.siteId,
+                        language: 'en',
+                        pages: [],
+                        navigation: [],
+                        redirects: [],
+                    },
+                    createdAt: new Date().toISOString(),
+                },
+            };
+        }
+
+        const gatewayStates = new Map<string, GatewayState>();
+        function runtime(
+            fixture: Fixture,
+            options: {
+                repository?: MigrationRepository;
+                finalize?: MigrationRuntime['finalize'];
+            } = {},
+        ): MigrationRuntime {
+            const repository = options.repository || mongoMigrationRepository();
+            const readState = () =>
+                gatewayStates.get(fixture.siteId) || stateFor(fixture, true);
+            const saveState = (value: GatewayState) => {
+                gatewayStates.set(fixture.siteId, value);
+                return value;
+            };
+            const base: GatewayReleaseSource = {
+                findSite: () =>
+                    Repo.siteInstallation.methods.findFresh(fixture.siteId),
+                loadContent: async () => {
+                    throw new Error('unused');
+                },
+                findRelease: async () => null,
+                insertRelease: async (_record: ReleaseRecord) => undefined,
+                activate: async () => true,
+                audit: async () => undefined,
+                saveSite: async () => true,
+                projectGatewayRelease: async () => true,
+            };
+            const finalize =
+                options.finalize ||
+                ((value: MigrationOperation, expected: number) =>
+                    Repo.siteInstallation.methods.finalizeMigration(
+                        value.cmsSiteId,
+                        value.id,
+                        expected,
+                        value.candidateSite,
+                    ));
+            return {
+                repository,
+                findSite: (id) => Repo.siteInstallation.methods.findFresh(id),
+                sourceChecksum: async (value) => value.sourceChecksum,
+                source: (value) =>
+                    createMigrationReleaseSource(value, {
+                        base,
+                        update: (next) => repository.save(next),
+                    }),
+                persistCandidate: async (value) => {
+                    await Repo.entryGroup.methods.ensure(
+                        value.candidateSite.contentGroupId ||
+                            `${value.cmsSiteId}-migration-${value.id}`,
+                        value.cmsSiteId,
+                        `${fixture.label} candidate`,
+                    );
+                    for (const template of value.candidateTemplates || []) {
+                        if (!(await Repo.template.findById(template._id)))
+                            await Repo.template.add(template, true);
+                    }
+                    for (const entry of value.candidateEntries || []) {
+                        if (!(await Repo.entry.findById(entry._id)))
+                            await Repo.entry.add(entry, true);
+                    }
+                },
+                finalize,
+                restore: (value, expected, previous) =>
+                    Repo.siteInstallation.methods.restoreMigrationSite(
+                        value.cmsSiteId,
+                        value.id,
+                        expected,
+                        previous,
+                    ),
+                settle: (value, status) =>
+                    Repo.siteInstallation.methods.settleMigrationState(
+                        value.cmsSiteId,
+                        value.id,
+                        status,
+                    ),
+                gateway: {
+                    publish: async (_source, operation) => {
+                        const state = saveState(stateFor(fixture, false));
+                        const persisted = await repository.find(operation.id);
+                        if (persisted) {
+                            await repository.save({
+                                ...persisted,
+                                status: 'publishing',
+                                recoveryPhase: 'gateway-active',
+                                targetReleaseId: fixture.newRelease,
+                                targetRouteRevision: fixture.newRevision,
+                                candidateSite: {
+                                    ...persisted.candidateSite,
+                                    gatewayCurrentReleaseId: fixture.newRelease,
+                                    gatewayPublishedReleaseIds: [
+                                        fixture.oldRelease,
+                                        fixture.newRelease,
+                                    ],
+                                    gatewayActiveRevision: fixture.newRevision,
+                                    updatedAt: Math.max(
+                                        Date.now(),
+                                        persisted.candidateSite.updatedAt + 1,
+                                    ),
+                                },
+                                updatedAt: Date.now(),
+                            });
+                        }
+                        return {
+                            state,
+                            targetReleaseId: fixture.newRelease,
+                            targetRouteRevision: fixture.newRevision,
+                        };
+                    },
+                    readState: async () => readState(),
+                    rollback: async () => {
+                        return saveState(stateFor(fixture, true));
+                    },
+                },
+            };
+        }
+
+        const first = await seed('alpha', 1);
+        const second = await seed('beta', 2);
+        const crashBeforeCas = await seed('gamma', 3);
+        const crashAfterCas = await seed('delta', 4);
+        const unrelated = await seed('epsilon', 5);
+
+        const concurrent = await runWithWorkspace(workspace, () =>
+            Promise.all([
+                new MigrationService(runtime(first)).adopt(
+                    first.operation.id,
+                    first.operation.sourceChecksum,
+                    'migration-recovery',
+                ),
+                new MigrationService(runtime(second)).adopt(
+                    second.operation.id,
+                    second.operation.sourceChecksum,
+                    'migration-recovery',
+                ),
+            ]),
+        );
+        assert.deepEqual(
+            concurrent.map((value) => value.status),
+            ['active', 'active'],
+        );
+        const firstSite = await Repo.siteInstallation.methods.findFresh(
+            first.siteId,
+        );
+        const secondSite = await Repo.siteInstallation.methods.findFresh(
+            second.siteId,
+        );
+        assert.equal(firstSite?.templateNamespace, 'alpha-new-namespace');
+        assert.equal(secondSite?.templateNamespace, 'beta-new-namespace');
+        const [firstCandidateEntry, secondCandidateEntry] =
+            await runWithWorkspace(workspace, () =>
+                Promise.all([
+                    Repo.entry.findById(first.newEntry._id),
+                    Repo.entry.findById(second.newEntry._id),
+                ]),
+            );
+        assert.equal(firstCandidateEntry?.groupId, first.newEntry.groupId);
+        assert.equal(secondCandidateEntry?.groupId, second.newEntry.groupId);
+        await runWithWorkspace(workspace, () =>
+            withSiteMutation(unrelated.siteId, async () => {
+                const site = (await Repo.siteInstallation.methods.findFresh(
+                    unrelated.siteId,
+                ))!;
+                await Repo.siteInstallation.update({
+                    ...site,
+                    name: 'Still independently editable',
+                    updatedAt: site.updatedAt + 1,
+                });
+            }),
+        );
+        assert.equal(
+            (await Repo.siteInstallation.methods.findFresh(unrelated.siteId))
+                ?.name,
+            'Still independently editable',
+        );
+        assert.equal(
+            await Repo.siteInstallation.methods.claimSiteMutation(
+                first.siteId,
+                'duplicate-owner',
+                'migration',
+                'different-operation',
+                Date.now(),
+                Date.now() + 30_000,
+            ),
+            false,
+        );
+
+        const beforeCasRuntime = runtime(crashBeforeCas, {
+            finalize: async () => {
+                throw new Error('simulated crash before CMS CAS');
+            },
+        });
+        await assert.rejects(
+            () =>
+                runWithWorkspace(workspace, () =>
+                    new MigrationService(beforeCasRuntime).adopt(
+                        crashBeforeCas.operation.id,
+                        crashBeforeCas.operation.sourceChecksum,
+                        'migration-recovery',
+                    ),
+                ),
+            /crash before CMS CAS/,
+        );
+        assert.equal(
+            (
+                await Repo.siteInstallation.methods.findFresh(
+                    crashBeforeCas.siteId,
+                )
+            )?.templateNamespace,
+            crashBeforeCas.oldSite.templateNamespace,
+        );
+        const recoveredBeforeCas = await runWithWorkspace(workspace, () =>
+            new MigrationService(runtime(crashBeforeCas)).reconcile(
+                crashBeforeCas.operation.id,
+            ),
+        );
+        assert.equal(recoveredBeforeCas.status, 'active');
+
+        let failActiveSave = true;
+        const afterCasRepository = {
+            ...mongoMigrationRepository(),
+            save: async (value: MigrationOperation) => {
+                if (failActiveSave && value.status === 'active') {
+                    throw new Error('simulated crash after CMS CAS');
+                }
+                await mongoMigrationRepository().save(value);
+            },
+        };
+        await assert.rejects(
+            () =>
+                runWithWorkspace(workspace, () =>
+                    new MigrationService(
+                        runtime(crashAfterCas, {
+                            repository: afterCasRepository,
+                        }),
+                    ).adopt(
+                        crashAfterCas.operation.id,
+                        crashAfterCas.operation.sourceChecksum,
+                        'migration-recovery',
+                    ),
+                ),
+            /crash after CMS CAS/,
+        );
+        assert.equal(
+            (
+                await Repo.siteInstallation.methods.findFresh(
+                    crashAfterCas.siteId,
+                )
+            )?.migrationState,
+            'active',
+        );
+        failActiveSave = false;
+        const recoveredAfterCas = await runWithWorkspace(workspace, () =>
+            new MigrationService(runtime(crashAfterCas)).reconcile(
+                crashAfterCas.operation.id,
+            ),
+        );
+        assert.equal(recoveredAfterCas.status, 'active');
+
+        let failRollbackSave = true;
+        const rollbackRepository = {
+            ...mongoMigrationRepository(),
+            save: async (value: MigrationOperation) => {
+                if (failRollbackSave && value.status === 'rolled-back') {
+                    throw new Error('simulated crash after site restore');
+                }
+                await mongoMigrationRepository().save(value);
+            },
+        };
+        await assert.rejects(
+            () =>
+                runWithWorkspace(workspace, () =>
+                    new MigrationService(
+                        runtime(crashAfterCas, {
+                            repository: rollbackRepository,
+                        }),
+                    ).rollback(
+                        crashAfterCas.operation.id,
+                        'migration-recovery',
+                    ),
+                ),
+            /crash after site restore/,
+        );
+        assert.equal(
+            (
+                await Repo.siteInstallation.methods.findFresh(
+                    crashAfterCas.siteId,
+                )
+            )?.migrationState,
+            'rolled-back',
+        );
+        failRollbackSave = false;
+        const recoveredRollback = await runWithWorkspace(workspace, () =>
+            new MigrationService(runtime(crashAfterCas)).reconcile(
+                crashAfterCas.operation.id,
+            ),
+        );
+        assert.equal(recoveredRollback.status, 'rolled-back');
+        assert.ok(
+            await runWithWorkspace(workspace, () =>
+                Repo.entry.findById(crashAfterCas.oldEntry._id),
+            ),
+        );
+        assert.ok(
+            await runWithWorkspace(workspace, () =>
+                Repo.entry.findById(crashAfterCas.newEntry._id),
+            ),
+        );
+        assert.equal(
+            (
+                await runWithWorkspace(workspace, () =>
+                    mongoMigrationRepository().find(crashAfterCas.operation.id),
+                )
+            )?.media?.length,
+            1,
+        );
     },
 );

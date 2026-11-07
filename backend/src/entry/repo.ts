@@ -36,6 +36,7 @@ export const EntryRepo = createMongoDBRepository<Entry, EntryRepoMethods>({
         );
         if (
             site?.models.length &&
+            site.status !== 'importing' &&
             site.migrationState !== 'publishing' &&
             !site.models.some((model) => model.templateId === entry.templateId)
         ) {
