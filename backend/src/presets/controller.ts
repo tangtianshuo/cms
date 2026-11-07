@@ -44,10 +44,12 @@ import { ownerWorkspace } from '../workspaces/context';
 import { validateSectionMediaReferences } from '../storefront/section-schema';
 import {
     adoptMigration,
+    migrationSourceChecksum,
     rollbackMigration,
     stageMigration,
 } from '../template-contract/migration-service';
 import type { MigrationStep } from '../template-contract/migration-preview';
+import { withSiteMutation } from '../template-contract/site-mutation';
 
 const importBody = z
     .object({
@@ -65,7 +67,10 @@ const importBody = z
         mode: z.enum(['import', 'adopt']).optional(),
         expectedUpdatedAt: z.number().int().nonnegative().optional(),
         requestKey: z.string().uuid().optional(),
-        sourceChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+        sourceChecksum: z
+            .string()
+            .regex(/^sha256:[a-f0-9]{64}$/)
+            .optional(),
     })
     .strict();
 
@@ -308,10 +313,18 @@ export const PresetController = createController({
                             site,
                             authorizedMigrationMediaIds(site, content.media),
                         );
-                        return previewPublicTemplateUpgrade(site, selected, {
-                            document,
-                            target,
-                        });
+                        return {
+                            ...previewPublicTemplateUpgrade(site, selected, {
+                                document,
+                                target,
+                            }),
+                            sourceChecksum: migrationSourceChecksum(
+                                site,
+                                content.templates,
+                                content.entries,
+                                content.media,
+                            ),
+                        };
                     } catch (cause) {
                         throw errorHandler(
                             HttpStatus.BadRequest,
@@ -457,81 +470,95 @@ export const PresetController = createController({
                             HttpStatus.BadRequest,
                             'Invalid page draft',
                         );
-                    const site =
+                    const initialSite =
                         await Repo.siteInstallation.methods.findSelected();
-                    if (
-                        !site ||
-                        site.status !== 'ready' ||
-                        !pageDraft(site, pageKey)
-                    ) {
+                    if (!initialSite)
                         throw errorHandler(
                             HttpStatus.NotFound,
                             'Page draft not found',
                         );
-                    }
-                    const boundEntry = parsed.data.entryId
-                        ? await Repo.entry.findById(parsed.data.entryId)
-                        : null;
-                    if (boundEntry && boundEntry.siteId !== site._id) {
-                        throw errorHandler(
-                            HttpStatus.BadRequest,
-                            'Page Entry belongs to another site',
-                        );
-                    }
-                    if (parsed.data.sectionConfigs) {
-                        const draft = pageDraft(site, pageKey)!;
-                        const contractPage = Boolean(
-                            resolveInstalledPreset(site).editor?.pages.some(
-                                (item) =>
-                                    item.pageKey ===
-                                    (draft.blueprintKey || pageKey),
-                            ),
-                        );
-                        if (!contractPage)
-                            validateSectionMediaReferences(
-                                draft.layout,
-                                parsed.data.sectionConfigs as never,
-                                {
-                                    media: await Repo.media.findAll(),
-                                    site,
-                                    publishedPaths: new Set(
-                                        site.pages
-                                            .filter(
-                                                (page) =>
-                                                    page.enabled !== false &&
-                                                    !page.path.includes(':'),
-                                            )
-                                            .map((page) => page.path),
-                                    ),
-                                },
-                            );
-                    }
-                    try {
-                        const updated = updatePageDraft(
-                            site,
-                            pageKey,
-                            parsed.data,
-                            boundEntry,
-                        );
+                    return withSiteMutation(initialSite._id, async () => {
+                        const site =
+                            await Repo.siteInstallation.methods.findSelected();
                         if (
-                            !(await Repo.siteInstallation.methods.saveDraft(
-                                updated,
-                                site.updatedAt,
-                            ))
+                            !site ||
+                            site.status !== 'ready' ||
+                            !pageDraft(site, pageKey)
                         ) {
-                            throw new Error(
-                                'Site changed; refresh before saving',
+                            throw errorHandler(
+                                HttpStatus.NotFound,
+                                'Page draft not found',
                             );
                         }
-                        return pageDraft(updated, pageKey);
-                    } catch (cause) {
-                        throw errorHandler(
-                            HttpStatus.BadRequest,
-                            cause instanceof Error
-                                ? cause.message
-                                : 'Invalid page draft',
-                        );
-                    }
+                        const boundEntry = parsed.data.entryId
+                            ? await Repo.entry.findById(parsed.data.entryId)
+                            : null;
+                        if (boundEntry && boundEntry.siteId !== site._id) {
+                            throw errorHandler(
+                                HttpStatus.BadRequest,
+                                'Page Entry belongs to another site',
+                            );
+                        }
+                        if (parsed.data.sectionConfigs) {
+                            const draft = pageDraft(site, pageKey)!;
+                            const contractPage = Boolean(
+                                resolveInstalledPreset(site).editor?.pages.some(
+                                    (item) =>
+                                        item.pageKey ===
+                                        (draft.blueprintKey || pageKey),
+                                ),
+                            );
+                            if (!contractPage)
+                                await validateSectionMediaReferences(
+                                    draft.layout,
+                                    parsed.data.sectionConfigs as never,
+                                    {
+                                        media: await Repo.media.findAll(),
+                                        site,
+                                        publishedPaths: new Set(
+                                            site.pages
+                                                .filter(
+                                                    (page) =>
+                                                        page.enabled !==
+                                                            false &&
+                                                        !page.path.includes(
+                                                            ':',
+                                                        ),
+                                                )
+                                                .map((page) => page.path),
+                                        ),
+                                    },
+                                );
+                        }
+                        try {
+                            const updated = updatePageDraft(
+                                site,
+                                pageKey,
+                                parsed.data,
+                                boundEntry,
+                            );
+                            if (
+                                !(await Repo.siteInstallation.methods.saveDraft(
+                                    updated,
+                                    site.updatedAt,
+                                ))
+                            ) {
+                                throw new Error(
+                                    'Site changed; refresh before saving',
+                                );
+                            }
+                            return pageDraft(updated, pageKey);
+                        } catch (cause) {
+                            throw errorHandler(
+                                (cause as { status?: number }).status === 409
+                                    ? HttpStatus.Conflict
+                                    : HttpStatus.BadRequest,
+                                cause instanceof Error
+                                    ? cause.message
+                                    : 'Invalid page draft',
+                            );
+                        }
+                    });
                 },
             }),
             addPage: createControllerMethod({
@@ -547,47 +574,58 @@ export const PresetController = createController({
                             HttpStatus.BadRequest,
                             'Invalid new page',
                         );
-                    const site =
+                    const initialSite =
                         await Repo.siteInstallation.methods.findSelected();
-                    if (!site || site.status !== 'ready')
+                    if (!initialSite)
                         throw errorHandler(
                             HttpStatus.NotFound,
                             'Site not found',
                         );
-                    try {
-                        const key = randomUUID();
-                        const bound = await Repo.entry.findById(
-                            parsed.data.entryId,
-                        );
-                        if (!bound || bound.siteId !== site._id)
-                            throw new Error(
-                                'Page Entry belongs to another site',
+                    return withSiteMutation(initialSite._id, async () => {
+                        const site =
+                            await Repo.siteInstallation.methods.findSelected();
+                        if (!site || site.status !== 'ready')
+                            throw errorHandler(
+                                HttpStatus.NotFound,
+                                'Site not found',
                             );
-                        const updated = createPageDraft(
-                            site,
-                            key,
-                            parsed.data,
-                            bound,
-                        );
-                        if (
-                            !(await Repo.siteInstallation.methods.saveDraft(
-                                updated,
-                                site.updatedAt,
-                            ))
-                        ) {
-                            throw new Error(
-                                'Site changed; refresh before saving',
+                        try {
+                            const key = randomUUID();
+                            const bound = await Repo.entry.findById(
+                                parsed.data.entryId,
+                            );
+                            if (!bound || bound.siteId !== site._id)
+                                throw new Error(
+                                    'Page Entry belongs to another site',
+                                );
+                            const updated = createPageDraft(
+                                site,
+                                key,
+                                parsed.data,
+                                bound,
+                            );
+                            if (
+                                !(await Repo.siteInstallation.methods.saveDraft(
+                                    updated,
+                                    site.updatedAt,
+                                ))
+                            ) {
+                                throw new Error(
+                                    'Site changed; refresh before saving',
+                                );
+                            }
+                            return pageDraft(updated, key);
+                        } catch (cause) {
+                            throw errorHandler(
+                                (cause as { status?: number }).status === 409
+                                    ? HttpStatus.Conflict
+                                    : HttpStatus.BadRequest,
+                                cause instanceof Error
+                                    ? cause.message
+                                    : 'Could not add page',
                             );
                         }
-                        return pageDraft(updated, key);
-                    } catch (cause) {
-                        throw errorHandler(
-                            HttpStatus.BadRequest,
-                            cause instanceof Error
-                                ? cause.message
-                                : 'Could not add page',
-                        );
-                    }
+                    });
                 },
             }),
             import: createControllerMethod({
@@ -601,7 +639,8 @@ export const PresetController = createController({
                         (parsed.data.mode === 'adopt' &&
                             (!parsed.data.presetVersion ||
                                 parsed.data.expectedUpdatedAt === undefined ||
-                                !parsed.data.requestKey)) ||
+                                !parsed.data.requestKey ||
+                                !parsed.data.sourceChecksum)) ||
                         (parsed.data.mode !== 'adopt' && !parsed.data.siteName)
                     )
                         throw errorHandler(
@@ -665,22 +704,20 @@ export const PresetController = createController({
                                     schemaVersion: 1,
                                     id: selected.id,
                                     version: selected.version,
-                                    manifestChecksum:
-                                        selected.manifestChecksum,
-                                    imageRepository:
-                                        selected.imageRepository,
+                                    manifestChecksum: selected.manifestChecksum,
+                                    imageRepository: selected.imageRepository,
                                     imageDigest: selected.imageDigest,
                                     sourceCommit: selected.sourceCommit,
                                     manifestPath: `templates/${selected.id}/${selected.version}/template.json`,
                                     status: 'available',
                                 },
                                 input: { site, ...content },
-                                steps: (migration?.steps || []) as MigrationStep[],
+                                steps: (migration?.steps ||
+                                    []) as MigrationStep[],
                             });
                             return await adoptMigration(
                                 operation.id,
-                                parsed.data.sourceChecksum ||
-                                    operation.sourceChecksum,
+                                parsed.data.sourceChecksum!,
                                 token.payload.userId,
                             );
                         }

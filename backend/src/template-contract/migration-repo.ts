@@ -16,6 +16,15 @@ export type MigrationOperationStatus =
     | 'failed'
     | 'rolled-back';
 
+export type MigrationRecoveryPhase =
+    | 'gateway-submitting'
+    | 'gateway-pending'
+    | 'gateway-active'
+    | 'site-switching'
+    | 'rollback-requested'
+    | 'gateway-rolled-back'
+    | 'settled';
+
 export interface MigrationOperation {
     id: string;
     cmsWorkspaceId: string;
@@ -25,6 +34,7 @@ export interface MigrationOperation {
     sourceChecksum: string;
     targetManifestChecksum: string;
     status: MigrationOperationStatus;
+    recoveryPhase?: MigrationRecoveryPhase;
     previousSite: SiteInstallation;
     candidateSite: SiteInstallation;
     previousReleaseId: string;
@@ -52,6 +62,7 @@ interface StoredMigrationOperation extends MongoDBEntry {
     sourceChecksum: string;
     targetManifestChecksum: string;
     status: MigrationOperationStatus;
+    recoveryPhase?: MigrationRecoveryPhase;
     previousSiteJson: string;
     candidateSiteJson: string;
     previousReleaseId: string;
@@ -82,6 +93,9 @@ function stored(operation: MigrationOperation): StoredMigrationOperation {
         sourceChecksum: operation.sourceChecksum,
         targetManifestChecksum: operation.targetManifestChecksum,
         status: operation.status,
+        ...(operation.recoveryPhase
+            ? { recoveryPhase: operation.recoveryPhase }
+            : {}),
         previousSiteJson: JSON.stringify(operation.previousSite),
         candidateSiteJson: JSON.stringify(operation.candidateSite),
         previousReleaseId: operation.previousReleaseId,
@@ -146,6 +160,9 @@ function migrationOperation(
         sourceChecksum: record.sourceChecksum,
         targetManifestChecksum: record.targetManifestChecksum,
         status: record.status,
+        ...(record.recoveryPhase
+            ? { recoveryPhase: record.recoveryPhase }
+            : {}),
         previousSite: JSON.parse(record.previousSiteJson),
         candidateSite: JSON.parse(record.candidateSiteJson),
         previousReleaseId: record.previousReleaseId,
@@ -243,6 +260,7 @@ const RawMigrationRepo = createMongoDBRepository<
         sourceChecksum: { __type: 'string', __required: true },
         targetManifestChecksum: { __type: 'string', __required: true },
         status: { __type: 'string', __required: true },
+        recoveryPhase: { __type: 'string', __required: false },
         previousSiteJson: { __type: 'string', __required: true },
         candidateSiteJson: { __type: 'string', __required: true },
         previousReleaseId: { __type: 'string', __required: true },

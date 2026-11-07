@@ -35,6 +35,7 @@ interface PresetSummary {
     };
 }
 export interface UpgradePreview {
+    sourceChecksum: string;
     compatible: boolean;
     adoptable?: boolean;
     requiresNewInstallation: boolean;
@@ -80,6 +81,25 @@ export function canAdoptTemplate(state: TemplateAdoptionState): boolean {
         !state.hasConflicts &&
         (state.previewAdoptable ?? state.previewCompatible)
     );
+}
+
+export function migrationAdoptionBody(
+    preset: PresetSummary,
+    site: SiteInstallation,
+    preview: UpgradePreview,
+    requestKey: string,
+) {
+    if (!preview.sourceChecksum)
+        throw new Error('Migration source checksum is required');
+    return {
+        presetId: preset.id,
+        presetVersion: preset.version,
+        manifestChecksum: preset.manifestChecksum,
+        mode: 'adopt' as const,
+        expectedUpdatedAt: site.updatedAt,
+        requestKey,
+        sourceChecksum: preview.sourceChecksum,
+    };
 }
 
 const presetKey = (item: PresetSummary) =>
@@ -251,8 +271,7 @@ export const PresetsView = defineComponent({
                 isAdmin: !!sdk.context?.context.admin,
                 hasConflicts: conflicts.value.length > 0,
                 previewCompatible: upgradePreview.value?.compatible === true,
-                previewAdoptable:
-                    upgradePreview.value?.adoptable === true,
+                previewAdoptable: upgradePreview.value?.adoptable === true,
             }),
         );
         const importInProgress = computed(
@@ -367,6 +386,7 @@ export const PresetsView = defineComponent({
                                 });
                         } catch (cause) {
                             upgradePreview.value = {
+                                sourceChecksum: '',
                                 compatible: false,
                                 requiresNewInstallation: true,
                                 migrationRequired: false,
@@ -434,23 +454,29 @@ export const PresetsView = defineComponent({
             error.value = '';
             try {
                 const result = await sdk.send<{
-                    status?: 'planned'|'staged'|'publishing'|'active'|'failed'|'rolled-back';
+                    status?:
+                        | 'planned'
+                        | 'staged'
+                        | 'publishing'
+                        | 'active'
+                        | 'failed'
+                        | 'rolled-back';
                 }>({
                     url: '/api/v4/presets/import',
                     method: 'POST',
-                    data: {
-                        presetId: selected.value.id,
-                        presetVersion: selected.value.version,
-                        manifestChecksum: selected.value.manifestChecksum,
-                        mode: 'adopt',
-                        expectedUpdatedAt: site.value.updatedAt,
+                    data: migrationAdoptionBody(
+                        selected.value,
+                        site.value,
+                        upgradePreview.value!,
                         requestKey,
-                    },
+                    ),
                 });
                 await refreshSite();
                 if (result.status === 'active') {
                     adoptionRequestKeys.delete(selectedKey.value);
-                    window.bcms.notification.success(t('presets.versionAdopted'));
+                    window.bcms.notification.success(
+                        t('presets.versionAdopted'),
+                    );
                 } else {
                     error.value = t('presets.upgradeProcessing');
                 }

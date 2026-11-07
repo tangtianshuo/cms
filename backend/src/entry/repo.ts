@@ -13,7 +13,10 @@ import {
 } from '@bcms/selfhosted-utils/queue';
 import type { EntryContentNodeWidgetAttr } from '@bcms/selfhosted-backend/entry/models/content';
 import { workspaceContext } from '../workspaces/context';
-import { withSiteMutation } from '../template-contract/site-mutation';
+import {
+    SiteMutationConflict,
+    withSiteMutation,
+} from '../template-contract/site-mutation';
 
 export interface EntryRepoMethods {
     findAllByTemplateId(templateId: string): Promise<Entry[]>;
@@ -25,7 +28,22 @@ export const EntryRepo = createMongoDBRepository<Entry, EntryRepoMethods>({
     collection: 'entries',
     schema: EntrySchema,
     beforeIndexes: migrateEntryGroups,
-    prepareWrite: prepareEntryWrite,
+    async prepareWrite(entry) {
+        await prepareEntryWrite(entry);
+        if (!entry.siteId) return;
+        const site = await Repo.siteInstallation.methods.findFresh(
+            entry.siteId,
+        );
+        if (
+            site?.models.length &&
+            site.migrationState !== 'publishing' &&
+            !site.models.some((model) => model.templateId === entry.templateId)
+        ) {
+            throw new SiteMutationConflict(
+                'Site content changed; refresh before saving',
+            );
+        }
+    },
     aroundWrite: (entries, action) => {
         const siteIds = [
             ...new Set(
@@ -45,8 +63,14 @@ export const EntryRepo = createMongoDBRepository<Entry, EntryRepoMethods>({
         }
         return write();
     },
-    indexes: [{ key: { workspaceId: 1, groupId: 1, titleKeys: 1 }, name: 'workspace_group_language_title_unique', unique: true,
-        partialFilterExpression: { titleKeys: { $type: 'array' } } }],
+    indexes: [
+        {
+            key: { workspaceId: 1, groupId: 1, titleKeys: 1 },
+            name: 'workspace_group_language_title_unique',
+            unique: true,
+            partialFilterExpression: { titleKeys: { $type: 'array' } },
+        },
+    ],
     methods({ mdb, cache }) {
         const latches: {
             [key: string]: boolean;

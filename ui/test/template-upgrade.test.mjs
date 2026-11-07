@@ -98,6 +98,7 @@ async function renderPanel({
 }
 
 const migrationPreview = {
+    sourceChecksum: `sha256:${'a'.repeat(64)}`,
     compatible: false,
     requiresNewInstallation: false,
     migrationRequired: true,
@@ -200,6 +201,7 @@ test('keeps ordinary adoption explicit and render-only', async () => {
     };
     const { root, app } = await renderPanel({
         preview: {
+            sourceChecksum: `sha256:${'b'.repeat(64)}`,
             compatible: true,
             requiresNewInstallation: false,
             migrationRequired: false,
@@ -249,5 +251,41 @@ test('allows explicit adoption only after an issue-free migration preview is rea
             previewAdoptable: true,
         }),
         true,
+    );
+});
+
+test('sends the exact reviewed source checksum with adoption', () => {
+    const preset = {
+        id: 'service-studio',
+        version: '1.1.0',
+        name: 'Service Studio',
+        description: '',
+        heroImage: '',
+        manifestChecksum: `sha256:${'c'.repeat(64)}`,
+        theme: {
+            background: '#fff',
+            foreground: '#111',
+            accent: '#06c',
+            muted: '#eee',
+            font: 'Arial',
+        },
+    };
+    const body = presetsModule.migrationAdoptionBody(
+        preset,
+        { updatedAt: 7 },
+        migrationPreview,
+        '11111111-1111-4111-8111-111111111111',
+    );
+    assert.equal(body.sourceChecksum, migrationPreview.sourceChecksum);
+    assert.equal(body.expectedUpdatedAt, 7);
+    assert.throws(
+        () =>
+            presetsModule.migrationAdoptionBody(
+                preset,
+                { updatedAt: 7 },
+                { ...migrationPreview, sourceChecksum: '' },
+                '11111111-1111-4111-8111-111111111111',
+            ),
+        /checksum/,
     );
 });

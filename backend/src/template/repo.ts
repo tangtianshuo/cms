@@ -1,7 +1,11 @@
 import { Repo } from '../repo';
 import { ContentScopeError } from '../workspaces/scoped-collection';
 import { validatePropDefinitions } from '../workspaces/content-references';
-import { workspaceFilter, workspaceId, ownerWorkspace } from '../workspaces/context';
+import {
+    workspaceFilter,
+    workspaceId,
+    ownerWorkspace,
+} from '../workspaces/context';
 import { migrateTemplateIndex } from '../workspaces/migration';
 import { createMongoDBRepository } from '@bcms/selfhosted-backend/_server/modules/mongodb';
 import {
@@ -16,7 +20,10 @@ import {
 } from '@bcms/selfhosted-utils/queue';
 import { PropType } from '@bcms/selfhosted-backend/prop/models/main';
 import { workspaceContext } from '../workspaces/context';
-import { withSiteMutation } from '../template-contract/site-mutation';
+import {
+    SiteMutationConflict,
+    withSiteMutation,
+} from '../template-contract/site-mutation';
 
 export interface TemplateRepoMethods {
     findAllByPropGroupPointer(groupId: string): Promise<Template[]>;
@@ -41,10 +48,33 @@ export const TemplateRepo = createMongoDBRepository<
     ],
     async prepareWrite(item) {
         await validatePropDefinitions(item.props);
+        if (item.siteId) {
+            const site = await Repo.siteInstallation.methods.findFresh(
+                item.siteId,
+            );
+            if (
+                site?.models.length &&
+                site.migrationState !== 'publishing' &&
+                !site.models.some((model) => model.templateId === item._id)
+            ) {
+                throw new SiteMutationConflict(
+                    'Site content changed; refresh before saving',
+                );
+            }
+        }
         const previous = await TemplateRepo.findById(item._id);
-        const title = previous?.props.find(prop => prop.name === 'title');
-        const nextTitle = item.props.find(prop => prop.name === 'title');
-        if (title && (!nextTitle || nextTitle.id !== title.id || nextTitle.type !== PropType.STRING) && (await Repo.entry.methods.findAllByTemplateId(item._id)).length) throw new ContentScopeError('Title property mapping cannot change while template entries exist');
+        const title = previous?.props.find((prop) => prop.name === 'title');
+        const nextTitle = item.props.find((prop) => prop.name === 'title');
+        if (
+            title &&
+            (!nextTitle ||
+                nextTitle.id !== title.id ||
+                nextTitle.type !== PropType.STRING) &&
+            (await Repo.entry.methods.findAllByTemplateId(item._id)).length
+        )
+            throw new ContentScopeError(
+                'Title property mapping cannot change while template entries exist',
+            );
     },
     aroundWrite: (items, action) => {
         const siteIds = [
@@ -142,11 +172,17 @@ export const TemplateRepo = createMongoDBRepository<
             },
 
             async findByName(name) {
-                const cacheHit = cache.find((e) => e.name === name && ownerWorkspace(e) === workspaceId());
+                const cacheHit = cache.find(
+                    (e) =>
+                        e.name === name && ownerWorkspace(e) === workspaceId(),
+                );
                 if (cacheHit) {
                     return cacheHit;
                 }
-                const result = await mdb.findOne({ ...workspaceFilter(), name });
+                const result = await mdb.findOne({
+                    ...workspaceFilter(),
+                    name,
+                });
                 if (result) {
                     cache.set(result);
                 }

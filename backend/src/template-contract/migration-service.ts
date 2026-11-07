@@ -32,9 +32,12 @@ import {
     migrationTargetForManifest,
     toMigrationDocument,
 } from './migration-document';
+import { createLegacyEditorAdapter } from './compatibility';
+import { compareTemplateStructures } from './model';
 import { withSiteMutation, SiteMutationConflict } from './site-mutation';
 import { createMigrationReleaseSource } from './migration-source';
 import { mediaAuthorizedForSite } from '../storefront/section-schema';
+import { resolveInstalledPreset } from '../presets/installed';
 
 function digest(value: unknown): string {
     const plain = JSON.parse(JSON.stringify(value));
@@ -194,6 +197,7 @@ export interface PrepareMigrationInput {
 }
 
 function translatedFields(
+    modelKey: string,
     entry: Entry,
     language: string,
     current: Record<string, unknown> | null,
@@ -224,7 +228,7 @@ function translatedFields(
         );
     const migrated = structuredClone(source);
     for (const step of steps) {
-        if (step.op !== 'rename-field') continue;
+        if (step.op !== 'rename-field' || step.model !== modelKey) continue;
         if (
             Object.prototype.hasOwnProperty.call(migrated, step.from) &&
             Object.prototype.hasOwnProperty.call(migrated, step.to)
@@ -241,6 +245,7 @@ function translatedFields(
     for (const step of steps) {
         if (
             step.op === 'set-default' &&
+            step.model === modelKey &&
             !Object.prototype.hasOwnProperty.call(migrated, step.field)
         ) {
             migrated[step.field] = structuredClone(step.value);
@@ -268,6 +273,89 @@ export function prepareMigrationOperation(
     if (site.status !== 'ready' || site.updatedAt !== expectedUpdatedAt) {
         throw new SiteMutationConflict(
             'Site changed; refresh before upgrading',
+        );
+    }
+    if (
+        targetManifest.id !== site.presetId ||
+        targetRecord.id !== site.presetId
+    ) {
+        throw new Error('Template migration must keep the same template id');
+    }
+    const installedRecord = site.publishedTemplateRecord
+        ? (JSON.parse(site.publishedTemplateRecord) as PublicTemplateRecord)
+        : null;
+    if (
+        site.presetVersion === targetManifest.version &&
+        installedRecord?.manifestChecksum !== targetRecord.manifestChecksum
+    ) {
+        throw new Error(
+            'A published template version cannot change its manifest checksum',
+        );
+    }
+    const migration =
+        targetManifest.compatibility?.migrations?.find(
+            (item) =>
+                item.from === `${site.presetId}@${site.presetVersion}` &&
+                item.to === `${targetManifest.id}@${targetManifest.version}`,
+        ) || null;
+    if (site.presetVersion !== targetManifest.version && !migration) {
+        throw new Error(
+            `No migration is declared from ${site.presetId}@${site.presetVersion} to ${targetManifest.id}@${targetManifest.version}`,
+        );
+    }
+    if (
+        migration &&
+        JSON.stringify(migration.steps) !== JSON.stringify(steps)
+    ) {
+        throw new Error(
+            'Migration steps do not match the approved template migration',
+        );
+    }
+    const installed = resolveInstalledPreset(site);
+    const installedEditor =
+        installed.editor || createLegacyEditorAdapter(installed).contract;
+    const targetEditor =
+        targetManifest.editor ||
+        createLegacyEditorAdapter(targetManifest).contract;
+    const structures = compareTemplateStructures(
+        installedEditor,
+        targetEditor,
+        installed.renderer,
+        targetManifest.renderer,
+    );
+    const unsupported = structures.issues.filter((problem) => {
+        const [modelKey, fieldKey] = problem.path.split('/');
+        if (problem.code === 'field_removed') {
+            return !steps.some(
+                (step) =>
+                    step.op === 'rename-field' &&
+                    step.model === modelKey &&
+                    step.from === fieldKey,
+            );
+        }
+        if (problem.code === 'required_field_added') {
+            return !steps.some(
+                (step) =>
+                    (step.op === 'set-default' &&
+                        step.model === modelKey &&
+                        step.field === fieldKey) ||
+                    (step.op === 'rename-field' &&
+                        step.model === modelKey &&
+                        step.to === fieldKey),
+            );
+        }
+        if (problem.code === 'page_definition_changed') {
+            // Pages are rebuilt from the target blueprint and validated below.
+            return false;
+        }
+        return true;
+    });
+    if (unsupported.length) {
+        throw new Error(
+            `Unsupported structural migration: ${unsupported
+                .slice(0, 3)
+                .map((item) => `${item.code}:${item.path}`)
+                .join(',')}`,
         );
     }
     if (
@@ -304,6 +392,9 @@ export function prepareMigrationOperation(
             )
             .map((item) => item._id),
     );
+    // Target validation runs against the fully rewritten candidate below.
+    // Applying it to the pre-migration document would reject declared path,
+    // model and section changes before their supported migration steps run.
     const preview = previewMigration(document, steps);
     if (preview.issues.length) {
         throw new Error(
@@ -417,6 +508,7 @@ export function prepareMigrationOperation(
             if (!prior) continue;
             const meta = prior.meta.map((languageMeta) => {
                 const fields = translatedFields(
+                    modelKey,
                     prior,
                     languageMeta.lng,
                     languageMeta.lng === releaseInput.language
@@ -460,6 +552,11 @@ export function prepareMigrationOperation(
                 templateId: candidateTemplate._id,
                 groupId: `${site.contentGroupId || site._id}-migration-${operationId}`,
                 meta,
+                content: rewritePointers(
+                    prior.content,
+                    templateIds,
+                    entryIds,
+                ) as Entry['content'],
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
             });
@@ -535,78 +632,90 @@ export function prepareMigrationOperation(
             if (!page.entryId && firstEntry) page.entryId = firstEntry._id;
         }
     }
-    const targetPreview = previewMigration(
-        {
-            models: Object.fromEntries(
-                targetManifest.models.map((model) => [
-                    model.key,
-                    candidateEntries
-                        .filter(
-                            (entry) =>
-                                entry.templateId ===
-                                modelTemplates.get(model.key)?._id,
-                        )
-                        .map((entry) => ({
-                            id: entry._id,
-                            fields: Object.fromEntries(
-                                candidateSite.models
-                                    .find(
-                                        (mapping) =>
-                                            mapping.templateId ===
-                                            entry.templateId,
-                                    )!
-                                    .fields.map((field) => {
-                                        const propId = field.propId;
-                                        const value = entry.meta
-                                            .find(
-                                                (meta) =>
-                                                    meta.lng ===
-                                                    releaseInput.language,
-                                            )
-                                            ?.props.find(
-                                                (prop) => prop.id === propId,
-                                            )?.data;
-                                        const prop = candidateTemplates
-                                            .find(
-                                                (template) =>
-                                                    template._id ===
-                                                    entry.templateId,
-                                            )
-                                            ?.props.find(
-                                                (item) => item.id === propId,
-                                            );
-                                        return [
+    const candidateDocument = (language: string): MigrationDocument => ({
+        models: Object.fromEntries(
+            targetManifest.models.map((model) => [
+                model.key,
+                candidateEntries
+                    .filter(
+                        (entry) =>
+                            entry.templateId ===
+                            modelTemplates.get(model.key)?._id,
+                    )
+                    .map((entry) => ({
+                        id: entry._id,
+                        fields: Object.fromEntries(
+                            candidateSite.models
+                                .find(
+                                    (mapping) =>
+                                        mapping.templateId === entry.templateId,
+                                )!
+                                .fields.flatMap((field) => {
+                                    const propId = field.propId;
+                                    const languageProps = entry.meta.find(
+                                        (meta) => meta.lng === language,
+                                    )?.props;
+                                    const languageProp = languageProps?.find(
+                                        (prop) => prop.id === propId,
+                                    );
+                                    const prop = candidateTemplates
+                                        .find(
+                                            (template) =>
+                                                template._id ===
+                                                entry.templateId,
+                                        )
+                                        ?.props.find(
+                                            (item) => item.id === propId,
+                                        );
+                                    if (!languageProp && !prop?.required)
+                                        return [];
+                                    const value = languageProp?.data;
+                                    return [
+                                        [
                                             field.key,
                                             prop?.array
                                                 ? value || []
                                                 : Array.isArray(value)
                                                   ? value[0]
                                                   : value,
-                                        ];
-                                    }),
-                            ),
-                        })),
-                ]),
-            ),
-            pages: candidateSite.pages.map((page) => ({
-                id: page.key,
-                path: page.path,
-                sections: (page.sectionConfigs || []).map((section, index) => ({
-                    id: `${page.key}:${index}:${section.type}`,
-                    type: section.type,
-                    props: section.data,
-                })),
+                                        ],
+                                    ];
+                                }),
+                        ),
+                    })),
+            ]),
+        ),
+        pages: candidateSite.pages.map((page) => ({
+            id: page.key,
+            path: page.path,
+            sections: (page.sectionConfigs || []).map((section, index) => ({
+                id: `${page.key}:${index}:${section.type}`,
+                type: section.type,
+                props: section.data,
             })),
-        },
-        [],
-    );
-    if (targetPreview.issues.length) {
-        throw new Error(
-            `Candidate validation failed: ${targetPreview.issues
-                .slice(0, 3)
-                .map((item) => item.code)
-                .join(',')}`,
+        })),
+    });
+    const languages = [
+        ...new Set(
+            candidateEntries.flatMap((entry) =>
+                entry.meta.map((meta) => meta.lng),
+            ),
+        ),
+    ];
+    for (const language of languages) {
+        const targetPreview = previewMigration(
+            candidateDocument(language),
+            [],
+            target,
         );
+        if (targetPreview.issues.length) {
+            throw new Error(
+                `Candidate validation failed for ${language}: ${targetPreview.issues
+                    .slice(0, 3)
+                    .map((item) => `${item.code}:${item.path}`)
+                    .join(',')}`,
+            );
+        }
     }
     return {
         id: operationId,
@@ -764,6 +873,7 @@ export class MigrationService {
                 operation = {
                     ...operation,
                     status: 'publishing',
+                    recoveryPhase: 'gateway-submitting',
                     actorId,
                     errorCode: undefined,
                     updatedAt: Date.now(),
@@ -774,8 +884,16 @@ export class MigrationService {
                         this.runtime.source(operation),
                         operation,
                     );
+                    const persisted =
+                        (await this.runtime.repository.find(operation.id)) ||
+                        operation;
                     operation = {
-                        ...operation,
+                        ...persisted,
+                        status: 'publishing',
+                        recoveryPhase:
+                            result.targetRouteRevision !== undefined
+                                ? 'gateway-active'
+                                : 'gateway-pending',
                         targetReleaseId: result.targetReleaseId,
                         targetRouteRevision: result.targetRouteRevision,
                         updatedAt: Date.now(),
@@ -793,7 +911,19 @@ export class MigrationService {
                     await this.runtime.repository.save(operation);
                     return operation;
                 } catch (cause) {
-                    if (isGatewayUnavailable(cause)) {
+                    if (
+                        isGatewayUnavailable(cause) ||
+                        operation.targetReleaseId ||
+                        operation.recoveryPhase === 'gateway-active'
+                    ) {
+                        operation = {
+                            ...operation,
+                            status: 'publishing',
+                            recoveryPhase: isGatewayUnavailable(cause)
+                                ? 'gateway-pending'
+                                : operation.recoveryPhase,
+                            updatedAt: Date.now(),
+                        };
                         await this.runtime.repository.save(operation);
                         throw cause;
                     }
@@ -817,7 +947,13 @@ export class MigrationService {
 
     async reconcile(operationId: string): Promise<MigrationOperation> {
         let operation = await this.requireOperation(operationId);
-        if (operation.status !== 'publishing') return operation;
+        const rollbackRecovery =
+            operation.status === 'active' &&
+            (operation.recoveryPhase === 'rollback-requested' ||
+                operation.recoveryPhase === 'gateway-rolled-back');
+        if (operation.status !== 'publishing' && !rollbackRecovery) {
+            return operation;
+        }
         if (!operation.targetReleaseId) {
             return this.adopt(
                 operation.id,
@@ -833,6 +969,105 @@ export class MigrationService {
                 const state = await this.runtime.gateway.readState(operation);
                 const active = state.active;
                 if (
+                    site.migrationOperationId === operation.id &&
+                    site.migrationState === 'active'
+                ) {
+                    if (rollbackRecovery) {
+                        if (
+                            active?.releaseId === operation.previousReleaseId &&
+                            active.routeRevision ===
+                                operation.previousRouteRevision
+                        ) {
+                            if (
+                                !(await this.runtime.restore(
+                                    operation,
+                                    site.updatedAt,
+                                    operation.previousSite,
+                                ))
+                            ) {
+                                throw new SiteMutationConflict(
+                                    'Site changed during rollback recovery',
+                                );
+                            }
+                            const settled: MigrationOperation = {
+                                ...operation,
+                                status: 'rolled-back',
+                                recoveryPhase: 'settled',
+                                updatedAt: Date.now(),
+                            };
+                            await this.runtime.repository.save(settled);
+                            return settled;
+                        }
+                        return operation;
+                    }
+                    if (
+                        active &&
+                        active.releaseId === operation.targetReleaseId &&
+                        operation.targetRouteRevision !== undefined &&
+                        active.routeRevision === operation.targetRouteRevision
+                    ) {
+                        const settled: MigrationOperation = {
+                            ...operation,
+                            status: 'active',
+                            recoveryPhase: 'settled',
+                            updatedAt: Date.now(),
+                        };
+                        await this.runtime.repository.save(settled);
+                        return settled;
+                    }
+                    return operation;
+                }
+                if (
+                    site.migrationOperationId === operation.id &&
+                    site.migrationState === 'rolled-back'
+                ) {
+                    const settled: MigrationOperation = {
+                        ...operation,
+                        status: 'rolled-back',
+                        recoveryPhase: 'settled',
+                        updatedAt: Date.now(),
+                    };
+                    await this.runtime.repository.save(settled);
+                    return settled;
+                }
+                if (
+                    operation.recoveryPhase === 'gateway-rolled-back' ||
+                    (rollbackRecovery &&
+                        state.active?.releaseId ===
+                            operation.previousReleaseId &&
+                        state.active.routeRevision ===
+                            operation.previousRouteRevision)
+                ) {
+                    if (
+                        !state.active ||
+                        state.active.releaseId !==
+                            operation.previousReleaseId ||
+                        state.active.routeRevision !==
+                            operation.previousRouteRevision
+                    ) {
+                        return operation;
+                    }
+                    if (
+                        !(await this.runtime.restore(
+                            operation,
+                            site.updatedAt,
+                            operation.previousSite,
+                        ))
+                    ) {
+                        throw new SiteMutationConflict(
+                            'Site changed during rollback recovery',
+                        );
+                    }
+                    const settled: MigrationOperation = {
+                        ...operation,
+                        status: 'rolled-back',
+                        recoveryPhase: 'settled',
+                        updatedAt: Date.now(),
+                    };
+                    await this.runtime.repository.save(settled);
+                    return settled;
+                }
+                if (
                     active &&
                     active.releaseId === operation.targetReleaseId &&
                     operation.targetRouteRevision !== active.routeRevision
@@ -840,6 +1075,7 @@ export class MigrationService {
                     operation = {
                         ...operation,
                         targetRouteRevision: active.routeRevision,
+                        recoveryPhase: 'gateway-active',
                         updatedAt: Date.now(),
                     };
                     await this.runtime.repository.save(operation);
@@ -863,6 +1099,7 @@ export class MigrationService {
                     operation = {
                         ...operation,
                         status: 'failed',
+                        recoveryPhase: 'settled',
                         errorCode: 'gateway_rolled_back',
                         updatedAt: Date.now(),
                     };
@@ -890,6 +1127,13 @@ export class MigrationService {
         return withSiteMutation(
             operation.cmsSiteId,
             async () => {
+                operation = {
+                    ...operation,
+                    recoveryPhase: 'rollback-requested',
+                    actorId,
+                    updatedAt: Date.now(),
+                };
+                await this.runtime.repository.save(operation);
                 let site = await this.runtime.findSite(operation.cmsSiteId);
                 if (!site) throw new Error('Site not found');
                 if (
@@ -915,6 +1159,20 @@ export class MigrationService {
                         'Gateway did not confirm the previous release',
                     );
                 }
+                if (
+                    state.active.routeRevision !==
+                    operation.previousRouteRevision
+                ) {
+                    throw new Error(
+                        'Gateway confirmed a different previous route revision',
+                    );
+                }
+                operation = {
+                    ...operation,
+                    recoveryPhase: 'gateway-rolled-back',
+                    updatedAt: Date.now(),
+                };
+                await this.runtime.repository.save(operation);
                 site = (await this.runtime.findSite(operation.cmsSiteId))!;
                 if (
                     !(await this.runtime.restore(
@@ -930,6 +1188,7 @@ export class MigrationService {
                 operation = {
                     ...operation,
                     status: 'rolled-back',
+                    recoveryPhase: 'settled',
                     actorId,
                     updatedAt: Date.now(),
                 };
@@ -944,8 +1203,44 @@ export class MigrationService {
         operation: MigrationOperation,
         site: SiteInstallation,
     ): Promise<MigrationOperation> {
+        operation =
+            (await this.runtime.repository.find(operation.id)) || operation;
+        const currentSite = await this.runtime.findSite(operation.cmsSiteId);
+        if (
+            currentSite?.migrationOperationId === operation.id &&
+            currentSite.migrationState === 'active'
+        ) {
+            const settled: MigrationOperation = {
+                ...operation,
+                status: 'active',
+                recoveryPhase: 'settled',
+                updatedAt: Date.now(),
+            };
+            await this.runtime.repository.save(settled);
+            return settled;
+        }
+        operation = {
+            ...operation,
+            recoveryPhase: 'site-switching',
+            updatedAt: Date.now(),
+        };
+        await this.runtime.repository.save(operation);
         await this.runtime.persistCandidate(operation);
         if (!(await this.runtime.finalize(operation, site.updatedAt))) {
+            const winner = await this.runtime.findSite(operation.cmsSiteId);
+            if (
+                winner?.migrationOperationId === operation.id &&
+                winner.migrationState === 'active'
+            ) {
+                const settled: MigrationOperation = {
+                    ...operation,
+                    status: 'active',
+                    recoveryPhase: 'settled',
+                    updatedAt: Date.now(),
+                };
+                await this.runtime.repository.save(settled);
+                return settled;
+            }
             throw new SiteMutationConflict(
                 'Site changed before migration finalization',
             );
@@ -953,6 +1248,7 @@ export class MigrationService {
         const active: MigrationOperation = {
             ...operation,
             status: 'active',
+            recoveryPhase: 'settled',
             updatedAt: Date.now(),
         };
         await this.runtime.repository.save(active);

@@ -62,6 +62,7 @@ export interface ImportPlan {
 }
 
 export interface TemplateUpgradePreview {
+    sourceChecksum?: string;
     compatible: boolean;
     adoptable?: boolean;
     requiresNewInstallation: boolean;
@@ -253,8 +254,7 @@ export function previewPublicTemplateUpgrade(
         compatible: schemaCompatible,
         adoptable:
             schemaCompatible ||
-            (migrationRequired &&
-                migrationPreview?.issues.length === 0),
+            (migrationRequired && migrationPreview?.issues.length === 0),
         requiresNewInstallation: !schemaCompatible && !migrationRequired,
         migrationRequired,
         ...(migrationPlan ? { migrationPlan } : {}),

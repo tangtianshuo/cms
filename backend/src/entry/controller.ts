@@ -33,21 +33,69 @@ import {
     EntryUpdateBodySchema,
 } from '@bcms/selfhosted-backend/entry/models/controller';
 import { SocketManager } from '@bcms/selfhosted-backend/socket/manager';
-import { validateStructuredFields, validateStructuredNodes } from '../studio/structured-content';
+import {
+    validateStructuredFields,
+    validateStructuredNodes,
+} from '../studio/structured-content';
 import { entryContentNodeToHtml } from '@bcms/selfhosted-backend/entry/content';
 import { EventManager } from '@bcms/selfhosted-backend/event/manager';
 import { assertSiteCapability } from '../authorization/site-access';
 import { workspaceContext } from '../workspaces/context';
 import { prepareEntryCreate } from '@bcms/selfhosted-backend/entry/create';
 import { validateEntrySiteReferences } from './site-references';
-import { withSiteMutation } from '../template-contract/site-mutation';
+import {
+    SiteMutationConflict,
+    withSiteMutation,
+} from '../template-contract/site-mutation';
 
-async function assertEntrySite(templateId: string, entry?: Entry, write = false) {
+async function writableTemplateSite(templateId: string): Promise<string> {
+    const selectedSiteId = workspaceContext()?.siteId;
+    if (selectedSiteId) return selectedSiteId;
+    const template = await Repo.template.findById(templateId);
+    if (!template) {
+        throw Object.assign(
+            new Error(`Template with ID "${templateId}" does not exist`),
+            { status: 404 },
+        );
+    }
+    if (!template.siteId) {
+        throw Object.assign(new Error('Selected site is required'), {
+            status: 400,
+        });
+    }
+    return template.siteId;
+}
+
+async function assertEntrySite(
+    templateId: string,
+    entry?: Entry,
+    write = false,
+) {
     const context = workspaceContext();
     assertSiteCapability(context, write ? 'content.write' : 'content.read');
     const template = await Repo.template.findById(templateId);
-    if (!template || (template.siteId && template.siteId !== context.siteId) || (entry?.siteId && entry.siteId !== context.siteId)) {
-        throw Object.assign(new Error('Content not found or not permitted in selected site'), { status: 403 });
+    if (
+        !template ||
+        (template.siteId && template.siteId !== context.siteId) ||
+        (entry?.siteId && entry.siteId !== context.siteId)
+    ) {
+        throw Object.assign(
+            new Error('Content not found or not permitted in selected site'),
+            { status: 403 },
+        );
+    }
+    if (write && context.siteId) {
+        const site = await Repo.siteInstallation.methods.findFresh(
+            context.siteId,
+        );
+        if (
+            site?.models.length &&
+            !site.models.some((model) => model.templateId === templateId)
+        ) {
+            throw new SiteMutationConflict(
+                'Site content changed; refresh before saving',
+            );
+        }
     }
     return template;
 }
@@ -89,8 +137,15 @@ export const EntryController = createController({
                 async handler() {
                     const context = workspaceContext();
                     assertSiteCapability(context, 'content.read');
-                    const templates = (await Repo.template.findAll()).filter(template => !template.siteId || template.siteId === context.siteId);
-                    const entries = (await Repo.entry.findAll()).filter(entry => !entry.siteId || entry.siteId === context.siteId);
+                    const templates = (await Repo.template.findAll()).filter(
+                        (template) =>
+                            !template.siteId ||
+                            template.siteId === context.siteId,
+                    );
+                    const entries = (await Repo.entry.findAll()).filter(
+                        (entry) =>
+                            !entry.siteId || entry.siteId === context.siteId,
+                    );
                     const entriesLite: EntryLite[] = [];
                     const groups = await Repo.group.findAll();
                     for (let i = 0; i < entries.length; i++) {
@@ -169,7 +224,15 @@ export const EntryController = createController({
                         );
                     }
                     await assertEntrySite(params.templateId);
-                    const entries = (await Repo.entry.methods.findAllByTemplateId(params.templateId)).filter(entry => !entry.siteId || entry.siteId === workspaceContext()?.siteId);
+                    const entries = (
+                        await Repo.entry.methods.findAllByTemplateId(
+                            params.templateId,
+                        )
+                    ).filter(
+                        (entry) =>
+                            !entry.siteId ||
+                            entry.siteId === workspaceContext()?.siteId,
+                    );
                     const groups = await Repo.group.findAll();
                     return {
                         items: entries.map((e) =>
@@ -305,7 +368,15 @@ export const EntryController = createController({
                         templateId: string;
                     };
                     await assertEntrySite(params.templateId);
-                    const entries = (await Repo.entry.methods.findAllByTemplateId(params.templateId)).filter(entry => !entry.siteId || entry.siteId === workspaceContext()?.siteId);
+                    const entries = (
+                        await Repo.entry.methods.findAllByTemplateId(
+                            params.templateId,
+                        )
+                    ).filter(
+                        (entry) =>
+                            !entry.siteId ||
+                            entry.siteId === workspaceContext()?.siteId,
+                    );
                     return {
                         items: entries,
                         limit: entries.length,
@@ -590,63 +661,90 @@ export const EntryController = createController({
                     const params = request.params as {
                         templateId: string;
                     };
-                    const templates = await Repo.template.findAll();
-                    const template = templates.find(
-                        (e) => e._id === params.templateId,
+                    const siteId = await writableTemplateSite(
+                        params.templateId,
                     );
-                    if (!template) {
-                        throw errorHandler(
-                            HttpStatus.NotFound,
-                            `Template with ID "${params.templateId}" does not exist`,
+                    return withSiteMutation(siteId, async () => {
+                        const templates = await Repo.template.findAll();
+                        const template = templates.find(
+                            (e) => e._id === params.templateId,
                         );
-                    }
-                    await assertEntrySite(params.templateId, undefined, true);
-                    let prepared: EntryCreateBody;
-                    try {
-                        const [languages, statuses, widgets, groups, medias] = await Promise.all([
-                            Repo.language.findAll(), Repo.entryStatus.findAll(), Repo.widget.findAll(),
-                            Repo.group.findAll(), Repo.media.findAll(),
-                        ]);
-                        prepared = prepareEntryCreate(body, template.props, languages.map((lng) => lng.code),
-                            statuses.map((status) => status._id), widgets, groups, templates, medias);
-                    } catch (cause) {
-                        throw errorHandler(HttpStatus.BadRequest,
-                            cause instanceof Error ? cause.message : 'Invalid entry content');
-                    }
-                    let entry = EntryFactory.create({
-                        templateId: template._id,
-                        userId: token
-                            ? token.payload.userId
-                            : apiKey
-                            ? apiKey.userId
-                            : '__unknown',
-                        ...prepared,
-                        groupId: body.groupId,
+                        if (!template) {
+                            throw errorHandler(
+                                HttpStatus.NotFound,
+                                `Template with ID "${params.templateId}" does not exist`,
+                            );
+                        }
+                        await assertEntrySite(
+                            params.templateId,
+                            undefined,
+                            true,
+                        );
+                        let prepared: EntryCreateBody;
+                        try {
+                            const [
+                                languages,
+                                statuses,
+                                widgets,
+                                groups,
+                                medias,
+                            ] = await Promise.all([
+                                Repo.language.findAll(),
+                                Repo.entryStatus.findAll(),
+                                Repo.widget.findAll(),
+                                Repo.group.findAll(),
+                                Repo.media.findAll(),
+                            ]);
+                            prepared = prepareEntryCreate(
+                                body,
+                                template.props,
+                                languages.map((lng) => lng.code),
+                                statuses.map((status) => status._id),
+                                widgets,
+                                groups,
+                                templates,
+                                medias,
+                            );
+                        } catch (cause) {
+                            throw errorHandler(
+                                HttpStatus.BadRequest,
+                                cause instanceof Error
+                                    ? cause.message
+                                    : 'Invalid entry content',
+                            );
+                        }
+                        let entry = EntryFactory.create({
+                            templateId: template._id,
+                            userId: token
+                                ? token.payload.userId
+                                : apiKey
+                                  ? apiKey.userId
+                                  : '__unknown',
+                            ...prepared,
+                            groupId: body.groupId,
+                        });
+                        if (template.siteId) entry.siteId = template.siteId;
+                        await validateEntrySiteReferences(
+                            entry,
+                            template,
+                            Repo,
+                        );
+                        entry = await Repo.entry.add(entry);
+                        SocketManager.channelEmit(
+                            ['global'],
+                            'entry',
+                            {
+                                type: 'update',
+                                templateId: params.templateId,
+                                entryId: entry._id,
+                            },
+                            token ? [token.payload.userId] : undefined,
+                        );
+                        EventManager.trigger('add', 'entry', entry).catch(
+                            (err) => console.error(err),
+                        );
+                        return { item: entry };
                     });
-                    if (template.siteId) entry.siteId = template.siteId;
-                    await validateEntrySiteReferences(entry, template, Repo);
-                    const siteId =
-                        entry.siteId ||
-                        template.siteId ||
-                        workspaceContext()?.siteId;
-                    if (!siteId) throw errorHandler(HttpStatus.BadRequest, 'Selected site is required');
-                    entry = await withSiteMutation(siteId, () =>
-                        Repo.entry.add(entry),
-                    );
-                    SocketManager.channelEmit(
-                        ['global'],
-                        'entry',
-                        {
-                            type: 'update',
-                            templateId: params.templateId,
-                            entryId: entry._id,
-                        },
-                        token ? [token.payload.userId] : undefined,
-                    );
-                    EventManager.trigger('add', 'entry', entry).catch((err) =>
-                        console.error(err),
-                    );
-                    return { item: entry };
                 },
             }),
 
@@ -703,137 +801,178 @@ export const EntryController = createController({
                     const params = request.params as {
                         templateId: string;
                     };
-                    const templates = await Repo.template.findAll();
-                    const template = templates.find(
-                        (e) => e._id === params.templateId,
+                    const siteId = await writableTemplateSite(
+                        params.templateId,
                     );
-                    if (!template) {
-                        throw errorHandler(
-                            HttpStatus.NotFound,
-                            `Template with ID "${params.templateId}" does not exist`,
+                    return withSiteMutation(siteId, async () => {
+                        const templates = await Repo.template.findAll();
+                        const template = templates.find(
+                            (e) => e._id === params.templateId,
                         );
-                    }
-                    let entry = await Repo.entry.findById(body._id);
-                    if (!entry || entry.templateId !== params.templateId) {
-                        throw errorHandler(
-                            HttpStatus.NotFound,
-                            `Entry with ID "${body._id}" does not exist`,
-                        );
-                    }
-                    await assertEntrySite(params.templateId, entry, true);
-                    if (body.expectedUpdatedAt !== undefined && (!Number.isSafeInteger(body.expectedUpdatedAt) || body.expectedUpdatedAt < 0)) throw errorHandler(HttpStatus.BadRequest, 'Invalid content version');
-                    if (body.status) {
-                        const status = await Repo.entryStatus.findById(
-                            body.status,
-                        );
-                        if (!status) {
+                        if (!template) {
                             throw errorHandler(
-                                HttpStatus.BadRequest,
-                                `Status with ID "${body.status}" does not exist`,
+                                HttpStatus.NotFound,
+                                `Template with ID "${params.templateId}" does not exist`,
                             );
                         }
-                    }
-                    const lngs = await Repo.language.findAll();
-                    const widgets = await Repo.widget.findAll();
-                    const groups = await Repo.group.findAll();
-                    const medias = await Repo.media.findAll();
-                    const lng = lngs.find((e) => e.code === body.lng);
-                    if (!lng) {
-                        throw errorHandler(
-                            HttpStatus.BadRequest,
-                            `Provided language is not available`,
-                        );
-                    }
-                    if (body.status) {
-                        let statusFound = false;
-                        for (let i = 0; i < entry.statuses.length; i++) {
-                            if (entry.statuses[i].lng === lng.code) {
-                                statusFound = true;
-                                entry.statuses[i].id = body.status;
+                        let entry = await Repo.entry.findById(body._id);
+                        if (!entry || entry.templateId !== params.templateId) {
+                            throw errorHandler(
+                                HttpStatus.NotFound,
+                                `Entry with ID "${body._id}" does not exist`,
+                            );
+                        }
+                        await assertEntrySite(params.templateId, entry, true);
+                        if (
+                            body.expectedUpdatedAt !== undefined &&
+                            (!Number.isSafeInteger(body.expectedUpdatedAt) ||
+                                body.expectedUpdatedAt < 0)
+                        )
+                            throw errorHandler(
+                                HttpStatus.BadRequest,
+                                'Invalid content version',
+                            );
+                        if (body.status) {
+                            const status = await Repo.entryStatus.findById(
+                                body.status,
+                            );
+                            if (!status) {
+                                throw errorHandler(
+                                    HttpStatus.BadRequest,
+                                    `Status with ID "${body.status}" does not exist`,
+                                );
                             }
                         }
-                        if (!statusFound) {
-                            entry.statuses.push({
-                                lng: lng.code,
-                                id: body.status,
-                            });
+                        const lngs = await Repo.language.findAll();
+                        const widgets = await Repo.widget.findAll();
+                        const groups = await Repo.group.findAll();
+                        const medias = await Repo.media.findAll();
+                        const lng = lngs.find((e) => e.code === body.lng);
+                        if (!lng) {
+                            throw errorHandler(
+                                HttpStatus.BadRequest,
+                                `Provided language is not available`,
+                            );
                         }
-                    }
-                    try {
-                        const resources = { widgets, groups, templates, medias };
-                        validateStructuredFields(template, body.meta.props, resources);
-                        validateStructuredNodes(body.content.nodes, resources, 'body.content.nodes');
-                    } catch (cause) {
-                        throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Invalid structured content');
-                    }
-                    let metaFound = false;
-                    for (let i = 0; i < entry.meta.length; i++) {
-                        if (entry.meta[i].lng === lng.code) {
-                            metaFound = true;
-                            entry.meta[i] = {
+                        if (body.status) {
+                            let statusFound = false;
+                            for (let i = 0; i < entry.statuses.length; i++) {
+                                if (entry.statuses[i].lng === lng.code) {
+                                    statusFound = true;
+                                    entry.statuses[i].id = body.status;
+                                }
+                            }
+                            if (!statusFound) {
+                                entry.statuses.push({
+                                    lng: lng.code,
+                                    id: body.status,
+                                });
+                            }
+                        }
+                        try {
+                            const resources = {
+                                widgets,
+                                groups,
+                                templates,
+                                medias,
+                            };
+                            validateStructuredFields(
+                                template,
+                                body.meta.props,
+                                resources,
+                            );
+                            validateStructuredNodes(
+                                body.content.nodes,
+                                resources,
+                                'body.content.nodes',
+                            );
+                        } catch (cause) {
+                            throw errorHandler(
+                                HttpStatus.BadRequest,
+                                cause instanceof Error
+                                    ? cause.message
+                                    : 'Invalid structured content',
+                            );
+                        }
+                        let metaFound = false;
+                        for (let i = 0; i < entry.meta.length; i++) {
+                            if (entry.meta[i].lng === lng.code) {
+                                metaFound = true;
+                                entry.meta[i] = {
+                                    lng: lng.code,
+                                    props: body.meta.props,
+                                };
+                                break;
+                            }
+                        }
+                        if (!metaFound) {
+                            entry.meta.push({
                                 lng: lng.code,
                                 props: body.meta.props,
-                            };
-                            break;
+                            });
                         }
-                    }
-                    if (!metaFound) {
-                        entry.meta.push({
-                            lng: lng.code,
-                            props: body.meta.props,
-                        });
-                    }
-                    let contentFound = false;
-                    for (let i = 0; i < entry.content.length; i++) {
-                        if (entry.content[i].lng === lng.code) {
-                            contentFound = true;
-                            entry.content[i] = {
+                        let contentFound = false;
+                        for (let i = 0; i < entry.content.length; i++) {
+                            if (entry.content[i].lng === lng.code) {
+                                contentFound = true;
+                                entry.content[i] = {
+                                    lng: lng.code,
+                                    nodes: body.content.nodes,
+                                    plainText: body.content.nodes
+                                        .map((node) =>
+                                            entryContentNodeToHtml(node),
+                                        )
+                                        .join('\n'),
+                                };
+                                break;
+                            }
+                        }
+                        if (!contentFound) {
+                            entry.content.push({
                                 lng: lng.code,
                                 nodes: body.content.nodes,
                                 plainText: body.content.nodes
                                     .map((node) => entryContentNodeToHtml(node))
                                     .join('\n'),
-                            };
-                            break;
+                            });
                         }
-                    }
-                    if (!contentFound) {
-                        entry.content.push({
-                            lng: lng.code,
-                            nodes: body.content.nodes,
-                            plainText: body.content.nodes
-                                .map((node) => entryContentNodeToHtml(node))
-                                .join('\n'),
-                        });
-                    }
-                    if (body.groupId !== undefined) entry.groupId = body.groupId;
-                    await validateEntrySiteReferences(entry, template, Repo, lng.code);
-                    const siteId =
-                        entry.siteId ||
-                        template.siteId ||
-                        workspaceContext()?.siteId;
-                    if (!siteId) throw errorHandler(HttpStatus.BadRequest, 'Selected site is required');
-                    entry = await withSiteMutation(siteId, () =>
-                        Repo.entry.update(
+                        if (body.groupId !== undefined)
+                            entry.groupId = body.groupId;
+                        await validateEntrySiteReferences(
+                            entry,
+                            template,
+                            Repo,
+                            lng.code,
+                        );
+                        const entrySiteId =
+                            entry.siteId ||
+                            template.siteId ||
+                            workspaceContext()?.siteId;
+                        if (!entrySiteId)
+                            throw errorHandler(
+                                HttpStatus.BadRequest,
+                                'Selected site is required',
+                            );
+                        entry = await Repo.entry.update(
                             entry!,
                             false,
                             body.expectedUpdatedAt,
-                        ),
-                    );
-                    SocketManager.channelEmit(
-                        ['global'],
-                        'entry',
-                        {
-                            type: 'update',
-                            templateId: params.templateId,
-                            entryId: entry._id,
-                        },
-                        token ? [token.payload.userId] : undefined,
-                    );
-                    EventManager.trigger('update', 'entry', entry).catch(
-                        (err) => console.error(err),
-                    );
-                    return { item: entry };
+                        );
+                        SocketManager.channelEmit(
+                            ['global'],
+                            'entry',
+                            {
+                                type: 'update',
+                                templateId: params.templateId,
+                                entryId: entry._id,
+                            },
+                            token ? [token.payload.userId] : undefined,
+                        );
+                        EventManager.trigger('update', 'entry', entry).catch(
+                            (err) => console.error(err),
+                        );
+                        return { item: entry };
+                    });
                 },
             }),
 
@@ -895,9 +1034,12 @@ export const EntryController = createController({
                             `Entry with ID "${params.entryId}" does not exist`,
                         );
                     }
-                    const siteId =
-                        entry.siteId || workspaceContext()?.siteId;
-                    if (!siteId) throw errorHandler(HttpStatus.BadRequest, 'Selected site is required');
+                    const siteId = entry.siteId || workspaceContext()?.siteId;
+                    if (!siteId)
+                        throw errorHandler(
+                            HttpStatus.BadRequest,
+                            'Selected site is required',
+                        );
                     await withSiteMutation(siteId, () =>
                         Repo.entry.deleteById(entry._id),
                     );

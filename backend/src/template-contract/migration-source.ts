@@ -21,9 +21,7 @@ export interface MigrationSourceOptions {
  */
 export function createMigrationReleaseSource(
     operation: MigrationOperation,
-    options?: MigrationSourceOptions,
-): GatewayReleaseSource {
-    options ||= {
+    options: MigrationSourceOptions = {
         base: releaseSource(),
         language: Config.storefrontLanguage,
         mediaOrigin: Config.storefrontMediaOrigin,
@@ -31,7 +29,8 @@ export function createMigrationReleaseSource(
         update: async (next) => {
             await Repo.migrationOperation.save(next);
         },
-    };
+    },
+): GatewayReleaseSource {
     let current = structuredClone(operation);
     return {
         findSite: async () => structuredClone(current.candidateSite),

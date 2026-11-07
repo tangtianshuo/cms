@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import test from 'node:test';
 import type { Entry } from '../entry/models/main';
 import type { Media } from '../media/models/main';
@@ -11,6 +11,7 @@ import type { ReleaseInput, ReleaseRecord } from '../presets/releases';
 import type { SiteInstallation } from '../presets/site-model';
 import type { Template } from '../template/models/main';
 import type { PublicTemplateRecord } from '../presets/registry';
+import { canonicalJson } from '../presets/registry';
 import { PropType } from '../prop/models/main';
 import {
     canFinalizeMigration,
@@ -18,7 +19,10 @@ import {
     prepareMigrationOperation,
     type MigrationRuntime,
 } from './migration-service';
-import { createMemoryMigrationRepository } from './migration-repo';
+import {
+    createMemoryMigrationRepository,
+    type MigrationOperation,
+} from './migration-repo';
 import { createMigrationReleaseSource } from './migration-source';
 import { runMigrationRecoveryTick } from '../presets/gateway-jobs';
 
@@ -28,6 +32,17 @@ const manifest: PresetManifest = {
     version: '1.0.1',
     name: 'Service',
     description: 'Service',
+    compatibility: {
+        cmsSchema: 1,
+        releaseSchema: 1,
+        migrations: [
+            {
+                from: 'service-studio@1.0.0',
+                to: 'service-studio@1.0.1',
+                steps: [],
+            },
+        ],
+    },
     theme: {
         background: '#ffffff',
         foreground: '#111111',
@@ -153,6 +168,20 @@ const record: PublicTemplateRecord = {
     status: 'available',
 };
 
+const installedManifest = {
+    ...manifest,
+    version: '1.0.0',
+    renderer: { ...manifest.renderer, templateVersion: '1.0.0' },
+};
+const installedRecord: PublicTemplateRecord = {
+    ...record,
+    version: '1.0.0',
+    manifestChecksum: `sha256:${createHash('sha256')
+        .update(canonicalJson(installedManifest), 'utf8')
+        .digest('hex')}`,
+    manifestPath: 'templates/service-studio/1.0.0/template.json',
+};
+
 function fixture() {
     const site: SiteInstallation = {
         _id: cmsSiteId,
@@ -169,16 +198,8 @@ function fixture() {
         demoSeeded: false,
         language: 'en',
         theme: { ...manifest.theme },
-        presetManifestSnapshot: JSON.stringify({
-            ...manifest,
-            version: '1.0.0',
-            renderer: { ...manifest.renderer, templateVersion: '1.0.0' },
-        }),
-        publishedTemplateRecord: JSON.stringify({
-            ...record,
-            version: '1.0.0',
-            manifestChecksum: `sha256:${'d'.repeat(64)}`,
-        }),
+        presetManifestSnapshot: JSON.stringify(installedManifest),
+        publishedTemplateRecord: JSON.stringify(installedRecord),
         gatewayCurrentReleaseId: 'release-old',
         gatewayPublishedReleaseIds: ['release-old'],
         gatewayActiveRevision: 3,
@@ -331,6 +352,8 @@ function memoryRuntime() {
             site = {
                 ...structuredClone(operation.candidateSite),
                 updatedAt: site.updatedAt + 1,
+                migrationState: 'active',
+                migrationOperationId: operation.id,
             };
             return true;
         },
@@ -606,6 +629,60 @@ test('candidate migration preserves every non-current translation', () => {
         french?.props.find((prop) => prop.id === titleProp)?.data,
         ['Stratégie française'],
     );
+});
+
+test('candidate rich content rewrites template and Entry pointers', () => {
+    const f = fixture();
+    const pointerEntry = {
+        ...f.entry,
+        content: [
+            {
+                lng: 'en',
+                plainText: '',
+                nodes: [
+                    {
+                        type: 'widget',
+                        attrs: {
+                            data: {
+                                props: [
+                                    {
+                                        id: 'reference',
+                                        data: [
+                                            {
+                                                tid: f.template._id,
+                                                eid: f.entry._id,
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                ],
+            },
+        ] as Entry['content'],
+    };
+    const operation = prepareMigrationOperation({
+        site: f.site,
+        requestKey: randomUUID(),
+        expectedUpdatedAt: f.site.updatedAt,
+        actorId: 'admin',
+        targetManifest: manifest,
+        targetRecord: record,
+        input: { ...f.input, entries: [pointerEntry] },
+    });
+    const candidate = operation.candidateEntries?.[0];
+    const reference = (
+        candidate?.content[0]?.nodes[0]?.attrs as {
+            data: {
+                props: Array<{ data: Array<{ tid: string; eid: string }> }>;
+            };
+        }
+    ).data.props[0].data[0];
+    assert.equal(reference.tid, operation.candidateSite.models[0].templateId);
+    assert.equal(reference.eid, candidate?._id);
+    assert.notEqual(reference.tid, f.template._id);
+    assert.notEqual(reference.eid, f.entry._id);
 });
 
 test('candidate source completes the existing Gateway publication protocol', async () => {
@@ -887,4 +964,344 @@ test('rollback preserves a later draft before restoring the previous complete si
             ?.length,
         1,
     );
+});
+
+test('model-scoped migration steps preserve conflicting multilingual fields', () => {
+    const f = fixture();
+    const target = structuredClone(manifest);
+    target.models.push({
+        key: 'team',
+        label: 'Team',
+        description: 'Team',
+        singleEntry: false,
+        fields: [
+            {
+                key: 'summary',
+                label: 'Role',
+                type: PropType.STRING,
+                required: true,
+                array: false,
+            },
+        ],
+    });
+    target.editor!.models.push({
+        modelKey: 'team',
+        fields: [
+            { key: 'summary', label: 'Role', control: 'text', required: true },
+        ],
+    });
+    target.compatibility!.migrations[0].steps = [
+        {
+            op: 'rename-field',
+            model: 'team',
+            from: 'alias',
+            to: 'summary',
+        },
+    ];
+    const teamTemplate: Template = {
+        ...f.template,
+        _id: 'template-team-old',
+        name: 'team',
+        props: [
+            {
+                ...f.template.props[0],
+                id: 'prop-team-alias',
+                name: 'alias',
+                label: 'Role',
+            },
+        ],
+    };
+    const teamEntry: Entry = {
+        ...f.entry,
+        _id: 'team-entry',
+        templateId: teamTemplate._id,
+        meta: [
+            {
+                lng: 'en',
+                props: [
+                    {
+                        id: 'prop-team-alias',
+                        data: ['Guide'] as never,
+                    },
+                ],
+            },
+            {
+                lng: 'fr',
+                props: [
+                    {
+                        id: 'prop-team-alias',
+                        data: ['Accompagnatrice'] as never,
+                    },
+                ],
+            },
+        ],
+    };
+    const translatedService = {
+        ...f.entry,
+        meta: [
+            ...f.entry.meta,
+            {
+                lng: 'fr',
+                props: [
+                    {
+                        id: 'prop-summary',
+                        data: ['Résumé français'] as never,
+                    },
+                    {
+                        id: 'prop-title',
+                        data: ['Stratégie'] as never,
+                    },
+                ],
+            },
+        ],
+    };
+    const site: SiteInstallation = {
+        ...f.site,
+        models: [
+            ...f.site.models,
+            {
+                key: 'team',
+                templateId: teamTemplate._id,
+                fields: [{ key: 'alias', propId: 'prop-team-alias' }],
+            },
+        ],
+    };
+    const operation = prepareMigrationOperation({
+        site,
+        requestKey: randomUUID(),
+        expectedUpdatedAt: site.updatedAt,
+        actorId: 'admin',
+        targetManifest: target,
+        targetRecord: record,
+        steps: target.compatibility!.migrations[0].steps as never,
+        input: {
+            ...f.input,
+            site,
+            templates: [f.template, teamTemplate],
+            entries: [translatedService, teamEntry],
+        },
+    });
+    const service = operation.candidateEntries?.find(
+        (entry) =>
+            entry.meta.some((meta) => meta.lng === 'fr') &&
+            entry.meta.some((meta) =>
+                meta.props.some(
+                    (prop) =>
+                        Array.isArray(prop.data) &&
+                        prop.data.includes('Résumé français' as never),
+                ),
+            ),
+    );
+    const team = operation.candidateEntries?.find(
+        (entry) => entry._id !== service?._id,
+    );
+    const teamMapping = operation.candidateSite.models.find(
+        (model) => model.key === 'team',
+    )!;
+    const teamSummary = teamMapping.fields.find(
+        (field) => field.key === 'summary',
+    )!.propId;
+    assert.ok(
+        service?.meta
+            .find((meta) => meta.lng === 'fr')
+            ?.props.some(
+                (prop) =>
+                    Array.isArray(prop.data) &&
+                    prop.data.includes('Résumé français' as never),
+            ),
+    );
+    assert.deepEqual(
+        team?.meta
+            .find((meta) => meta.lng === 'fr')
+            ?.props.find((prop) => prop.id === teamSummary)?.data,
+        ['Accompagnatrice'],
+    );
+});
+
+test('rejects cross-template and undeclared structural migrations', () => {
+    const f = fixture();
+    const different = structuredClone(manifest);
+    different.id = 'different-template';
+    assert.throws(
+        () =>
+            prepareMigrationOperation({
+                site: f.site,
+                requestKey: randomUUID(),
+                expectedUpdatedAt: f.site.updatedAt,
+                actorId: 'admin',
+                targetManifest: different,
+                targetRecord: {
+                    ...record,
+                    id: different.id,
+                    imageRepository:
+                        'ghcr.io/tangtianshuo/independent-website-templates/different-template',
+                    manifestPath:
+                        'templates/different-template/1.0.1/template.json',
+                },
+                input: f.input,
+            }),
+        /same template id/i,
+    );
+    const noMigration = structuredClone(manifest);
+    delete noMigration.compatibility;
+    assert.throws(
+        () =>
+            prepareMigrationOperation({
+                site: f.site,
+                requestKey: randomUUID(),
+                expectedUpdatedAt: f.site.updatedAt,
+                actorId: 'admin',
+                targetManifest: noMigration,
+                targetRecord: record,
+                input: f.input,
+            }),
+        /No migration is declared/i,
+    );
+    const removedField = structuredClone(manifest);
+    removedField.models[0].fields = removedField.models[0].fields.filter(
+        (field) => field.key !== 'summary',
+    );
+    removedField.editor!.models[0].fields =
+        removedField.editor!.models[0].fields.filter(
+            (field) => field.key !== 'summary',
+        );
+    assert.throws(
+        () =>
+            prepareMigrationOperation({
+                site: f.site,
+                requestKey: randomUUID(),
+                expectedUpdatedAt: f.site.updatedAt,
+                actorId: 'admin',
+                targetManifest: removedField,
+                targetRecord: record,
+                input: f.input,
+            }),
+        /Unsupported structural migration/i,
+    );
+});
+
+test('recovery settles a completed site CAS after operation persistence fails', async () => {
+    const f = fixture();
+    const h = memoryRuntime();
+    h.setSite(f.site);
+    const operation = {
+        ...prepareMigrationOperation({
+            site: f.site,
+            requestKey: randomUUID(),
+            expectedUpdatedAt: f.site.updatedAt,
+            actorId: 'admin',
+            targetManifest: manifest,
+            targetRecord: record,
+            input: f.input,
+        }),
+        targetReleaseId: 'release-new',
+        targetRouteRevision: 4,
+        recoveryPhase: 'gateway-active' as const,
+    };
+    await h.runtime.repository.save(operation);
+    h.setGatewayState({
+        revision: 4,
+        active: {
+            releaseId: 'release-new',
+            imageDigest: record.imageDigest,
+            routeRevision: 4,
+            metadata: {},
+            snapshot: {
+                schemaVersion: 1,
+                siteId: cmsSiteId,
+                language: 'en',
+                pages: [],
+                navigation: [],
+                redirects: [],
+            },
+            createdAt: new Date().toISOString(),
+        },
+    });
+    let failActiveSave = true;
+    const repository = {
+        ...h.runtime.repository,
+        save: async (value: MigrationOperation) => {
+            if (failActiveSave && value.status === 'active') {
+                throw new Error('simulated crash after site CAS');
+            }
+            await h.runtime.repository.save(value);
+        },
+    };
+    const service = new MigrationService({ ...h.runtime, repository });
+    await assert.rejects(
+        () => service.adopt(operation.id, operation.sourceChecksum, 'admin'),
+        /site CAS/,
+    );
+    assert.equal(h.site().migrationOperationId, operation.id);
+    assert.equal(h.site().migrationState, 'active');
+    failActiveSave = false;
+    const settled = await service.reconcile(operation.id);
+    assert.equal(settled.status, 'active');
+    assert.equal(settled.recoveryPhase, 'settled');
+});
+
+test('recovery completes rollback after site restore succeeds but save fails', async () => {
+    const f = fixture();
+    const h = memoryRuntime();
+    h.setSite(f.site);
+    const operation = {
+        ...prepareMigrationOperation({
+            site: f.site,
+            requestKey: randomUUID(),
+            expectedUpdatedAt: f.site.updatedAt,
+            actorId: 'admin',
+            targetManifest: manifest,
+            targetRecord: record,
+            input: f.input,
+        }),
+        status: 'active' as const,
+        recoveryPhase: 'settled' as const,
+        targetReleaseId: 'release-new',
+        targetRouteRevision: 4,
+    };
+    await h.runtime.repository.save(operation);
+    h.setSite({
+        ...operation.candidateSite,
+        migrationState: 'active',
+        migrationOperationId: operation.id,
+        updatedAt: operation.candidateSite.updatedAt + 3,
+    });
+    h.setGatewayState({
+        revision: 5,
+        active: {
+            releaseId: 'release-old',
+            imageDigest: record.imageDigest,
+            routeRevision: 3,
+            metadata: {},
+            snapshot: {
+                schemaVersion: 1,
+                siteId: cmsSiteId,
+                language: 'en',
+                pages: [],
+                navigation: [],
+                redirects: [],
+            },
+            createdAt: new Date().toISOString(),
+        },
+    });
+    let failRolledBackSave = true;
+    const repository = {
+        ...h.runtime.repository,
+        save: async (value: MigrationOperation) => {
+            if (failRolledBackSave && value.status === 'rolled-back') {
+                throw new Error('simulated crash after site restore');
+            }
+            await h.runtime.repository.save(value);
+        },
+    };
+    const service = new MigrationService({ ...h.runtime, repository });
+    await assert.rejects(
+        () => service.rollback(operation.id, 'admin'),
+        /site restore/,
+    );
+    assert.equal(h.site().migrationState, 'rolled-back');
+    failRolledBackSave = false;
+    const settled = await service.reconcile(operation.id);
+    assert.equal(settled.status, 'rolled-back');
+    assert.equal(settled.recoveryPhase, 'settled');
 });

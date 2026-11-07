@@ -35,6 +35,10 @@ import { propsApplyChanges } from '@bcms/selfhosted-backend/prop/changes';
 import { removeEntryPointerProps } from '@bcms/selfhosted-backend/prop/delete';
 import { EventManager } from '@bcms/selfhosted-backend/event/manager';
 import { apiNameFromLabel } from '@bcms/selfhosted-backend/util/api-name';
+import {
+    SiteMutationConflict,
+    withSiteMutation,
+} from '../template-contract/site-mutation';
 
 async function availableTemplateName(label: string, id: string) {
     const base = apiNameFromLabel(label, 'template', id);
@@ -46,7 +50,9 @@ async function availableTemplateName(label: string, id: string) {
     return name;
 }
 
-async function addTemplateWithUniqueName(template: Template): Promise<Template> {
+async function addTemplateWithUniqueName(
+    template: Template,
+): Promise<Template> {
     // The loop terminates on a completed read or successful insert.
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -187,7 +193,11 @@ export const TemplateController = createController({
                         }
                         items = await Repo.template.findAllById(templateIds);
                     }
-                    items = items.filter(item => !item.siteId || item.siteId === workspaceContext()?.siteId);
+                    items = items.filter(
+                        (item) =>
+                            !item.siteId ||
+                            item.siteId === workspaceContext()?.siteId,
+                    );
                     return {
                         items,
                         total: items.length,
@@ -248,7 +258,14 @@ export const TemplateController = createController({
                             `Template with ID "${params.templateId}" does not exist`,
                         );
                     }
-                    if (template.siteId && template.siteId !== workspaceContext()?.siteId) throw Object.assign(new Error('Model not permitted in selected site'), { status: 403 });
+                    if (
+                        template.siteId &&
+                        template.siteId !== workspaceContext()?.siteId
+                    )
+                        throw Object.assign(
+                            new Error('Model not permitted in selected site'),
+                            { status: 403 },
+                        );
                     return {
                         item: template,
                     };
@@ -329,8 +346,8 @@ export const TemplateController = createController({
                         userId: token
                             ? token.payload.userId
                             : apiKey
-                            ? 'apiKey_' + apiKey._id
-                            : '__unknown',
+                              ? 'apiKey_' + apiKey._id
+                              : '__unknown',
                         singleEntry: body.singleEntry,
                     });
                     template = await addTemplateWithUniqueName(template);
@@ -395,79 +412,110 @@ export const TemplateController = createController({
                     ['ADMIN'],
                 ),
                 async handler({ body, errorHandler, token }) {
-                    let template = await Repo.template.findById(body._id);
-                    if (!template) {
-                        throw errorHandler(
-                            HttpStatus.NotFound,
-                            `Template with ID "${body._id}" does not exist`,
-                        );
-                    }
-                    let shouldUpdate = false;
-                    if (body.label && body.label !== template.label) {
-                        shouldUpdate = true;
-                        template.label = body.label;
-                    }
-                    if (!template.name) {
-                        template.name = await availableTemplateName(
-                            template.label,
-                            template._id,
-                        );
-                        shouldUpdate = true;
-                    }
-                    if (
-                        typeof body.singleEntry === 'boolean' &&
-                        body.singleEntry !== template.singleEntry
-                    ) {
-                        shouldUpdate = true;
-                        template.singleEntry = body.singleEntry;
-                    }
-                    if (
-                        typeof body.desc === 'string' &&
-                        body.desc !== template.desc
-                    ) {
-                        shouldUpdate = true;
-                        template.desc = body.desc;
-                    }
-                    if (body.propChanges && body.propChanges.length > 0) {
-                        const updatedProps = propsApplyChanges(
-                            template.props,
-                            body.propChanges,
-                            `(template: ${template.name}).props`,
-                            false,
-                            await Repo.media.findAll(),
-                            await Repo.group.findAll(),
-                            await Repo.widget.findAll(),
-                            await Repo.template.findAll(),
-                        );
-                        if (updatedProps instanceof Error) {
+                    let siteId = workspaceContext()?.siteId;
+                    if (!siteId) {
+                        const known = await Repo.template.findById(body._id);
+                        if (!known) {
                             throw errorHandler(
-                                HttpStatus.BadRequest,
-                                updatedProps.message,
+                                HttpStatus.NotFound,
+                                `Template with ID "${body._id}" does not exist`,
                             );
                         }
-                        shouldUpdate = true;
-                        template.props = updatedProps;
+                        siteId = known.siteId;
                     }
-                    if (shouldUpdate) {
-                        template = await Repo.template.update(template);
-                        SocketManager.channelEmit(
-                            ['global'],
-                            'template',
-                            {
-                                type: 'update',
-                                templateId: template._id,
-                            },
-                            token ? [token.payload.userId] : undefined,
-                        );
-                        EventManager.trigger(
-                            'update',
-                            'template',
-                            template,
-                        ).catch((err) => console.error(err));
-                    }
-                    return {
-                        item: template,
+                    const mutate = async () => {
+                        let template = await Repo.template.findById(body._id);
+                        if (!template) {
+                            throw errorHandler(
+                                HttpStatus.NotFound,
+                                `Template with ID "${body._id}" does not exist`,
+                            );
+                        }
+                        if (template.siteId) {
+                            const site =
+                                await Repo.siteInstallation.methods.findFresh(
+                                    template.siteId,
+                                );
+                            if (
+                                site?.models.length &&
+                                !site.models.some(
+                                    (model) =>
+                                        model.templateId === template!._id,
+                                )
+                            ) {
+                                throw new SiteMutationConflict(
+                                    'Site content changed; refresh before saving',
+                                );
+                            }
+                        }
+                        let shouldUpdate = false;
+                        if (body.label && body.label !== template.label) {
+                            shouldUpdate = true;
+                            template.label = body.label;
+                        }
+                        if (!template.name) {
+                            template.name = await availableTemplateName(
+                                template.label,
+                                template._id,
+                            );
+                            shouldUpdate = true;
+                        }
+                        if (
+                            typeof body.singleEntry === 'boolean' &&
+                            body.singleEntry !== template.singleEntry
+                        ) {
+                            shouldUpdate = true;
+                            template.singleEntry = body.singleEntry;
+                        }
+                        if (
+                            typeof body.desc === 'string' &&
+                            body.desc !== template.desc
+                        ) {
+                            shouldUpdate = true;
+                            template.desc = body.desc;
+                        }
+                        if (body.propChanges && body.propChanges.length > 0) {
+                            const updatedProps = propsApplyChanges(
+                                template.props,
+                                body.propChanges,
+                                `(template: ${template.name}).props`,
+                                false,
+                                await Repo.media.findAll(),
+                                await Repo.group.findAll(),
+                                await Repo.widget.findAll(),
+                                await Repo.template.findAll(),
+                            );
+                            if (updatedProps instanceof Error) {
+                                throw errorHandler(
+                                    HttpStatus.BadRequest,
+                                    updatedProps.message,
+                                );
+                            }
+                            shouldUpdate = true;
+                            template.props = updatedProps;
+                        }
+                        if (shouldUpdate) {
+                            template = await Repo.template.update(template);
+                            SocketManager.channelEmit(
+                                ['global'],
+                                'template',
+                                {
+                                    type: 'update',
+                                    templateId: template._id,
+                                },
+                                token ? [token.payload.userId] : undefined,
+                            );
+                            EventManager.trigger(
+                                'update',
+                                'template',
+                                template,
+                            ).catch((err) => console.error(err));
+                        }
+                        return {
+                            item: template,
+                        };
                     };
+                    return siteId ? withSiteMutation(siteId, mutate) : mutate();
                 },
             }),
 

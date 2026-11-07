@@ -36,6 +36,13 @@ function memoryStore(): SiteMutationStore {
             ) {
                 return false;
             }
+            if (
+                mode === 'migration' &&
+                states.get(siteId)?.status === 'publishing' &&
+                states.get(siteId)?.operationId !== operationId
+            ) {
+                return false;
+            }
             leases.set(siteId, { token, until: leaseUntil, mode });
             if (mode === 'migration' && operationId) {
                 states.set(siteId, {
@@ -134,8 +141,48 @@ test('a long migration renews its lease before another owner can take over', asy
         async () => {
             events.push('second-start');
         },
-        { mode: 'migration', operationId: 'second', leaseMs: 60 },
+        { mode: 'migration', operationId: 'first', leaseMs: 60 },
     );
     await Promise.all([first, second]);
     assert.deepEqual(events, ['first-start', 'first-end', 'second-start']);
+});
+
+test('a different operation cannot take over a persisted publishing owner', async () => {
+    const store = memoryStore();
+    setSiteMutationStore(store);
+    const now = Date.now();
+    assert.equal(
+        await store.claimSiteMutation(
+            'site-a',
+            'token-1',
+            'migration',
+            'operation-1',
+            now,
+            now + 10,
+        ),
+        true,
+    );
+    assert.equal(await store.releaseSiteMutation('site-a', 'token-1'), true);
+    assert.equal(
+        await store.claimSiteMutation(
+            'site-a',
+            'token-2',
+            'migration',
+            'operation-2',
+            now + 100,
+            now + 200,
+        ),
+        false,
+    );
+    assert.equal(
+        await store.claimSiteMutation(
+            'site-a',
+            'token-3',
+            'migration',
+            'operation-1',
+            now + 100,
+            now + 200,
+        ),
+        true,
+    );
 });
