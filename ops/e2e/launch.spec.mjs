@@ -939,7 +939,7 @@ for (const target of acceptanceTemplates)
                     expect(latestPublication.activeRevision).toBeGreaterThan(
                         firstPublication.activeRevision,
                     );
-                    return latestPublication;
+                    return { ...latestPublication, coverageComplete: false };
                 });
                 await capture('ROLLBACK', async () => {
                     await page.goto('/d/studio?section=publish');
