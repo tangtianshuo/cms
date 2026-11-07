@@ -114,6 +114,7 @@ test(
             previousSite: site,
             candidateSite: candidate,
             previousReleaseId: 'release-1',
+            previousRouteRevision: 3,
             createdAt: 1,
             updatedAt: 1,
         };

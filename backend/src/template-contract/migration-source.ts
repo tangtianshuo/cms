@@ -2,6 +2,9 @@ import type { GatewayReleaseSource } from '../presets/gateway-publish';
 import type { ReleaseInput } from '../presets/releases';
 import type { SiteInstallation } from '../presets/site-model';
 import type { MigrationOperation } from './migration-repo';
+import { Repo } from '../repo';
+import { releaseSource } from '../presets/release-source';
+import { Config } from '../config';
 
 export interface MigrationSourceOptions {
     base: GatewayReleaseSource;
@@ -20,11 +23,15 @@ export function createMigrationReleaseSource(
     operation: MigrationOperation,
     options?: MigrationSourceOptions,
 ): GatewayReleaseSource {
-    if (!options) {
-        throw new TypeError(
-            'Migration release source options are required at the integration boundary',
-        );
-    }
+    options ||= {
+        base: releaseSource(),
+        language: Config.storefrontLanguage,
+        mediaOrigin: Config.storefrontMediaOrigin,
+        currency: Config.storefrontCurrency,
+        update: async (next) => {
+            await Repo.migrationOperation.save(next);
+        },
+    };
     let current = structuredClone(operation);
     return {
         findSite: async () => structuredClone(current.candidateSite),

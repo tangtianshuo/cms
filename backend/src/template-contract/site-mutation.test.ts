@@ -50,6 +50,12 @@ function memoryStore(): SiteMutationStore {
             leases.delete(siteId);
             return true;
         },
+        async renewSiteMutation(siteId, token, leaseUntil) {
+            const lease = leases.get(siteId);
+            if (lease?.token !== token) return false;
+            lease.until = leaseUntil;
+            return true;
+        },
         async siteMutationState(siteId) {
             return states.get(siteId) || { status: 'idle' as const };
         },
@@ -108,4 +114,28 @@ test('nested calls reuse the site lease instead of deadlocking or stealing it', 
         ),
     );
     assert.equal(value, 7);
+});
+
+test('a long migration renews its lease before another owner can take over', async () => {
+    setSiteMutationStore(memoryStore());
+    const events: string[] = [];
+    const first = withSiteMutation(
+        'site-a',
+        async () => {
+            events.push('first-start');
+            await new Promise((resolve) => setTimeout(resolve, 140));
+            events.push('first-end');
+        },
+        { mode: 'migration', operationId: 'first', leaseMs: 60 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    const second = withSiteMutation(
+        'site-a',
+        async () => {
+            events.push('second-start');
+        },
+        { mode: 'migration', operationId: 'second', leaseMs: 60 },
+    );
+    await Promise.all([first, second]);
+    assert.deepEqual(events, ['first-start', 'first-end', 'second-start']);
 });

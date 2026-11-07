@@ -193,6 +193,62 @@ export interface PrepareMigrationInput {
     steps?: MigrationStep[];
 }
 
+function translatedFields(
+    entry: Entry,
+    language: string,
+    current: Record<string, unknown> | null,
+    template: Template | undefined,
+    steps: MigrationStep[],
+): Record<string, unknown> {
+    const source =
+        current ||
+        Object.fromEntries(
+            entry.meta
+                .find((meta) => meta.lng === language)
+                ?.props.flatMap((prop) => {
+                    const propDefinition = template?.props.find(
+                        (item) => item.id === prop.id,
+                    );
+                    if (!propDefinition) return [];
+                    return [
+                        [
+                            propDefinition.name,
+                            propDefinition.array
+                                ? structuredClone(prop.data)
+                                : Array.isArray(prop.data)
+                                  ? structuredClone(prop.data[0])
+                                  : structuredClone(prop.data),
+                        ],
+                    ];
+                }) || [],
+        );
+    const migrated = structuredClone(source);
+    for (const step of steps) {
+        if (step.op !== 'rename-field') continue;
+        if (
+            Object.prototype.hasOwnProperty.call(migrated, step.from) &&
+            Object.prototype.hasOwnProperty.call(migrated, step.to)
+        ) {
+            throw new Error(
+                `Migration target already exists for ${step.model}.${step.to}`,
+            );
+        }
+        if (Object.prototype.hasOwnProperty.call(migrated, step.from)) {
+            migrated[step.to] = migrated[step.from];
+            delete migrated[step.from];
+        }
+    }
+    for (const step of steps) {
+        if (
+            step.op === 'set-default' &&
+            !Object.prototype.hasOwnProperty.call(migrated, step.field)
+        ) {
+            migrated[step.field] = structuredClone(step.value);
+        }
+    }
+    return migrated;
+}
+
 export function prepareMigrationOperation(
     input: PrepareMigrationInput,
 ): MigrationOperation {
@@ -354,19 +410,21 @@ export function prepareMigrationOperation(
     for (const [modelKey, entries] of Object.entries(preview.document.models)) {
         const candidateTemplate = modelTemplates.get(modelKey);
         if (!candidateTemplate) continue;
+        const oldMapping = oldModel.get(modelKey);
+        const oldTemplate = oldMapping ? oldTemplates.get(modelKey) : undefined;
         for (const row of entries) {
             const prior = entryById.get(row.id);
             if (!prior) continue;
             const meta = prior.meta.map((languageMeta) => {
-                const fields =
+                const fields = translatedFields(
+                    prior,
+                    languageMeta.lng,
                     languageMeta.lng === releaseInput.language
                         ? row.fields
-                        : Object.fromEntries(
-                              Object.entries(row.fields).map(([key, value]) => [
-                                  key,
-                                  value,
-                              ]),
-                          );
+                        : null,
+                    oldTemplate,
+                    steps,
+                );
                 return {
                     ...structuredClone(languageMeta),
                     props: candidateTemplate.props.flatMap((prop) => {
@@ -437,35 +495,45 @@ export function prepareMigrationOperation(
         updatedAt: Math.max(Date.now(), site.updatedAt + 1),
     };
     for (const requiredPage of targetManifest.pages) {
-        if (
-            candidateSite.pages.some(
-                (page) =>
-                    page.key === requiredPage.key ||
-                    page.blueprintKey === requiredPage.key ||
-                    page.path === requiredPage.path,
-            )
-        ) {
-            continue;
-        }
         const candidateTemplate = modelTemplates.get(requiredPage.modelKey);
         const firstEntry = candidateEntries.find(
             (entry) => entry.templateId === candidateTemplate?._id,
         );
-        candidateSite.pages.push({
-            key: requiredPage.key,
-            title: requiredPage.title,
-            path: requiredPage.path,
-            modelKey: requiredPage.modelKey,
-            layout: requiredPage.layout,
-            status: 'draft',
-            ...(firstEntry ? { entryId: firstEntry._id } : {}),
-            sections:
-                targetManifest.editor?.pages.find(
-                    (page) => page.pageKey === requiredPage.key,
-                )?.sections || [],
-            enabled: true,
-            navigation: !requiredPage.path.includes(':'),
-        });
+        const declaredSections =
+            targetManifest.editor?.pages.find(
+                (page) => page.pageKey === requiredPage.key,
+            )?.sections || [];
+        const matching = candidateSite.pages.filter(
+            (page) =>
+                page.key === requiredPage.key ||
+                page.blueprintKey === requiredPage.key ||
+                (!page.blueprintKey && page.path === requiredPage.path),
+        );
+        if (!matching.length) {
+            candidateSite.pages.push({
+                key: requiredPage.key,
+                title: requiredPage.title,
+                path: requiredPage.path,
+                modelKey: requiredPage.modelKey,
+                layout: requiredPage.layout,
+                status: 'draft',
+                ...(firstEntry ? { entryId: firstEntry._id } : {}),
+                sections: declaredSections,
+                enabled: true,
+                navigation: !requiredPage.path.includes(':'),
+            });
+            continue;
+        }
+        for (const page of matching) {
+            page.title = requiredPage.title;
+            page.modelKey = requiredPage.modelKey;
+            page.layout = requiredPage.layout;
+            page.sections = declaredSections;
+            if (!page.blueprintKey) {
+                page.path = requiredPage.path;
+            }
+            if (!page.entryId && firstEntry) page.entryId = firstEntry._id;
+        }
     }
     const targetPreview = previewMigration(
         {
@@ -552,6 +620,7 @@ export function prepareMigrationOperation(
         previousSite: structuredClone(site),
         candidateSite,
         previousReleaseId: site.gatewayCurrentReleaseId || '',
+        previousRouteRevision: site.gatewayActiveRevision || 0,
         actorId,
         steps: clone(steps),
         previousTemplates: clone(releaseInput.templates),
@@ -587,7 +656,7 @@ export interface MigrationGatewayRuntime {
     ): Promise<{
         state: GatewayState;
         targetReleaseId: string;
-        targetRouteRevision: number;
+        targetRouteRevision?: number;
     }>;
     readState(operation: MigrationOperation): Promise<GatewayState>;
     rollback(
@@ -712,6 +781,7 @@ export class MigrationService {
                         updatedAt: Date.now(),
                     };
                     if (
+                        result.targetRouteRevision !== undefined &&
                         canFinalizeMigration(
                             result.targetReleaseId,
                             result.targetRouteRevision,
@@ -748,10 +818,7 @@ export class MigrationService {
     async reconcile(operationId: string): Promise<MigrationOperation> {
         let operation = await this.requireOperation(operationId);
         if (operation.status !== 'publishing') return operation;
-        if (
-            !operation.targetReleaseId ||
-            operation.targetRouteRevision === undefined
-        ) {
+        if (!operation.targetReleaseId) {
             return this.adopt(
                 operation.id,
                 operation.sourceChecksum,
@@ -764,7 +831,21 @@ export class MigrationService {
                 const site = await this.runtime.findSite(operation.cmsSiteId);
                 if (!site) return operation;
                 const state = await this.runtime.gateway.readState(operation);
+                const active = state.active;
                 if (
+                    active &&
+                    active.releaseId === operation.targetReleaseId &&
+                    operation.targetRouteRevision !== active.routeRevision
+                ) {
+                    operation = {
+                        ...operation,
+                        targetRouteRevision: active.routeRevision,
+                        updatedAt: Date.now(),
+                    };
+                    await this.runtime.repository.save(operation);
+                }
+                if (
+                    operation.targetRouteRevision !== undefined &&
                     canFinalizeMigration(
                         operation.targetReleaseId!,
                         operation.targetRouteRevision!,
@@ -776,7 +857,8 @@ export class MigrationService {
                 if (
                     state.active &&
                     state.active.releaseId === operation.previousReleaseId &&
-                    state.active.routeRevision === operation.expectedUpdatedAt
+                    state.active.routeRevision ===
+                        operation.previousRouteRevision
                 ) {
                     operation = {
                         ...operation,
@@ -1030,7 +1112,11 @@ function defaultRuntime(): MigrationRuntime {
                 return {
                     state,
                     targetReleaseId: intent.releaseId,
-                    targetRouteRevision: intent.revision ?? state.revision + 1,
+                    ...(state.active?.releaseId === intent.releaseId
+                        ? {
+                              targetRouteRevision: state.active.routeRevision,
+                          }
+                        : {}),
                 };
             },
             async readState(operation) {

@@ -28,6 +28,7 @@ export interface MigrationOperation {
     previousSite: SiteInstallation;
     candidateSite: SiteInstallation;
     previousReleaseId: string;
+    previousRouteRevision: number;
     targetReleaseId?: string;
     targetRouteRevision?: number;
     errorCode?: string;
@@ -54,6 +55,7 @@ interface StoredMigrationOperation extends MongoDBEntry {
     previousSiteJson: string;
     candidateSiteJson: string;
     previousReleaseId: string;
+    previousRouteRevision: number;
     targetReleaseId?: string;
     targetRouteRevision?: number;
     errorCode?: string;
@@ -83,6 +85,7 @@ function stored(operation: MigrationOperation): StoredMigrationOperation {
         previousSiteJson: JSON.stringify(operation.previousSite),
         candidateSiteJson: JSON.stringify(operation.candidateSite),
         previousReleaseId: operation.previousReleaseId,
+        previousRouteRevision: operation.previousRouteRevision,
         ...(operation.targetReleaseId
             ? { targetReleaseId: operation.targetReleaseId }
             : {}),
@@ -146,6 +149,7 @@ function migrationOperation(
         previousSite: JSON.parse(record.previousSiteJson),
         candidateSite: JSON.parse(record.candidateSiteJson),
         previousReleaseId: record.previousReleaseId,
+        previousRouteRevision: record.previousRouteRevision,
         ...(record.targetReleaseId
             ? { targetReleaseId: record.targetReleaseId }
             : {}),
@@ -242,6 +246,10 @@ const RawMigrationRepo = createMongoDBRepository<
         previousSiteJson: { __type: 'string', __required: true },
         candidateSiteJson: { __type: 'string', __required: true },
         previousReleaseId: { __type: 'string', __required: true },
+        previousRouteRevision: {
+            __type: 'number',
+            __required: true,
+        },
         targetReleaseId: { __type: 'string', __required: false },
         targetRouteRevision: { __type: 'number', __required: false },
         errorCode: { __type: 'string', __required: false },

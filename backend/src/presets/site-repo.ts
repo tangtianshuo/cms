@@ -35,6 +35,11 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
     claimSiteMutation(siteId: string, token: string, mode: SiteMutationMode, operationId: string | undefined,
         now: number, leaseUntil: number): Promise<boolean>;
     releaseSiteMutation(siteId: string, token: string): Promise<boolean>;
+    renewSiteMutation(
+        siteId: string,
+        token: string,
+        leaseUntil: number,
+    ): Promise<boolean>;
     settleMigrationState(siteId: string, operationId: string,
         status: 'active'|'failed'|'rolled-back'): Promise<boolean>;
     siteMutationState(siteId: string): Promise<{ status: 'idle'|'publishing'|'active'|'failed'|'rolled-back'; operationId?: string }>;
@@ -182,6 +187,21 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                         $unset: {
                             migrationMutationToken: '',
                             migrationMutationUntil: '',
+                        },
+                    },
+                );
+                cache.remove(siteId);
+                return result.matchedCount === 1;
+            },
+            async renewSiteMutation(siteId, token, leaseUntil) {
+                const result = await mdb.updateOne(
+                    {
+                        _id: siteId,
+                        migrationMutationToken: token,
+                    },
+                    {
+                        $set: {
+                            migrationMutationUntil: leaseUntil,
                         },
                     },
                 );

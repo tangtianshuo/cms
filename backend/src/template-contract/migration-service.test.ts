@@ -532,13 +532,80 @@ test('candidate source exposes only namespaced templates and rewritten Entries',
         base,
         update: async () => undefined,
     });
+    const defaultSource = createMigrationReleaseSource(operation);
     const site = await source.findSite();
+    assert.equal((await defaultSource.findSite())?._id, operation.cmsSiteId);
     const content = await source.loadContent(site!);
     assert.notEqual(site?.models[0].templateId, f.site.models[0].templateId);
     assert.equal(content.templates.length, 1);
     assert.equal(content.entries.length, 1);
     assert.equal(content.entries[0].templateId, site?.models[0].templateId);
     assert.ok(site?.templateNamespace?.includes('migration-'));
+});
+
+test('target blueprint changes replace matching route and model declarations', () => {
+    const f = fixture();
+    const changedManifest = structuredClone(manifest);
+    changedManifest.pages[0] = {
+        ...changedManifest.pages[0],
+        title: 'Offerings',
+        path: '/offerings',
+    };
+    const operation = prepareMigrationOperation({
+        site: f.site,
+        requestKey: randomUUID(),
+        expectedUpdatedAt: f.site.updatedAt,
+        actorId: 'admin',
+        targetManifest: changedManifest,
+        targetRecord: record,
+        input: f.input,
+    });
+    assert.equal(operation.candidateSite.pages[0].title, 'Offerings');
+    assert.equal(operation.candidateSite.pages[0].path, '/offerings');
+});
+
+test('candidate migration preserves every non-current translation', () => {
+    const f = fixture();
+    const translatedEntry = {
+        ...f.entry,
+        meta: [
+            ...f.entry.meta,
+            {
+                lng: 'fr',
+                props: [
+                    {
+                        id: 'prop-title',
+                        data: ['Stratégie française'] as never,
+                    },
+                    {
+                        id: 'prop-summary',
+                        data: ['Résumé français'] as never,
+                    },
+                ],
+            },
+        ],
+    };
+    const operation = prepareMigrationOperation({
+        site: f.site,
+        requestKey: randomUUID(),
+        expectedUpdatedAt: f.site.updatedAt,
+        actorId: 'admin',
+        targetManifest: manifest,
+        targetRecord: record,
+        input: {
+            ...f.input,
+            entries: [translatedEntry],
+        },
+    });
+    const candidate = operation.candidateEntries?.[0];
+    const french = candidate?.meta.find((meta) => meta.lng === 'fr');
+    const titleProp = operation.candidateSite.models[0].fields.find(
+        (field) => field.key === 'title',
+    )?.propId;
+    assert.deepEqual(
+        french?.props.find((prop) => prop.id === titleProp)?.data,
+        ['Stratégie française'],
+    );
 });
 
 test('candidate source completes the existing Gateway publication protocol', async () => {
@@ -740,6 +807,50 @@ test('pending authoritative publication is reconciled and finalized exactly once
     assert.equal(h.gatewayPublishCount(), 1);
     assert.equal(h.site().presetVersion, '1.0.1');
     assert.notEqual(h.site().models[0].templateId, f.site.models[0].templateId);
+});
+
+test('reconciliation restores only when Gateway proves the exact previous tuple', async () => {
+    const f = fixture();
+    const h = memoryRuntime();
+    h.setSite(f.site);
+    h.setGatewayState({
+        revision: 3,
+        active: {
+            releaseId: 'release-old',
+            imageDigest: record.imageDigest,
+            routeRevision: 3,
+            metadata: {},
+            snapshot: {
+                schemaVersion: 1,
+                siteId: cmsSiteId,
+                language: 'en',
+                pages: [],
+                navigation: [],
+                redirects: [],
+            },
+            createdAt: new Date().toISOString(),
+        },
+    });
+    const service = new MigrationService(h.runtime);
+    const operation = {
+        ...prepareMigrationOperation({
+            site: f.site,
+            requestKey: randomUUID(),
+            expectedUpdatedAt: f.site.updatedAt,
+            actorId: 'admin',
+            targetManifest: manifest,
+            targetRecord: record,
+            input: f.input,
+        }),
+        status: 'publishing' as const,
+        targetReleaseId: 'release-new',
+        targetRouteRevision: 4,
+    };
+    await h.runtime.repository.save(operation);
+    const failed = await service.reconcile(operation.id);
+    assert.equal(failed.status, 'failed');
+    assert.equal(failed.errorCode, 'gateway_rolled_back');
+    assert.equal(h.site().presetVersion, '1.0.0');
 });
 
 test('rollback preserves a later draft before restoring the previous complete site', async () => {

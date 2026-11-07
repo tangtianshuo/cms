@@ -19,6 +19,11 @@ export interface SiteMutationStore {
         leaseUntil: number,
     ): Promise<boolean>;
     releaseSiteMutation(siteId: string, token: string): Promise<boolean>;
+    renewSiteMutation(
+        siteId: string,
+        token: string,
+        leaseUntil: number,
+    ): Promise<boolean>;
     siteMutationState(siteId: string): Promise<{
         status: 'idle' | 'publishing' | 'active' | 'failed' | 'rolled-back';
         operationId?: string;
@@ -118,9 +123,48 @@ export async function withSiteMutation<T>(
         if (Date.now() >= waitUntil) throw new SiteMutationConflict();
         await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    const leaseMs = options.leaseMs ?? 120_000;
+    let renewalError: Error | null = null;
+    const heartbeat = setInterval(
+        () => {
+            const nextLease = Date.now() + leaseMs;
+            const renewal = store
+                ? store.renewSiteMutation(siteId, token, nextLease)
+                : Promise.resolve(
+                      (() => {
+                          const current = fallbackLocks.get(siteId);
+                          if (current?.token !== token) return false;
+                          current.until = nextLease;
+                          return true;
+                      })(),
+                  );
+            renewal
+                .then((owned) => {
+                    if (!owned) {
+                        renewalError = new SiteMutationConflict(
+                            'Site mutation lease was lost',
+                        );
+                    }
+                })
+                .catch((cause) => {
+                    renewalError =
+                        cause instanceof Error
+                            ? cause
+                            : new Error('Site mutation renewal failed');
+                });
+        },
+        Math.max(50, Math.floor(leaseMs / 3)),
+    );
+    heartbeat.unref();
     try {
-        return await context.run({ siteId, token, mode: options.mode }, action);
+        const result = await context.run(
+            { siteId, token, mode: options.mode },
+            action,
+        );
+        if (renewalError) throw renewalError;
+        return result;
     } finally {
+        clearInterval(heartbeat);
         if (store) await store.releaseSiteMutation(siteId, token);
         else {
             const current = fallbackLocks.get(siteId);
