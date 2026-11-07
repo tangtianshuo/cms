@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import {
@@ -12,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
     probePublishedSite,
     readBackupEvidence,
@@ -20,7 +22,12 @@ import {
     validateConfig,
     writeMonitorState,
 } from './probe.mjs';
-import { createMonitorState } from './policy.mjs';
+import {
+    createMonitorState,
+    markNotificationDelivered,
+    markNotificationFailed,
+    reconcileAlerts,
+} from './policy.mjs';
 
 const digest = (value) =>
     `sha256:${createHash('sha256').update(value).digest('hex')}`;
@@ -435,4 +442,411 @@ test('local notification configuration stays on the loopback receiver', () => {
             }),
         /credential-free/,
     );
+});
+
+test(
+    'public probe bounds a response whose body never completes',
+    { timeout: 1_500 },
+    async () => {
+        const fetcher = async (_url, { signal }) =>
+            new Response(
+                new ReadableStream({
+                    start(controller) {
+                        signal.addEventListener(
+                            'abort',
+                            () =>
+                                controller.error(
+                                    new Error('body deadline exceeded'),
+                                ),
+                            { once: true },
+                        );
+                    },
+                }),
+                {
+                    status: 200,
+                    headers: { 'content-type': 'text/html' },
+                },
+            );
+        const result = await probePublishedSite(
+            {
+                id: 'site-a',
+                origin: 'http://127.0.0.1:18080',
+                path: '/',
+                marker: 'marker-a',
+                assets: [],
+            },
+            { fetcher, timeoutMs: 50 },
+        );
+        assert.equal(result.publicStatus, 0);
+        assert.equal(result.expectedRelease, false);
+        assert.match(result.pageError, /deadline|abort/i);
+    },
+);
+
+test(
+    'control body stalls become a separate unavailable observation',
+    { timeout: 1_500 },
+    async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'f3-control-timeout-'));
+        const statePath = join(directory, 'state.json');
+        process.env.F3_BODY_TOKEN = 'test-only';
+        const fetcher = async (_url, { signal }) =>
+            new Response(
+                new ReadableStream({
+                    start(controller) {
+                        signal.addEventListener(
+                            'abort',
+                            () =>
+                                controller.error(
+                                    new Error('control body deadline exceeded'),
+                                ),
+                            { once: true },
+                        );
+                    },
+                }),
+                {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                },
+            );
+        try {
+            const result = await runMonitor(
+                {
+                    schemaVersion: 1,
+                    environment: 'local',
+                    statePath,
+                    sites: [
+                        {
+                            id: 'site-a',
+                            origin: 'http://127.0.0.1:18080',
+                            path: '/',
+                            marker: 'marker-a',
+                            expectedTemplate,
+                            assets: [],
+                        },
+                    ],
+                    control: {
+                        url: 'http://127.0.0.1:18081',
+                        tokenEnv: 'F3_BODY_TOKEN',
+                        timeoutMs: 50,
+                    },
+                    backup: { directory: join(directory, 'backup') },
+                    notification: null,
+                },
+                {
+                    fetcher,
+                    now: Date.parse('2026-11-07T00:00:00Z'),
+                    publicProbe: async () => ({
+                        publicStatus: 200,
+                        latencyMs: 20,
+                        markerPresent: true,
+                        expectedRelease: true,
+                        missingAssets: 0,
+                        assets: [],
+                    }),
+                    backupProbe: async () => ({
+                        accepted: true,
+                        valid: true,
+                        ageHours: 1,
+                        reason: null,
+                        lockTemplates: [expectedTemplate],
+                    }),
+                    certificateProbe: async () => 30,
+                },
+            );
+            assert.equal(result.sites[0].control.available, false);
+            assert.match(result.sites[0].control.reason, /deadline|abort/i);
+            assert.equal(result.sites[0].public.publicStatus, 200);
+        } finally {
+            delete process.env.F3_BODY_TOKEN;
+            await rm(directory, { recursive: true, force: true });
+        }
+    },
+);
+
+test('monitor passes the configured backup age threshold into policy', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'f3-backup-threshold-'));
+    try {
+        const result = await runMonitor(
+            {
+                schemaVersion: 1,
+                environment: 'local',
+                statePath: join(directory, 'state.json'),
+                sites: [
+                    {
+                        id: 'site-a',
+                        origin: 'http://127.0.0.1:18080',
+                        path: '/',
+                        marker: 'marker-a',
+                        expectedTemplate,
+                        assets: [],
+                    },
+                ],
+                control: {
+                    url: 'http://127.0.0.1:18081',
+                    tokenEnv: 'F3_THRESHOLD_TOKEN',
+                },
+                backup: {
+                    directory: join(directory, 'backup'),
+                    maxAgeHours: 2,
+                },
+                notification: null,
+            },
+            {
+                now: Date.parse('2026-11-07T00:00:00Z'),
+                publicProbe: async () => ({
+                    publicStatus: 200,
+                    latencyMs: 20,
+                    markerPresent: true,
+                    expectedRelease: true,
+                    missingAssets: 0,
+                    assets: [],
+                }),
+                controlProbe: async () => ({
+                    available: true,
+                    releaseMatches: true,
+                    publishFailureCount15m: 0,
+                }),
+                backupProbe: async () => ({
+                    accepted: true,
+                    valid: true,
+                    ageHours: 3,
+                    reason: null,
+                    lockTemplates: [expectedTemplate],
+                }),
+                certificateProbe: async () => 30,
+            },
+        );
+        assert.deepEqual(
+            result.sites[0].alerts.map((alert) => alert.key),
+            ['site-a:backup-stale'],
+        );
+        assert.equal(result.sites[0].health.backupMaxAgeHours, 2);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test(
+    'stale-lock contention admits exactly one real process',
+    { timeout: 15_000 },
+    async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'f3-lock-processes-'));
+        const probeUrl = pathToFileURL(
+            fileURLToPath(new URL('./probe.mjs', import.meta.url)),
+        ).href;
+        const source = `
+        import { readFile } from 'node:fs/promises';
+        import { runMonitor } from ${JSON.stringify(probeUrl)};
+        const config = JSON.parse(await readFile(process.argv[1], 'utf8'));
+        try {
+            const result = await runMonitor(config, {
+                now: Date.parse('2026-11-07T00:00:00Z'),
+                publicProbe: async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    return { publicStatus: 200, latencyMs: 20, markerPresent: true,
+                        expectedRelease: true, missingAssets: 0, assets: [] };
+                },
+                controlProbe: async () => ({ available: true, releaseMatches: true,
+                    publishFailureCount15m: 0 }),
+                backupProbe: async () => ({ accepted: true, valid: true, ageHours: 1,
+                    reason: null, lockTemplates: [${JSON.stringify(expectedTemplate)}] }),
+                certificateProbe: async () => 30,
+            });
+            console.log(JSON.stringify({ status: 'ran', healthy: result.healthy }));
+        } catch (error) {
+            console.log(JSON.stringify({ status: 'error', message: String(error.message) }));
+            process.exitCode = 1;
+        }
+    `;
+        const run = (configPath) =>
+            new Promise((resolve, reject) => {
+                const child = spawn(
+                    process.execPath,
+                    ['--input-type=module', '-e', source, configPath],
+                    { stdio: ['ignore', 'pipe', 'pipe'] },
+                );
+                let stdout = '';
+                let stderr = '';
+                child.stdout.on('data', (chunk) => {
+                    stdout += chunk;
+                });
+                child.stderr.on('data', (chunk) => {
+                    stderr += chunk;
+                });
+                child.once('error', reject);
+                child.once('exit', (code) => resolve({ code, stdout, stderr }));
+            });
+        try {
+            for (let round = 0; round < 3; round += 1) {
+                const statePath = join(directory, `state-${round}.json`);
+                const configPath = join(directory, `config-${round}.json`);
+                await writeFile(
+                    configPath,
+                    JSON.stringify({
+                        schemaVersion: 1,
+                        environment: 'local',
+                        statePath,
+                        sites: [
+                            {
+                                id: 'site-a',
+                                origin: 'http://127.0.0.1:18080',
+                                path: '/',
+                                marker: 'marker-a',
+                                expectedTemplate,
+                                assets: [],
+                            },
+                        ],
+                        control: {
+                            url: 'http://127.0.0.1:18081',
+                            tokenEnv: 'F3_LOCK_PROCESS_TOKEN',
+                        },
+                        backup: {
+                            directory: join(directory, `backup-${round}`),
+                        },
+                        notification: null,
+                    }),
+                );
+                await writeFile(
+                    `${statePath}.lock`,
+                    JSON.stringify({
+                        pid: 999999,
+                        createdAt: new Date(
+                            Date.now() - 3_600_000,
+                        ).toISOString(),
+                    }),
+                    { mode: 0o600 },
+                );
+                const [first, second] = await Promise.all([
+                    run(configPath),
+                    run(configPath),
+                ]);
+                const outcomes = [first, second].map((child) =>
+                    JSON.parse(child.stdout.trim().split('\n').at(-1)),
+                );
+                assert.equal(
+                    outcomes.filter((outcome) => outcome.status === 'ran')
+                        .length,
+                    1,
+                );
+                assert.equal(
+                    outcomes.filter(
+                        (outcome) =>
+                            outcome.status === 'error' &&
+                            outcome.message === 'monitor_locked',
+                    ).length,
+                    1,
+                );
+                assert.equal(
+                    [first, second].filter((child) => child.code === 1).length,
+                    1,
+                );
+            }
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    },
+);
+
+test('exhausted recovery delivery keeps monitor unhealthy until explicit acknowledgment', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'f3-delivery-exhausted-'));
+    const statePath = join(directory, 'state.json');
+    const started = Date.parse('2026-11-07T00:00:00Z');
+    let state = createMonitorState();
+    let transition = reconcileAlerts(
+        state,
+        'site-a',
+        [
+            {
+                key: 'site-a:public-unavailable',
+                severity: 'critical',
+                message: 'down',
+            },
+        ],
+        started,
+    );
+    state = markNotificationDelivered(
+        transition.state,
+        transition.notifications[0].id,
+        started + 1_000,
+    );
+    transition = reconcileAlerts(state, 'site-a', [], started + 2_000);
+    state = transition.state;
+    const recovery = transition.notifications[0];
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+        state = markNotificationFailed(
+            state,
+            recovery.id,
+            'receiver unavailable',
+            started + 2_000 + attempt * 1_000,
+            1_000,
+        ).state;
+    }
+    await writeMonitorState(statePath, state);
+    const config = {
+        schemaVersion: 1,
+        environment: 'local',
+        statePath,
+        sites: [
+            {
+                id: 'site-a',
+                origin: 'http://127.0.0.1:18080',
+                path: '/',
+                marker: 'marker-a',
+                expectedTemplate,
+                assets: [],
+            },
+        ],
+        control: {
+            url: 'http://127.0.0.1:18081',
+            tokenEnv: 'F3_EXHAUSTED_TOKEN',
+        },
+        backup: { directory: join(directory, 'backup') },
+        notification: { url: 'http://127.0.0.1:18082/alerts' },
+    };
+    const run = (now) =>
+        runMonitor(config, {
+            now,
+            publicProbe: async () => ({
+                publicStatus: 200,
+                latencyMs: 20,
+                markerPresent: true,
+                expectedRelease: true,
+                missingAssets: 0,
+                assets: [],
+            }),
+            controlProbe: async () => ({
+                available: true,
+                releaseMatches: true,
+                publishFailureCount15m: 0,
+            }),
+            backupProbe: async () => ({
+                accepted: true,
+                valid: true,
+                ageHours: 1,
+                reason: null,
+                lockTemplates: [expectedTemplate],
+            }),
+            certificateProbe: async () => 30,
+            deliver: async () => true,
+        });
+    try {
+        const unresolved = await run(started + 20_000);
+        assert.equal(unresolved.healthy, false);
+        assert.equal(unresolved.deliveryFailures.length, 1);
+        assert.equal(unresolved.deliveryFailures[0].id, recovery.id);
+
+        const { acknowledgeDeliveryFailure } = await import('./probe.mjs');
+        await acknowledgeDeliveryFailure(
+            statePath,
+            recovery.id,
+            started + 21_000,
+        );
+        const cleared = await run(started + 22_000);
+        assert.equal(cleared.healthy, true);
+        assert.deepEqual(cleared.deliveryFailures, []);
+    } finally {
+        delete process.env.F3_EXHAUSTED_TOKEN;
+        await rm(directory, { recursive: true, force: true });
+    }
 });

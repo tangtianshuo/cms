@@ -10,18 +10,18 @@ Each site's `expectedTemplate` must match an entry in the F1 lock carried by the
 
 The monitor emits:
 
-- `release-mismatch` when an HTTP 200 page lacks the configured release-bound marker or returns a conflicting release header;
-- `public-unavailable` immediately for non-success non-5xx responses, or after three consecutive 5xx/no-response samples;
-- `control-unavailable` when the authenticated authoritative publication-state request is unavailable;
-- `locked-target-mismatch` when the site's expected template is absent from the verified lock;
-- `missing-assets` when a configured representative asset is not HTTP 200 with the expected content type;
-- `certificate-expiring` when fewer than 14 days remain before normal TLS validation expires;
-- `backup-stale` when the latest valid completion manifest is over 26 hours old;
-- `backup-unverified` when the completion manifest, files, lock checksum or required evidence scope cannot be verified;
-- `publish-failures` when the authoritative Gateway operation count is at least three failures in 15 minutes;
-- `slow-response` when latency exceeds 3 seconds for three consecutive samples.
+-   `release-mismatch` when an HTTP 200 page lacks the configured release-bound marker or returns a conflicting release header;
+-   `public-unavailable` immediately for non-success non-5xx responses, or after three consecutive 5xx/no-response samples;
+-   `control-unavailable` when the authenticated authoritative publication-state request is unavailable;
+-   `locked-target-mismatch` when the site's expected template is absent from the verified lock;
+-   `missing-assets` when a configured representative asset is not HTTP 200 with the expected content type;
+-   `certificate-expiring` when fewer than 14 days remain before normal TLS validation expires;
+-   `backup-stale` when the latest valid completion manifest is older than `backup.maxAgeHours` (26 by default);
+-   `backup-unverified` when the completion manifest, files, lock checksum or required evidence scope cannot be verified;
+-   `publish-failures` when the authoritative Gateway operation count is at least three failures in 15 minutes;
+-   `slow-response` when latency exceeds 3 seconds for three consecutive samples.
 
-Public requests use manual redirects, strict certificate validation, a 10-second bounded timeout and no CMS authorization or cookie. Management requests read only publication state and the 15-minute failure count. They never select a deployment or change a release.
+Public and management request bodies share the configured request deadline; response headers and body consumption must both finish within that bound. Public requests use manual redirects, strict certificate validation, a 10-second default timeout and no CMS authorization or cookie. Management requests read only publication state and the 15-minute failure count. They never select a deployment or change a release.
 
 ## Backup evidence
 
@@ -31,11 +31,19 @@ The monitor runs the existing F2 Python verifier against the completion director
 
 ## Durable state and delivery
 
-`statePath` stores active alert episodes, pending notification work and bounded delivery history as a private `0600` file written by temporary-file rename. A one-shot run lock prevents overlapping executions; a lock whose owner is no longer alive or is over three minutes old is reclaimed after abrupt termination. Malformed state fails closed rather than resetting dedupe history.
+`statePath` stores active alert episodes, pending notification work, exhausted delivery work and bounded delivery history as a private `0600` file written by temporary-file rename. A one-shot run lock prevents overlapping executions. A lock is reclaimed only after its recorded owner is no longer alive (or an unreadable lock remains old), and a separate reclaim claim prevents two processes from replacing the same stale lock. Malformed state fails closed rather than resetting dedupe history.
 
 The first condition enqueues one alert. A successful delivery records `lastNotifiedAt`; the same key is suppressed for 15 minutes and can then produce at most one reminder. Clearing the condition enqueues one recovery. Receiver failures update a separate retry task with bounded exponential-free retry timing from `notification.retryMs`, up to eight attempts. Delivery failure does not change public traffic or suppress recovery.
 
 Every delivery carries an `Idempotency-Key` equal to the durable notification ID. The receiver should use it to deduplicate a retry after an ambiguous network failure. Alert bodies contain only site ID, alert key, severity, message and timestamps; inquiry content and credentials are absent.
+
+After eight failed attempts, the delivery is retained under `deliveryFailures`; the monitor remains unhealthy and exits nonzero until an operator resolves the channel. The resolver can explicitly acknowledge the reviewed failure without pretending it was delivered:
+
+```sh
+node ops/monitoring/probe.mjs --config /etc/platform-monitoring/config.json --ack-delivery monitor-42
+```
+
+The acknowledgment is audited by the notification ID and recorded only after the operator has handled the missed event through another authorized channel. An exhausted notification is not silently re-sent.
 
 If no notification destination is configured, the JSON reports `monitoring-unconfigured`. A remaining local receiver exercises delivery in the development drill; this is not proof that an external operator channel exists. D2 must record the authorized recipient/channel and latest successful external delivery separately.
 
@@ -45,10 +53,10 @@ If no notification destination is configured, the JSON reports `monitoring-uncon
 
 ```json
 {
-  "observability": {
-    "publishFailureCount15m": 0,
-    "windowMinutes": 15
-  }
+    "observability": {
+        "publishFailureCount15m": 0,
+        "windowMinutes": 15
+    }
 }
 ```
 
@@ -68,6 +76,6 @@ Do not install or enable the timer until the target environment, authorized noti
 
 ## Local drill
 
-The F3 integration drill starts task-owned public, control and receiver HTTP servers, creates a disposable completion manifest and exercises wrong-content HTTP 200, site outage/recovery, asset 404, stale/invalid backup, test certificate expiry, control failure, duplicate state reload and receiver retry. It retains only generated fixtures and safe timestamps/status counts. It must clean its listeners and temporary state; shared PostgreSQL/MongoDB are not used by this drill.
+The F3 integration drill starts task-owned public, control and receiver HTTP servers plus an exactly named and labeled disposable site container. It stops and starts that container to prove real site outage/recovery, then removes it in `finally`; there is no broad prune. The drill also exercises wrong-content HTTP 200, asset 404, stale/invalid backup, test certificate expiry, control failure, duplicate state reload and receiver retry. It retains only generated fixtures and safe timestamps/status counts and cleans its listeners, container and temporary state; shared PostgreSQL/MongoDB are not used by this drill.
 
 The drill is source-only evidence. It does not claim Internet DNS/TLS, an authorized external channel, installed scheduling, production backup copy or production readiness.

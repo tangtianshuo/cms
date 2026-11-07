@@ -10,6 +10,7 @@ const numericFields = [
 export const ALERT_COOLDOWN_MS = 15 * 60 * 1000;
 const deliveryHistoryLimit = 100;
 const maximumDeliveryAttempts = 8;
+const defaultBackupMaxAgeHours = 26;
 
 function requireHealth(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -43,6 +44,14 @@ function requireHealth(value) {
         throw new TypeError(
             'consecutiveSlowSamples must be a non-negative integer',
         );
+    }
+    if (
+        value.backupMaxAgeHours !== undefined &&
+        (typeof value.backupMaxAgeHours !== 'number' ||
+            !Number.isFinite(value.backupMaxAgeHours) ||
+            value.backupMaxAgeHours <= 0)
+    ) {
+        throw new TypeError('backupMaxAgeHours must be a positive number');
     }
 }
 
@@ -128,13 +137,18 @@ export function assessHealth(value) {
             ),
         );
     }
-    if (value.backupAgeHours > 26 && value.backupEvidenceAccepted !== false) {
+    const backupMaxAgeHours =
+        value.backupMaxAgeHours ?? defaultBackupMaxAgeHours;
+    if (
+        value.backupAgeHours > backupMaxAgeHours &&
+        value.backupEvidenceAccepted !== false
+    ) {
         alerts.push(
             alert(
                 site,
                 'backup-stale',
                 'warning',
-                'The latest integrity-verified backup is more than 26 hours old',
+                `The latest integrity-verified backup is more than ${backupMaxAgeHours} hours old`,
             ),
         );
     }
@@ -201,6 +215,7 @@ function siteState(state, siteId) {
         alerts: {},
         pending: [],
         deliveryHistory: [],
+        deliveryFailures: [],
         consecutiveSlowSamples: 0,
     };
     return state.sites[siteId];
@@ -388,6 +403,13 @@ export function markNotificationFailed(
             );
             owned.deliveryHistory =
                 owned.deliveryHistory.slice(-deliveryHistoryLimit);
+            owned.deliveryFailures ??= [];
+            owned.deliveryFailures = [
+                ...owned.deliveryFailures.filter(
+                    (failure) => failure.id !== task.id,
+                ),
+                historyRecord(task, now, 'exhausted', task.lastError),
+            ].slice(-deliveryHistoryLimit);
         } else {
             task.nextAttemptAt = new Date(now + retryMs).toISOString();
         }

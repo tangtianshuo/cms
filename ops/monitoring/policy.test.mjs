@@ -266,3 +266,65 @@ test('allows one reminder after fifteen minutes and keeps delivery retry separat
         1,
     );
 });
+
+test('uses the configured verified-backup age threshold', () => {
+    assert.equal(
+        assessHealth({
+            ...healthy,
+            backupAgeHours: 25,
+            backupMaxAgeHours: 24,
+        })[0].key,
+        'site-a:backup-stale',
+    );
+    assert.equal(
+        assessHealth({
+            ...healthy,
+            backupAgeHours: 25,
+            backupMaxAgeHours: 26,
+        }).some((alert) => alert.key === 'site-a:backup-stale'),
+        false,
+    );
+});
+
+test('retains exhausted delivery failures separately from alert episodes', () => {
+    const started = Date.parse('2026-11-07T00:00:00Z');
+    let state = createMonitorState();
+    let transition = reconcileAlerts(
+        state,
+        'site-a',
+        [
+            {
+                key: 'site-a:public-unavailable',
+                severity: 'critical',
+                message: 'down',
+            },
+        ],
+        started,
+    );
+    state = markNotificationDelivered(
+        transition.state,
+        transition.notifications[0].id,
+        started + 1_000,
+    );
+    transition = reconcileAlerts(state, 'site-a', [], started + 2_000);
+    state = transition.state;
+    const recovery = transition.notifications[0];
+    assert.equal(recovery.kind, 'recovery');
+
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+        const failed = markNotificationFailed(
+            state,
+            recovery.id,
+            'receiver unavailable',
+            started + 2_000 + attempt * 1_000,
+            1_000,
+        );
+        state = failed.state;
+    }
+    const owned = state.sites['site-a'];
+    assert.equal(owned.pending.length, 0);
+    assert.equal(owned.deliveryHistory.at(-1).status, 'exhausted');
+    assert.equal(owned.deliveryFailures.length, 1);
+    assert.equal(owned.deliveryFailures[0].id, recovery.id);
+    assert.equal(owned.deliveryFailures[0].kind, 'recovery');
+});

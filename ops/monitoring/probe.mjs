@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
     chmod,
     mkdir,
@@ -8,7 +8,6 @@ import {
     rename,
     stat,
     unlink,
-    writeFile,
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -142,11 +141,29 @@ async function fetchWithTimeout(
     url,
     options,
     timeoutMs = requestTimeoutMs,
+    consume = async (response) => response,
 ) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    let timer;
+    const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+            controller.abort();
+            response?.body?.cancel().catch(() => undefined);
+            reject(new Error('request body deadline exceeded'));
+        }, timeoutMs);
+    });
     try {
-        return await fetcher(url, { ...options, signal: controller.signal });
+        return await Promise.race([
+            (async () => {
+                response = await fetcher(url, {
+                    ...options,
+                    signal: controller.signal,
+                });
+                return consume(response, controller.signal);
+            })(),
+            deadline,
+        ]);
     } finally {
         clearTimeout(timer);
     }
@@ -156,14 +173,17 @@ async function fetchWithTimeout(
  * Probe one configured public site without management credentials. Redirects
  * remain visible so challenge pages cannot be mistaken for a published site.
  */
-export async function probePublishedSite(site, { fetcher = fetch } = {}) {
+export async function probePublishedSite(
+    site,
+    { fetcher = fetch, timeoutMs = requestTimeoutMs } = {},
+) {
     const started = performance.now();
     let publicStatus = 0;
     let markerPresent = false;
     let releaseHeader = null;
     let pageError = null;
     try {
-        const response = await fetchWithTimeout(
+        const observed = await fetchWithTimeout(
             fetcher,
             new URL(site.path ?? '/', site.origin),
             {
@@ -171,15 +191,20 @@ export async function probePublishedSite(site, { fetcher = fetch } = {}) {
                 redirect: 'manual',
                 headers: { accept: 'text/html,application/xhtml+xml' },
             },
+            timeoutMs,
+            async (response) => {
+                const status = response.status;
+                const header = response.headers.get('x-platform-release-id');
+                const body =
+                    status === 200 ? await readBoundedText(response) : '';
+                if (status !== 200) await response.body?.cancel();
+                return { status, header, body };
+            },
         );
-        publicStatus = response.status;
-        releaseHeader = response.headers.get('x-platform-release-id');
-        if (response.status === 200) {
-            const body = await readBoundedText(response);
-            markerPresent = body.includes(site.marker);
-        } else {
-            await response.body?.cancel();
-        }
+        publicStatus = observed.status;
+        releaseHeader = observed.header;
+        markerPresent =
+            observed.status === 200 && observed.body.includes(site.marker);
     } catch (error) {
         pageError = String(error?.message ?? error);
     }
@@ -188,7 +213,7 @@ export async function probePublishedSite(site, { fetcher = fetch } = {}) {
     const assets = [];
     for (const asset of site.assets ?? []) {
         try {
-            const response = await fetchWithTimeout(
+            const observed = await fetchWithTimeout(
                 fetcher,
                 new URL(asset.path, site.origin),
                 {
@@ -196,16 +221,20 @@ export async function probePublishedSite(site, { fetcher = fetch } = {}) {
                     redirect: 'manual',
                     headers: { accept: asset.contentType },
                 },
+                timeoutMs,
+                async (response) => {
+                    const contentType = response.headers.get('content-type');
+                    await response.body?.cancel();
+                    return { status: response.status, contentType };
+                },
             );
-            const contentType = response.headers.get('content-type');
-            await response.body?.cancel();
             assets.push({
                 path: asset.path,
-                status: response.status,
-                contentType,
+                status: observed.status,
+                contentType: observed.contentType,
                 ok:
-                    response.status === 200 &&
-                    contentTypeMatches(contentType, asset.contentType),
+                    observed.status === 200 &&
+                    contentTypeMatches(observed.contentType, asset.contentType),
             });
         } catch (error) {
             assets.push({
@@ -431,6 +460,17 @@ export function validateConfig(config) {
     ) {
         throw new TypeError('backup.directory is required');
     }
+    if (
+        config.backup.maxAgeHours !== undefined &&
+        (typeof config.backup.maxAgeHours !== 'number' ||
+            !Number.isFinite(config.backup.maxAgeHours) ||
+            config.backup.maxAgeHours <= 0 ||
+            config.backup.maxAgeHours > 720)
+    ) {
+        throw new TypeError(
+            'backup.maxAgeHours must be a positive number no greater than 720',
+        );
+    }
     const sites = config.sites.map((site) =>
         validateSite(site, config.environment),
     );
@@ -472,7 +512,6 @@ export function validateConfig(config) {
         sites,
         backup: {
             maxAgeHours: 26,
-            scopeId: 'platform-backup',
             ...config.backup,
         },
         control: { timeoutMs: requestTimeoutMs, ...config.control },
@@ -496,19 +535,23 @@ async function probeControl(config, site, fetcher = fetch) {
             `/api/v1/sites/${encodeURIComponent(site.id)}/publication-state`,
             config.url,
         );
-        const response = await fetchWithTimeout(
+        const observation = await fetchWithTimeout(
             fetcher,
             url,
             { headers: { authorization: `Bearer ${token}` } },
             config.timeoutMs ?? requestTimeoutMs,
+            async (response) => ({
+                status: response.status,
+                body: response.status === 200 ? await response.json() : null,
+            }),
         );
-        if (response.status !== 200) {
+        if (observation.status !== 200) {
             return {
                 available: false,
-                reason: `control_status_${response.status}`,
+                reason: `control_status_${observation.status}`,
             };
         }
-        const body = await response.json();
+        const body = observation.body;
         const active = body?.active;
         const metadata = active?.metadata;
         const expected = site.expectedTemplate;
@@ -544,7 +587,7 @@ async function deliverNotification(notification, config, fetcher = fetch) {
     if (config.notification.tokenEnv && !token) {
         throw new Error('notification credential missing');
     }
-    const response = await fetchWithTimeout(
+    const status = await fetchWithTimeout(
         fetcher,
         config.notification.url,
         {
@@ -557,62 +600,154 @@ async function deliverNotification(notification, config, fetcher = fetch) {
             body: JSON.stringify(notification),
         },
         config.notification.timeoutMs,
+        async (response) => {
+            await response.body?.cancel();
+            return response.status;
+        },
     );
-    await response.body?.cancel();
-    if (response.status < 200 || response.status >= 300) {
-        throw new Error(`notification_status_${response.status}`);
+    if (status < 200 || status >= 300) {
+        throw new Error(`notification_status_${status}`);
     }
     return true;
+}
+
+const staleLockAgeMs = 180_000;
+
+async function createOwnedLockFile(path) {
+    const handle = await open(path, 'wx', 0o600);
+    const token = randomUUID();
+    try {
+        await handle.writeFile(
+            JSON.stringify({
+                pid: process.pid,
+                createdAt: new Date().toISOString(),
+                token,
+            }),
+        );
+        await handle.sync();
+        return { handle, token };
+    } catch (error) {
+        await handle.close();
+        await unlink(path).catch(() => undefined);
+        throw error;
+    }
+}
+
+async function ownedLockFileIsStale(path) {
+    try {
+        const record = JSON.parse(await readFile(path, 'utf8'));
+        if (Number.isSafeInteger(record.pid) && record.pid > 0) {
+            try {
+                process.kill(record.pid, 0);
+                return false;
+            } catch (error) {
+                if (error?.code === 'EPERM') return false;
+                if (error?.code === 'ESRCH') return true;
+            }
+        }
+        const createdAt = Date.parse(record.createdAt);
+        return (
+            !Number.isFinite(createdAt) ||
+            Date.now() - createdAt > staleLockAgeMs
+        );
+    } catch (error) {
+        if (error?.code === 'ENOENT') return true;
+        try {
+            const file = await stat(path);
+            return Date.now() - file.mtimeMs > staleLockAgeMs;
+        } catch (statError) {
+            return statError?.code === 'ENOENT';
+        }
+    }
+}
+
+async function removeOwnedLockFile(path, token) {
+    try {
+        const record = JSON.parse(await readFile(path, 'utf8'));
+        if (record.token === token) await unlink(path);
+    } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+    }
+}
+
+async function claimStateLock(lockPath) {
+    try {
+        return await createOwnedLockFile(lockPath);
+    } catch (error) {
+        if (error?.code !== 'EEXIST') throw error;
+    }
+    if (!(await ownedLockFileIsStale(lockPath))) {
+        throw new Error('monitor_locked');
+    }
+
+    const reclaimPath = `${lockPath}.reclaim`;
+    let reclaim;
+    try {
+        reclaim = await createOwnedLockFile(reclaimPath);
+    } catch (error) {
+        if (error?.code === 'EEXIST') {
+            if (await ownedLockFileIsStale(reclaimPath)) {
+                await unlink(reclaimPath).catch(() => undefined);
+            }
+            throw new Error('monitor_locked');
+        }
+        throw error;
+    }
+    try {
+        if (!(await ownedLockFileIsStale(lockPath))) {
+            throw new Error('monitor_locked');
+        }
+        await unlink(lockPath).catch((error) => {
+            if (error?.code !== 'ENOENT') throw error;
+        });
+        return await createOwnedLockFile(lockPath);
+    } finally {
+        await reclaim.handle.close();
+        await removeOwnedLockFile(reclaimPath, reclaim.token);
+    }
 }
 
 async function withStateLock(statePath, action) {
     await mkdir(dirname(statePath), { recursive: true, mode: 0o700 });
     const lockPath = `${statePath}.lock`;
-    let lock;
+    const lock = await claimStateLock(lockPath);
     try {
-        lock = await open(lockPath, 'wx', 0o600);
-    } catch (error) {
-        if (error?.code !== 'EEXIST') throw error;
-        let stale = false;
-        try {
-            const record = JSON.parse(await readFile(lockPath, 'utf8'));
-            const createdAt = Date.parse(record.createdAt);
-            const old =
-                !Number.isFinite(createdAt) || Date.now() - createdAt > 180_000;
-            let alive = false;
-            if (Number.isSafeInteger(record.pid) && record.pid > 0) {
-                try {
-                    process.kill(record.pid, 0);
-                    alive = true;
-                } catch (probeError) {
-                    alive = probeError?.code === 'EPERM';
-                }
-            }
-            stale = old || !alive;
-        } catch {
-            try {
-                const file = await stat(lockPath);
-                stale = Date.now() - file.mtimeMs > 180_000;
-            } catch {
-                stale = true;
-            }
-        }
-        if (!stale) throw new Error('monitor_locked');
-        await unlink(lockPath);
-        lock = await open(lockPath, 'wx', 0o600);
-    }
-    try {
-        await lock.writeFile(
-            JSON.stringify({
-                pid: process.pid,
-                createdAt: new Date().toISOString(),
-            }),
-        );
         return await action();
     } finally {
-        await lock.close();
-        await unlink(lockPath).catch(() => undefined);
+        await lock.handle.close();
+        await removeOwnedLockFile(lockPath, lock.token);
     }
+}
+
+export async function acknowledgeDeliveryFailure(
+    statePath,
+    failureId,
+    now = Date.now(),
+) {
+    if (
+        typeof failureId !== 'string' ||
+        !/^monitor-[1-9][0-9]*$/.test(failureId)
+    ) {
+        throw new TypeError('failureId is invalid');
+    }
+    return withStateLock(statePath, async () => {
+        const state = await readMonitorState(statePath);
+        for (const owned of Object.values(state.sites)) {
+            const index = (owned.deliveryFailures ?? []).findIndex(
+                (failure) => failure.id === failureId,
+            );
+            if (index === -1) continue;
+            owned.deliveryFailures.splice(index, 1);
+            state.updatedAt = new Date(now).toISOString();
+            await writeMonitorState(statePath, state);
+            return {
+                schemaVersion: 1,
+                acknowledged: failureId,
+                acknowledgedAt: state.updatedAt,
+            };
+        }
+        throw new Error('delivery_failure_not_found');
+    });
 }
 
 function consecutiveFailureCount(previous, publicProbe) {
@@ -653,9 +788,11 @@ export async function runMonitor(
                 alerts: {},
                 pending: [],
                 deliveryHistory: [],
+                deliveryFailures: [],
                 consecutiveSlowSamples: 0,
                 consecutiveFailures: 0,
             };
+            owned.deliveryFailures ??= [];
             const failures = consecutiveFailureCount(
                 owned.consecutiveFailures ?? 0,
                 publicProbeResult,
@@ -674,6 +811,7 @@ export async function runMonitor(
                 missingAssets: publicProbeResult.missingAssets,
                 certificateDaysLeft: certificateDays,
                 backupAgeHours: backup.ageHours,
+                backupMaxAgeHours: config.backup.maxAgeHours,
                 backupEvidenceAccepted: backup.accepted,
                 consecutiveFailures: failures,
                 consecutiveSlowSamples: slowSamples,
@@ -743,12 +881,16 @@ export async function runMonitor(
             (count, site) => count + site.pending.length,
             0,
         );
+        const deliveryFailures = Object.values(state.sites).flatMap(
+            (site) => site.deliveryFailures ?? [],
+        );
         const healthy =
             alerts.length === 0 &&
             backup.accepted &&
             !!config.notification &&
             !notificationRetryNeeded &&
-            pending === 0;
+            pending === 0 &&
+            deliveryFailures.length === 0;
         return {
             schemaVersion: 1,
             checkedAt: new Date(now).toISOString(),
@@ -758,6 +900,7 @@ export async function runMonitor(
             deliveries,
             notification: config.notification?.url ?? 'monitoring-unconfigured',
             pendingNotifications: pending,
+            deliveryFailures,
             healthy,
             alertCount: alerts.length,
         };
@@ -777,9 +920,22 @@ if (
         const index = process.argv.indexOf('--config');
         const path = index >= 0 ? process.argv[index + 1] : null;
         if (!path) throw new Error('Usage: probe.mjs --config FILE');
-        const result = await loadAndRun(path);
-        console.log(JSON.stringify(result, null, 2));
-        process.exitCode = result.healthy ? 0 : 1;
+        const acknowledgeIndex = process.argv.indexOf('--ack-delivery');
+        if (acknowledgeIndex >= 0) {
+            const failureId = process.argv[acknowledgeIndex + 1];
+            const config = JSON.parse(await readFile(path, 'utf8'));
+            validateConfig(config);
+            const result = await acknowledgeDeliveryFailure(
+                config.statePath,
+                failureId,
+            );
+            console.log(JSON.stringify(result, null, 2));
+            process.exitCode = 0;
+        } else {
+            const result = await loadAndRun(path);
+            console.log(JSON.stringify(result, null, 2));
+            process.exitCode = result.healthy ? 0 : 1;
+        }
     } catch (error) {
         console.log(
             JSON.stringify(

@@ -1,42 +1,41 @@
 {
-  "schemaVersion": 1,
-  "environment": "production",
-  "statePath": "/var/lib/platform-monitoring/state.json",
-  "control": {
-    "url": "https://control.example.invalid",
-    "tokenEnv": "PLATFORM_MONITOR_CONTROL_TOKEN",
-    "timeoutMs": 10000
-  },
-  "backup": {
-    "directory": "/var/lib/platform-delivery/backups/latest",
-    "lockPath": "/opt/platform-delivery/cms/docs/releases/platform-lock.json",
-    "maxAgeHours": 26,
-    "scopeId": "platform-backup"
-  },
-  "notification": {
-    "url": "https://alerts.example.invalid/platform-monitor",
-    "tokenEnv": "PLATFORM_MONITOR_NOTIFICATION_TOKEN",
-    "timeoutMs": 10000,
-    "retryMs": 60000
-  },
-  "sites": [
-    {
-      "id": "00000000-0000-4000-8000-000000000000",
-      "origin": "https://launch.example.invalid",
-      "path": "/",
-      "marker": "replace-with-a-release-bound-public-marker",
-      "expectedReleaseId": "release-to-verify",
-      "expectedTemplate": {
-        "id": "aeroframe",
-        "version": "1.0.4",
-        "manifestChecksum": "sha256:replace-with-the-locked-manifest-checksum"
-      },
-      "assets": [
+    "schemaVersion": 1,
+    "environment": "production",
+    "statePath": "/var/lib/platform-monitoring/state.json",
+    "control": {
+        "url": "https://control.example.invalid",
+        "tokenEnv": "PLATFORM_MONITOR_CONTROL_TOKEN",
+        "timeoutMs": 10000
+    },
+    "backup": {
+        "directory": "/var/lib/platform-delivery/backups/latest",
+        "lockPath": "/opt/platform-delivery/cms/docs/releases/platform-lock.json",
+        "maxAgeHours": 26
+    },
+    "notification": {
+        "url": "https://alerts.example.invalid/platform-monitor",
+        "tokenEnv": "PLATFORM_MONITOR_NOTIFICATION_TOKEN",
+        "timeoutMs": 10000,
+        "retryMs": 60000
+    },
+    "sites": [
         {
-          "path": "/favicon.ico",
-          "contentType": "image/x-icon"
+            "id": "00000000-0000-4000-8000-000000000000",
+            "origin": "https://launch.example.invalid",
+            "path": "/",
+            "marker": "replace-with-a-release-bound-public-marker",
+            "expectedReleaseId": "release-to-verify",
+            "expectedTemplate": {
+                "id": "aeroframe",
+                "version": "1.0.4",
+                "manifestChecksum": "sha256:replace-with-the-locked-manifest-checksum"
+            },
+            "assets": [
+                {
+                    "path": "/favicon.ico",
+                    "contentType": "image/x-icon"
+                }
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }
