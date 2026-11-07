@@ -109,6 +109,11 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
+      - name: Install existing Python test dependency
+        run: python3 -m pip install PyYAML==6.0.3
+      - name: Test cross-repository candidate workflow
+        working-directory: cms
+        run: python3 -m unittest ops.release.test_gateway_release_workflow -v
       - name: Materialize candidate inputs without shell interpolation
         env:
           LOCK_JSON: ${{ inputs.lock }}

@@ -1,9 +1,5 @@
 import importlib.util
-import os
 from pathlib import Path
-import re
-import subprocess
-import tempfile
 import unittest
 import yaml
 
@@ -41,37 +37,28 @@ class PlatformGateWorkflowTests(unittest.TestCase):
         self.root = Path(__file__).parents[2]
         self.workflow = yaml.safe_load((self.root / '.github/workflows/platform-gate.yml').read_text())
 
-    def test_gateway_candidate_condition_consumes_real_release_output(self):
-        gateway = Path(os.environ.get('E2E_GATEWAY_ROOT', self.root.parent / 'Independent-Website-Gateway'))
-        workflow = yaml.safe_load((gateway / '.github/workflows/release.yml').read_text())
-        job = workflow['jobs']['candidate']
-        condition = re.fullmatch(r"needs\.([\w-]+)\.outputs\.([\w-]+) == 'true'", job['if'])
-        self.assertIsNotNone(condition, 'candidate condition must consume a verification output')
-        producer_id, output_id = condition.groups()
-        needs = job['needs'] if isinstance(job['needs'], list) else [job['needs']]
-        self.assertIn(producer_id, needs)
-        producer = workflow['jobs'][producer_id]
-        self.assertIn(output_id, producer['outputs'], 'candidate condition references an unexported output')
-        binding = re.fullmatch(r'\$\{\{ steps\.([\w-]+)\.outputs\.([\w-]+) \}\}', producer['outputs'][output_id])
-        self.assertIsNotNone(binding)
-        step_id, step_output = binding.groups()
-        release = next(step for step in producer['steps'] if step.get('id') == step_id)
-        # Execute the real metadata producer and follow the workflow's output
-        # mapping, so a renamed export cannot silently disable valid candidates.
-        for ref, event, expected in [
-            ('refs/heads/release/v1.2.3', 'push', True),
-            ('refs/heads/master', 'push', False),
-            ('refs/pull/3/merge', 'pull_request', False),
-            ('refs/heads/release/v1.2.3', 'workflow_dispatch', False),
-        ]:
-            with self.subTest(ref=ref, event=event), tempfile.TemporaryDirectory() as directory:
-                output = Path(directory) / 'outputs'
-                env = dict(os.environ, GITHUB_REF=ref, GITHUB_EVENT_NAME=event, GITHUB_OUTPUT=str(output))
-                result = subprocess.run(['bash', '-e', '-c', release['run']], cwd=gateway, env=env, capture_output=True, text=True)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                values = dict(line.split('=', 1) for line in output.read_text().splitlines())
-                self.assertIn(step_output, values)
-                self.assertEqual(values[step_output] == 'true', expected)
+    def test_cross_repository_candidate_regression_is_required_after_exact_checkout(self):
+        job = self.workflow['jobs']['platform-gate']
+        steps = job['steps']
+        command = 'python3 -m unittest ops.release.test_gateway_release_workflow -v'
+        matches = [i for i, step in enumerate(steps) if step.get('run') == command]
+        self.assertEqual(len(matches), 1, 'central gate must run the cross-repository regression')
+        index = matches[0]
+        regression = steps[index]
+        self.assertEqual(regression['working-directory'], 'cms')
+        self.assertNotIn('if', regression)
+        self.assertNotIn('continue-on-error', regression)
+        self.assertNotIn('continue-on-error', job)
+        self.assertEqual(job['env']['E2E_GATEWAY_ROOT'], '${{ github.workspace }}/gateway')
+        checkouts = [(i, step) for i, step in enumerate(steps) if step.get('uses', '').startswith('actions/checkout@')]
+        self.assertEqual(len(checkouts), 4)
+        self.assertTrue(all(i < index for i, _ in checkouts))
+        gateway = next(step for _, step in checkouts if step['with']['path'] == 'gateway')
+        self.assertEqual(gateway['with']['ref'], '${{ needs.resolve.outputs.gateway }}')
+        dependency = next(i for i, step in enumerate(steps) if step.get('run') == 'python3 -m pip install PyYAML==6.0.3')
+        self.assertLess(dependency, index)
+        build = next(i for i, step in enumerate(steps) if step.get('name') == 'Install and build locked CMS and Gateway')
+        self.assertLess(index, build)
 
     def test_deployment_only_follows_gate_and_uses_its_exact_digests(self):
         job = self.workflow['jobs']['deploy']
