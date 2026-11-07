@@ -13,7 +13,7 @@ test('launch missing lock is nonzero and exports all exact required IDs without 
             {
                 env: {
                     ...process.env,
-                    E2E_RUNTIME_DIR: directory,
+                    E2E_RUNTIME_DIR: path.join(directory, 'run'),
                     E2E_PLATFORM_LOCK: path.join(directory, 'absent.json'),
                 },
                 encoding: 'utf8',
@@ -21,7 +21,10 @@ test('launch missing lock is nonzero and exports all exact required IDs without 
         );
         assert.notEqual(result.status, 0);
         const report = JSON.parse(
-            await readFile(path.join(directory, 'launch-result.json'), 'utf8'),
+            await readFile(
+                path.join(directory, 'run', 'launch-result.json'),
+                'utf8',
+            ),
         );
         assert.equal(report.passed, false);
         assert.equal(report.lockChecksum, null);

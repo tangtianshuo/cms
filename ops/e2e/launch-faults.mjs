@@ -19,11 +19,15 @@ export async function launchFaults({
     publicGet,
     sites,
     seed,
+    seeds,
+    formal = false,
     until,
     containerIds,
 }) {
     const proof = {
-        scope: 'actual-local-source-runtime-faults-not-public-acceptance',
+        scope: formal
+            ? 'formal-owned-runtime-faults'
+            : 'actual-local-source-runtime-faults-not-public-acceptance',
         checks: [],
         restored: [],
     };
@@ -59,81 +63,87 @@ export async function launchFaults({
     };
     try {
         // Stop the candidate process while its real image is starting; no artifact corruption.
-        const releaseId = randomUUID();
-        const bytes = Buffer.from(JSON.stringify(seed.snapshot));
-        await seed.gateway('releases', {
-            siteId: seed.binding.siteId,
-            releaseId,
-            checksum:
-                'sha256:' + createHash('sha256').update(bytes).digest('hex'),
-            metadata: seed.metadata,
-            snapshot: bytes.toString('base64'),
-        });
-        const operation = await seed.gateway('publish-operations', {
-            releaseId,
-            expectedRevision: baseline[0].active.routeRevision,
-            idempotencyKey: randomUUID(),
-        });
-        let candidate;
-        try {
-            await until(
-                async () => {
-                    const ids = docker([
-                        'ps',
-                        '-q',
-                        '--filter',
-                        `label=gateway.release-id=${releaseId}`,
-                    ])
-                        .split('\n')
-                        .filter(Boolean);
-                    if (ids[0]) {
-                        candidate = ids[0];
-                        return true;
-                    }
-                    return false;
-                },
-                'actual candidate start',
-                30000,
-            );
-            containerIds.add(candidate);
-            docker(['pause', candidate]);
-            const inspect = JSON.parse(docker(['inspect', candidate]))[0];
-            assert.equal(inspect.State.Paused, true);
-            assert.equal(
-                inspect.Config.Labels['gateway.release-id'],
+        const candidates = seeds || [seed];
+        for (const seed of candidates) {
+            const releaseId = randomUUID();
+            const bytes = Buffer.from(JSON.stringify(seed.snapshot));
+            await seed.gateway('releases', {
+                siteId: seed.binding.siteId,
                 releaseId,
-            );
-            let failure;
-            await until(
-                async () => {
-                    failure = (
-                        await sql.query(
-                            'SELECT "status","failureCode" FROM "PublishOperation" WHERE "id"=$1',
-                            [operation.id],
-                        )
-                    ).rows[0];
-                    return failure.status === 'failed';
-                },
-                'unhealthy runtime failure',
-                90000,
-            );
-            assert.equal(failure.failureCode, 'CANDIDATE_UNHEALTHY');
-            await verify();
-            proof.checks.push({
-                fault: 'unhealthy-candidate',
-                operationId: operation.id,
-                releaseId,
-                containerId: candidate,
-                failureCode: failure.failureCode,
-                activePreserved: true,
+                checksum:
+                    'sha256:' +
+                    createHash('sha256').update(bytes).digest('hex'),
+                metadata: seed.metadata,
+                snapshot: bytes.toString('base64'),
             });
-        } finally {
-            if (candidate)
-                try {
-                    docker(['unpause', candidate]);
-                } catch {
-                    /* worker already removed its failed candidate */
-                }
+            const operation = await seed.gateway('publish-operations', {
+                releaseId,
+                expectedRevision: baseline.find(
+                    (b) => b.site.siteId === seed.binding.siteId,
+                ).active.routeRevision,
+                idempotencyKey: randomUUID(),
+            });
+            let candidate;
+            try {
+                await until(
+                    async () => {
+                        const ids = docker([
+                            'ps',
+                            '-q',
+                            '--filter',
+                            `label=gateway.release-id=${releaseId}`,
+                        ])
+                            .split('\n')
+                            .filter(Boolean);
+                        if (ids[0]) {
+                            candidate = ids[0];
+                            return true;
+                        }
+                        return false;
+                    },
+                    'actual candidate start',
+                    30000,
+                );
+                containerIds.add(candidate);
+                docker(['pause', candidate]);
+                const inspect = JSON.parse(docker(['inspect', candidate]))[0];
+                assert.equal(inspect.State.Paused, true);
+                assert.equal(
+                    inspect.Config.Labels['gateway.release-id'],
+                    releaseId,
+                );
+                let failure;
+                await until(
+                    async () => {
+                        failure = (
+                            await sql.query(
+                                'SELECT "status","failureCode" FROM "PublishOperation" WHERE "id"=$1',
+                                [operation.id],
+                            )
+                        ).rows[0];
+                        return failure.status === 'failed';
+                    },
+                    'unhealthy runtime failure',
+                    90000,
+                );
+                assert.equal(failure.failureCode, 'CANDIDATE_UNHEALTHY');
+                await verify();
+                proof.checks.push({
+                    fault: 'unhealthy-candidate',
+                    operationId: operation.id,
+                    releaseId,
+                    containerId: candidate,
+                    failureCode: failure.failureCode,
+                    activePreserved: true,
+                });
+            } finally {
+                if (candidate)
+                    try {
+                        docker(['unpause', candidate]);
+                    } catch {
+                        /* worker already removed its failed candidate */
+                    }
+            }
         }
         processes.signalGroup(cmsChild.pid, 'SIGSTOP');
         try {

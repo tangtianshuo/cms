@@ -326,7 +326,7 @@ try {
     const selector = { 'x-bcms-workspace': workspace._id };
     const site = await api(
         '/workspaces/current/sites',
-        { name: 'Local renderer unavailable baseline' },
+        { name: 'Local renderer unavailable baseline', requestKey:'preview-'+identity },
         auth.accessToken,
         selector,
     );

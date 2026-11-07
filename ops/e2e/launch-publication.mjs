@@ -11,3 +11,36 @@ export function verifyPublicResponse({ status, body, marker, otherMarker }) {
     );
     return true;
 }
+
+export function verifyPublicProduct({
+    status,
+    body,
+    marker,
+    otherMarker,
+    price,
+    replacedPrice,
+}) {
+    verifyPublicResponse({ status, body, marker, otherMarker });
+    const prices = [
+        ...body.matchAll(/<strong\b[^>]*>([\s\S]*?)<\/strong>/gi),
+    ].map((m) => m[1].replace(/<[^>]*>/g, ' ').trim());
+    const exact = (value) => new RegExp('(^|[^0-9])' + value + '([^0-9]|$)');
+    assert.ok(
+        prices.some((text) => exact(price).test(text)),
+        'Expected product price absent',
+    );
+    assert.ok(
+        !prices.some((text) => exact(replacedPrice).test(text)),
+        'Replaced product price remains',
+    );
+    return true;
+}
+
+export function verifyRollbackRevision(restored, latest) {
+    assert.ok(
+        Number.isSafeInteger(restored) &&
+            Number.isSafeInteger(latest) &&
+            restored > latest,
+        'Rollback authority revision must exceed latest active revision',
+    );
+}

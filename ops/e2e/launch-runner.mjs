@@ -1,14 +1,17 @@
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {
+    createLaunchDirectory,
+    validateLaunchEnvelope,
+    finalizeLaunchResults,
+} from './launch-results.mjs';
 import { validatePlatformLock } from '../release/platform-lock.mjs';
 import {
     acceptanceTemplates,
-    completeAcceptance,
     summarizeAcceptance,
-    acceptanceEvidence,
 } from './acceptance-report.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 export async function runLaunch(env = process.env) {
@@ -23,7 +26,7 @@ export async function runLaunch(env = process.env) {
                 runId,
             ),
     );
-    await mkdir(directory, { recursive: true, mode: 0o700 });
+    await createLaunchDirectory(directory);
     const startedAt = new Date().toISOString();
     let lock,
         lockChecksum = null,
@@ -82,7 +85,10 @@ export async function runLaunch(env = process.env) {
                 source[name] = { unavailable: true };
             }
         }
-    let childStatus, supplementary;
+    let childStatus,
+        supplementary,
+        ownedReceipt,
+        cleanupVerified = false;
     if (env.E2E_LAUNCH_LOCAL === '1') {
         const run = spawnSync(
             process.execPath,
@@ -112,13 +118,6 @@ export async function runLaunch(env = process.env) {
             )
                 reason =
                     'All four executed sources must be clean and match the supplied PlatformLock';
-        if (
-            !env.STOREFRONT_E2E_CMS ||
-            !env.STOREFRONT_E2E_EMAIL ||
-            !env.STOREFRONT_E2E_PASSWORD
-        )
-            reason =
-                'Fresh isolated CMS, database, Gateway, worker, ingest and authenticated browser fixture are required';
     }
     if (reason)
         cases = acceptanceTemplates.map((t) => ({
@@ -130,18 +129,12 @@ export async function runLaunch(env = process.env) {
     else {
         const browser = spawnSync(
             process.execPath,
-            [
-                'node_modules/@playwright/test/cli.js',
-                'test',
-                '--config',
-                'ops/e2e/playwright.config.mjs',
-                'ops/e2e/launch.spec.mjs',
-                '--project=desktop',
-            ],
+            ['ops/e2e/launch-owned.mjs'],
             {
                 cwd: root,
                 env: {
                     ...env,
+                    E2E_RUNTIME_DIR: path.join(directory, 'owned'),
                     E2E_PLATFORM_LOCK:
                         env.E2E_PLATFORM_LOCK ||
                         path.join(root, 'docs/releases/platform-lock.json'),
@@ -160,6 +153,23 @@ export async function runLaunch(env = process.env) {
             },
         );
         childStatus = browser.status;
+        try {
+            ownedReceipt = JSON.parse(
+                await readFile(
+                    path.join(directory, 'owned/evidence.json'),
+                    'utf8',
+                ),
+            );
+            if (
+                ownedReceipt.runId !== runId ||
+                ownedReceipt.lockChecksum !== lockChecksum ||
+                ownedReceipt.scope !== 'formal-owned-runtime'
+            )
+                throw Error('Foreign lifecycle');
+            cleanupVerified = ownedReceipt.cleanupVerified === true;
+        } catch {
+            cleanupVerified = false;
+        }
         for (const template of acceptanceTemplates)
             try {
                 const result = JSON.parse(
@@ -168,7 +178,19 @@ export async function runLaunch(env = process.env) {
                         'utf8',
                     ),
                 );
-                cases.push(...result.cases);
+                const operational = (ownedReceipt?.cases || []).filter((c) =>
+                    c.id.startsWith(template.id + '/'),
+                );
+                const replacements = new Set(operational.map((c) => c.id));
+                cases.push(
+                    ...validateLaunchEnvelope(result, {
+                        runId,
+                        lockChecksum,
+                        target: template,
+                        scope: 'formal-UI',
+                    }).filter((c) => !replacements.has(c.id)),
+                    ...operational,
+                );
             } catch {
                 cases.push({
                     id: template.id + '/CREATE',
@@ -178,7 +200,14 @@ export async function runLaunch(env = process.env) {
                 });
             }
     }
-    const completed = completeAcceptance(cases),
+    const finalized = finalizeLaunchResults({
+        cases,
+        lockChecksum,
+        browserExit: childStatus,
+        cleanupVerified,
+        startedAt,
+    });
+    const completed = finalized.cases,
         summary = summarizeAcceptance(completed);
     const report = {
         schemaVersion: 1,
@@ -191,6 +220,7 @@ export async function runLaunch(env = process.env) {
         completedAt: new Date().toISOString(),
         source,
         supplementary,
+        cleanupVerified,
         ...summary,
         passed: summary.passed && childStatus === 0,
         cases: completed,
@@ -201,19 +231,10 @@ export async function runLaunch(env = process.env) {
         JSON.stringify(report, null, 2) + '\n',
         { mode: 0o600 },
     );
-    if (lockChecksum)
+    if (finalized.consumerEvidence)
         await writeFile(
             path.join(directory, 'acceptance-evidence.json'),
-            JSON.stringify(
-                acceptanceEvidence({
-                    cases: completed,
-                    lockChecksum,
-                    environment: 'isolated',
-                    startedAt,
-                }),
-                null,
-                2,
-            ) + '\n',
+            JSON.stringify(finalized.consumerEvidence, null, 2) + '\n',
             { mode: 0o600 },
         );
     console.log(

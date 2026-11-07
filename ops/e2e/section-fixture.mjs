@@ -64,7 +64,7 @@ export async function provisionSectionSite({ templatesRoot, root, runRoot, db, s
         return (await response.json()).item._id;
     }
     const ownMedia = await upload(selector, 'B4 own image.png');
-    const foreign = await api('/workspaces/current/sites', { name: 'B4 foreign-media control' }, token, { 'x-bcms-workspace': workspace._id });
+    const foreign = await api('/workspaces/current/sites', { name: 'B4 foreign-media control', requestKey:'preview-foreign-'+randomBytes(16).toString('hex') }, token, { 'x-bcms-workspace': workspace._id });
     const foreignMedia = await upload({ ...selector, 'x-bcms-site': foreign._id }, 'B4 foreign image.png');
     const viewerEmail = `viewer-${randomBytes(8).toString('hex')}@acceptance.invalid`;
     const viewerPassword = randomBytes(24).toString('hex');
