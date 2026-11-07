@@ -734,9 +734,32 @@ test('data migration preview identifies affected entries without mutating site o
         target,
     });
     assert.ok(
-        preview.affectedContent?.includes(
-            'field:product/entry-1:title→headline',
+        preview.affectedContent?.some(
+            (item) =>
+                item.includes('Products') &&
+                item.includes('A') &&
+                item.includes('Title') &&
+                item.includes('Headline'),
         ),
+    );
+    assert.ok(
+        preview.readableChanges.some((item) => item.includes('Products')) &&
+            preview.readableChanges.some((item) => item.includes('Title')) &&
+            preview.readableChanges.some((item) => item.includes('Headline')),
+    );
+    assert.ok(
+        preview.readableChanges.every(
+            (item) =>
+                !item.includes('entry-1') &&
+                !item.includes('product/') &&
+                !item.includes('field:'),
+        ),
+    );
+    assert.ok(
+        preview.affectedContent?.every((item) => !item.includes('entry-1')),
+    );
+    assert.ok(
+        preview.affectedContent?.every((item) => !item.includes('product/')),
     );
     assert.deepEqual(document, beforeDocument);
     assert.deepEqual(target, beforeTarget);

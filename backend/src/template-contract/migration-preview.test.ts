@@ -60,7 +60,7 @@ const source: MigrationDocument = {
                     enabled: false,
                     rank: 0,
                     summary: '',
-                    cover: [{ _id: 'media-1' }],
+                    cover: { _id: 'media-1' },
                     related: [{ tid: 'service-template', eid: 'entry-1' }],
                 },
             },
@@ -92,7 +92,7 @@ test('renames a field without mutating the source or overwriting a target', () =
         enabled: false,
         rank: 0,
         summary: '',
-        cover: [{ _id: 'media-1' }],
+        cover: { _id: 'media-1' },
         related: [{ tid: 'service-template', eid: 'entry-1' }],
     });
     assert.deepEqual(source.models.service[0].fields.headline, 'A');
@@ -153,9 +153,9 @@ test('set-default writes only an absent property and preserves false, zero and e
         },
     ]);
     assert.equal(present.document.models.service[0].fields.title, 'Fallback');
-    assert.deepEqual(present.document.models.service[0].fields.cover, [
-        { _id: 'media-1' },
-    ]);
+    assert.deepEqual(present.document.models.service[0].fields.cover, {
+        _id: 'media-1',
+    });
 });
 
 test('returns explicit issues for unsupported operations, unknown models and forbidden keys', () => {
@@ -212,7 +212,7 @@ test('target validation reports required, type, media, reference and page-sectio
                     fields: {
                         title: 'A',
                         rank: 'zero',
-                        cover: [{ _id: 'missing' }],
+                        cover: { _id: 'missing' },
                         related: [{ tid: 'wrong', eid: 'missing' }],
                     },
                 },
@@ -233,4 +233,214 @@ test('target validation reports required, type, media, reference and page-sectio
     assert.ok(codes.has('entry_reference'));
     assert.ok(codes.has('missing_page'));
     assert.ok(codes.has('unknown_section'));
+});
+
+test('target validation covers complex field values, array shape and exactly-one models', () => {
+    const complexTarget: MigrationTarget = {
+        models: {
+            settings: {
+                singleEntry: true,
+                fields: [
+                    {
+                        key: 'tags',
+                        type: 'STRING',
+                        required: false,
+                        array: true,
+                    },
+                    {
+                        key: 'publishedAt',
+                        type: 'DATE',
+                        required: false,
+                        array: false,
+                    },
+                    {
+                        key: 'status',
+                        type: 'ENUMERATION',
+                        required: false,
+                        array: false,
+                    },
+                    {
+                        key: 'group',
+                        type: 'GROUP_POINTER',
+                        required: false,
+                        array: false,
+                    },
+                    {
+                        key: 'widget',
+                        type: 'WIDGET',
+                        required: false,
+                        array: false,
+                    },
+                ],
+            },
+        },
+        pages: [],
+        sections: [],
+    };
+    const invalid = previewMigration(
+        {
+            models: {
+                settings: [
+                    {
+                        id: 'settings-1',
+                        fields: {
+                            tags: 'not-an-array',
+                            publishedAt: {
+                                timestamp: 'now',
+                                timezoneOffset: 0,
+                            },
+                            status: { items: ['active'], selected: 'missing' },
+                            group: { _id: 'group', items: [{ props: 'bad' }] },
+                            widget: { _id: '', props: [{ id: 'field' }] },
+                        },
+                    },
+                    { id: 'settings-2', fields: { tags: [] } },
+                ],
+            },
+            pages: [],
+        },
+        [],
+        complexTarget,
+    );
+    const codes = new Set(invalid.issues.map((issue) => issue.code));
+    assert.ok(codes.has('single_entry'));
+    assert.ok(codes.has('field_shape'));
+    assert.ok(codes.has('field_value'));
+    const valid = previewMigration(
+        {
+            models: {
+                settings: [
+                    {
+                        id: 'settings-1',
+                        fields: {
+                            tags: ['public'],
+                            publishedAt: { timestamp: 1, timezoneOffset: 0 },
+                            status: { items: ['active'], selected: 'active' },
+                            group: { _id: 'group', items: [{ props: [] }] },
+                            widget: {
+                                _id: 'widget',
+                                props: [{ id: 'field', data: 'value' }],
+                            },
+                        },
+                    },
+                ],
+            },
+            pages: [],
+        },
+        [],
+        complexTarget,
+    );
+    assert.deepEqual(valid.issues, []);
+});
+
+test('target validation rejects zero singletons and both directions of array shape', () => {
+    const empty = previewMigration(
+        { models: { settings: [] }, pages: [] },
+        [],
+        {
+            models: {
+                settings: {
+                    singleEntry: true,
+                    fields: [
+                        {
+                            key: 'title',
+                            type: 'STRING',
+                            required: false,
+                            array: false,
+                        },
+                    ],
+                },
+            },
+            pages: [],
+            sections: [],
+        },
+    );
+    assert.ok(empty.issues.some((issue) => issue.code === 'single_entry'));
+
+    const shapes = previewMigration(
+        {
+            models: {
+                settings: [
+                    {
+                        id: 'settings-1',
+                        fields: {
+                            tags: 'not-an-array',
+                            title: ['not-a-scalar'],
+                        },
+                    },
+                ],
+            },
+            pages: [],
+        },
+        [],
+        {
+            models: {
+                settings: {
+                    singleEntry: true,
+                    fields: [
+                        {
+                            key: 'tags',
+                            type: 'STRING',
+                            required: false,
+                            array: true,
+                        },
+                        {
+                            key: 'title',
+                            type: 'STRING',
+                            required: false,
+                            array: false,
+                        },
+                    ],
+                },
+            },
+            pages: [],
+            sections: [],
+        },
+    );
+    assert.equal(
+        shapes.issues.filter((issue) => issue.code === 'field_shape').length,
+        2,
+    );
+});
+
+test('target validation rejects missing models and unknown declared field types', () => {
+    const targetWithUnknownType: MigrationTarget = {
+        models: {
+            services: {
+                fields: [
+                    {
+                        key: 'title',
+                        type: 'CUSTOM',
+                        required: false,
+                        array: false,
+                    },
+                ],
+            },
+        },
+        pages: [],
+        sections: [],
+    };
+    const unknownType = previewMigration(
+        {
+            models: {
+                services: [{ id: 'service', fields: { title: 'A' } }],
+            },
+            pages: [],
+        },
+        [],
+        targetWithUnknownType,
+    );
+    assert.ok(
+        unknownType.issues.some((issue) => issue.code === 'unknown_field_type'),
+    );
+    const missing = previewMigration({ models: {}, pages: [] }, [], {
+        models: {
+            services: {
+                fields: [],
+            },
+        },
+        pages: [],
+        sections: [],
+    });
+    assert.ok(missing.issues.some((issue) => issue.code === 'missing_model'));
 });

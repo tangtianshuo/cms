@@ -50,6 +50,7 @@ interface UpgradePreview {
     }>;
     issues?: Array<{ code: string; path: string }>;
     affectedContent?: string[];
+    readableChanges: string[];
     contentImpact: string[];
     templateImpact: string[];
 }
@@ -272,6 +273,7 @@ export const PresetsView = defineComponent({
                                     },
                                 ],
                                 affectedContent: [],
+                                readableChanges: [],
                                 contentImpact: [userErrorMessage(cause)],
                                 templateImpact: [],
                             };
@@ -730,42 +732,20 @@ export const PresetsView = defineComponent({
                                                               : '此版本需要新建网站安装'}
                                                     </strong>
                                                     {(upgradePreview.value
-                                                        .structureChanges
+                                                        .readableChanges
                                                         ?.length ?? 0) > 0 && (
                                                         <div class="mt-3">
                                                             <span class="font-medium">
                                                                 内容结构变化
                                                             </span>
                                                             <ul class="mt-1 list-disc pl-5 opacity-80">
-                                                                {upgradePreview.value.structureChanges!.map(
+                                                                {upgradePreview.value.readableChanges!.map(
                                                                     (
                                                                         change,
                                                                     ) => (
                                                                         <li>
-                                                                            {change.kind ===
-                                                                            'field'
-                                                                                ? '内容字段'
-                                                                                : change.kind ===
-                                                                                    'section'
-                                                                                  ? '页面区块'
-                                                                                  : change.kind ===
-                                                                                      'page'
-                                                                                    ? '页面结构'
-                                                                                    : change.kind ===
-                                                                                        'renderer'
-                                                                                      ? '展示能力'
-                                                                                      : '内容类型'}{' '}
-                                                                            ·{' '}
                                                                             {
-                                                                                change.id
-                                                                            }
-                                                                            ：
-                                                                            {
-                                                                                change.from
-                                                                            }{' '}
-                                                                            →{' '}
-                                                                            {
-                                                                                change.to
+                                                                                change
                                                                             }
                                                                         </li>
                                                                     ),
@@ -789,10 +769,6 @@ export const PresetsView = defineComponent({
                                                                         problem,
                                                                     ) => (
                                                                         <li>
-                                                                            {
-                                                                                problem.path
-                                                                            }{' '}
-                                                                            ·{' '}
                                                                             {upgradeIssueText(
                                                                                 problem.code,
                                                                             )}

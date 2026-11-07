@@ -67,6 +67,18 @@ const supportedOperations = new Set([
     'set-default',
     'rename-section',
 ]);
+const supportedFieldTypes = new Set([
+    'STRING',
+    'NUMBER',
+    'BOOLEAN',
+    'DATE',
+    'ENUMERATION',
+    'MEDIA',
+    'ENTRY_POINTER',
+    'RICH_TEXT',
+    'GROUP_POINTER',
+    'WIDGET',
+]);
 
 function has(value: Record<string, unknown>, key: string): boolean {
     return Object.prototype.hasOwnProperty.call(value, key);
@@ -126,6 +138,55 @@ function objectWithStringId(value: unknown): boolean {
     );
 }
 
+function object(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function dateValue(value: unknown): boolean {
+    return (
+        object(value) &&
+        typeof value.timestamp === 'number' &&
+        Number.isFinite(value.timestamp) &&
+        typeof value.timezoneOffset === 'number' &&
+        Number.isFinite(value.timezoneOffset)
+    );
+}
+
+function enumValue(value: unknown): boolean {
+    return (
+        typeof value === 'string' ||
+        (object(value) &&
+            Array.isArray(value.items) &&
+            value.items.every((item) => typeof item === 'string') &&
+            (value.selected === undefined ||
+                (typeof value.selected === 'string' &&
+                    value.items.includes(value.selected))))
+    );
+}
+
+function groupPointerValue(value: unknown): boolean {
+    return (
+        object(value) &&
+        typeof value._id === 'string' &&
+        !!value._id &&
+        Array.isArray(value.items) &&
+        value.items.every((item) => object(item) && Array.isArray(item.props))
+    );
+}
+
+function widgetValue(value: unknown): boolean {
+    return (
+        object(value) &&
+        typeof value._id === 'string' &&
+        !!value._id &&
+        Array.isArray(value.props) &&
+        value.props.every(
+            (item) =>
+                object(item) && typeof item.id === 'string' && 'data' in item,
+        )
+    );
+}
+
 function pointer(value: unknown): { tid: string; eid: string } | null {
     if (!value || typeof value !== 'object') return null;
     const candidate = value as { tid?: unknown; eid?: unknown };
@@ -176,6 +237,10 @@ function validateValueType(
             issue(issues, 'field_value', path);
         } else if (type === 'BOOLEAN' && typeof value !== 'boolean') {
             issue(issues, 'field_value', path);
+        } else if (type === 'DATE' && !dateValue(value)) {
+            issue(issues, 'field_value', path);
+        } else if (type === 'ENUMERATION' && !enumValue(value)) {
+            issue(issues, 'field_value', path);
         } else if (type === 'MEDIA') {
             if (!objectWithStringId(value)) {
                 issue(issues, 'field_value', path);
@@ -211,6 +276,12 @@ function validateValueType(
             (!value || typeof value !== 'object')
         ) {
             issue(issues, 'field_value', path);
+        } else if (type === 'GROUP_POINTER' && !groupPointerValue(value)) {
+            issue(issues, 'field_value', path);
+        } else if (type === 'WIDGET' && !widgetValue(value)) {
+            issue(issues, 'field_value', path);
+        } else if (!supportedFieldTypes.has(type)) {
+            issue(issues, 'unknown_field_type', path);
         }
     }
 }
@@ -220,13 +291,18 @@ function validateDocument(
     target: MigrationTarget,
     issues: MigrationIssue[],
 ): void {
+    for (const modelKey of Object.keys(target.models)) {
+        if (!has(document.models, modelKey)) {
+            issue(issues, 'missing_model', modelKey);
+        }
+    }
     for (const [modelKey, entries] of Object.entries(document.models)) {
         const definition = target.models[modelKey];
         if (!definition) {
             issue(issues, 'unknown_model', modelKey);
             continue;
         }
-        if (definition.singleEntry && entries.length > 1) {
+        if (definition.singleEntry && entries.length !== 1) {
             issue(issues, 'single_entry', modelKey);
         }
         const declared = new Map(
@@ -254,14 +330,25 @@ function validateDocument(
                     continue;
                 }
                 const value = entry.fields[field.key];
-                const values = valuesOf(value);
-                if (!field.array && values.length > 1) {
+                const arrayShaped =
+                    field.array || field.type.toUpperCase() === 'RICH_TEXT';
+                if (arrayShaped && !Array.isArray(value)) {
                     issue(
                         issues,
-                        'field_value',
+                        'field_shape',
                         `${modelKey}/${entry.id}/${field.key}`,
                     );
+                    continue;
                 }
+                if (!arrayShaped && Array.isArray(value)) {
+                    issue(
+                        issues,
+                        'field_shape',
+                        `${modelKey}/${entry.id}/${field.key}`,
+                    );
+                    continue;
+                }
+                const values = valuesOf(value);
                 if (field.required && !nonemptyRequiredValue(value)) {
                     issue(
                         issues,

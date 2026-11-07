@@ -6,7 +6,11 @@ import type { SiteInstallation } from '../presets/site-model';
 import type { ReleaseInput } from '../presets/releases';
 import type { Template } from '../template/models/main';
 import { PropType } from '../prop/models/main';
-import { toMigrationDocument } from './migration-document';
+import {
+    authorizedMigrationMediaIds,
+    toMigrationDocument,
+} from './migration-document';
+import { previewMigration } from './migration-preview';
 
 const site: SiteInstallation = {
     _id: 'site-1',
@@ -202,7 +206,7 @@ test('projects installed prop IDs to stable model field keys without mutating in
             title: 'Consulting',
             enabled: false,
             rank: 0,
-            cover: [{ _id: 'media-1' }],
+            cover: { _id: 'media-1' },
             related: [{ tid: 'template-service', eid: 'entry-2' }],
         },
     });
@@ -269,4 +273,59 @@ test('uses the requested language and keeps layout node IDs authoritative', () =
     assert.deepEqual(french.models.service[0].fields, {
         title: 'Conseil',
     });
+});
+
+test('media authorization excludes same-workspace media bound to another site', () => {
+    const foreign = {
+        ...media,
+        _id: 'media-foreign-site',
+        siteId: 'site-2',
+    } as Media;
+    assert.deepEqual(authorizedMigrationMediaIds(site, [media, foreign]), [
+        'media-1',
+    ]);
+    const target = {
+        models: {
+            service: {
+                fields: [
+                    {
+                        key: 'cover',
+                        type: 'MEDIA',
+                        required: false,
+                        array: false,
+                    },
+                ],
+            },
+        },
+        pages: [],
+        sections: [],
+        availableMediaIds: authorizedMigrationMediaIds(site, [media, foreign]),
+    };
+    const own = previewMigration(
+        {
+            models: {
+                service: [{ id: 'own', fields: { cover: { _id: 'media-1' } } }],
+            },
+            pages: [],
+        },
+        [],
+        target,
+    );
+    const otherSite = previewMigration(
+        {
+            models: {
+                service: [
+                    {
+                        id: 'foreign',
+                        fields: { cover: { _id: 'media-foreign-site' } },
+                    },
+                ],
+            },
+            pages: [],
+        },
+        [],
+        target,
+    );
+    assert.deepEqual(own.issues, []);
+    assert.ok(otherSite.issues.some((issue) => issue.code === 'media_missing'));
 });

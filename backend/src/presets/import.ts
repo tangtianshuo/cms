@@ -78,8 +78,20 @@ export interface TemplateUpgradePreview {
     }>;
     issues?: Array<{ code: string; path: string }>;
     affectedContent?: string[];
+    readableChanges: string[];
     contentImpact: string[];
     templateImpact: string[];
+}
+
+function contentLabel(
+    fields: Record<string, unknown>,
+    fallback: string,
+): string {
+    for (const key of ['title', 'name', 'headline', 'summary']) {
+        const value = fields[key];
+        if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return fallback;
 }
 
 export function previewPublicTemplateUpgrade(
@@ -106,6 +118,46 @@ export function previewPublicTemplateUpgrade(
     );
     const issues = [...structures.issues];
     let schemaCompatible = issues.length === 0;
+    const modelLabels = new Map(
+        installed.models.map((model) => [model.key, model.label]),
+    );
+    for (const model of selected.manifest.models) {
+        modelLabels.set(model.key, model.label);
+    }
+    const fieldLabel = (modelKey: string, fieldKey: string) =>
+        selectedEditor.models
+            .find((model) => model.modelKey === modelKey)
+            ?.fields.find((field) => field.key === fieldKey)?.label ||
+        installedEditor.models
+            .find((model) => model.modelKey === modelKey)
+            ?.fields.find((field) => field.key === fieldKey)?.label ||
+        '内容项';
+    const pageLabel = (pageKey: string) =>
+        selected.manifest.pages.find((page) => page.key === pageKey)?.title ||
+        installed.pages.find((page) => page.key === pageKey)?.title ||
+        '相关页面';
+    const sectionLabel = (type: string) =>
+        selectedEditor.sections.find((section) => section.type === type)
+            ?.label ||
+        installedEditor.sections.find((section) => section.type === type)
+            ?.label ||
+        '页面区块';
+    const readableChanges = structures.changes.map((change) => {
+        if (change.kind === 'field') {
+            const [modelKey, fieldKey] = change.id.split('/');
+            return `${modelLabels.get(modelKey) || '内容'}中的「${fieldLabel(modelKey, fieldKey)}」设置已变化`;
+        }
+        if (change.kind === 'model') {
+            return `${modelLabels.get(change.id) || '内容类型'}已变化`;
+        }
+        if (change.kind === 'page') {
+            return `页面「${pageLabel(change.id)}」的地址或内容归属已变化`;
+        }
+        if (change.kind === 'section') {
+            return `「${sectionLabel(change.id)}」页面区块已变化`;
+        }
+        return '网站展示能力已变化';
+    });
     const installedRecord = site.publishedTemplateRecord
         ? (JSON.parse(site.publishedTemplateRecord) as PublicTemplateRecord)
         : null;
@@ -113,12 +165,12 @@ export function previewPublicTemplateUpgrade(
         ...new Set(
             structures.changes.map((change) =>
                 change.kind === 'field' || change.kind === 'model'
-                    ? `模型 ${change.id.split('/')[0]} 下的内容需要检查`
+                    ? `${modelLabels.get(change.id.split('/')[0]) || '相关内容'}需要检查`
                     : change.kind === 'page'
-                      ? `页面 ${change.id} 需要检查发布路径和内容绑定`
+                      ? `页面「${pageLabel(change.id)}」需要检查`
                       : change.kind === 'section'
-                        ? `区块 ${change.id} 需要检查页面内容`
-                        : `运行能力 ${change.id} 已变化`,
+                        ? `「${sectionLabel(change.id)}」页面区块需要检查`
+                        : '网站展示能力需要检查',
             ),
         ),
     ];
@@ -169,10 +221,17 @@ export function previewPublicTemplateUpgrade(
         if (migrationPreview.issues.length) schemaCompatible = false;
     }
     const actualContentChanges =
-        migrationPreview?.changes.map(
-            (change) =>
-                `${change.kind}:${change.id}:${change.from}→${change.to}`,
-        ) ?? [];
+        migrationPreview?.changes.map((change) => {
+            if (change.kind === 'field') {
+                const [modelKey, entryId] = change.id.split('/');
+                const entry = migrationInput?.document.models[modelKey]?.find(
+                    (item) => item.id === entryId,
+                );
+                return `${modelLabels.get(modelKey) || '内容'}「${contentLabel(entry?.fields || {}, '当前条目')}」中的「${fieldLabel(modelKey, change.from)}」需要调整为「${fieldLabel(modelKey, change.to)}」`;
+            }
+            const [pageKey] = change.id.split('/');
+            return `页面「${pageLabel(pageKey)}」中的「${sectionLabel(change.from)}」需要调整为「${sectionLabel(change.to)}」`;
+        }) ?? [];
     const migrationRequired = !schemaCompatible && !!migrationPlan;
     if (!schemaCompatible && !migrationRequired) {
         contentImpact.unshift('模板字段或页面结构发生变化，需要新建站点安装。');
@@ -194,6 +253,7 @@ export function previewPublicTemplateUpgrade(
         structureChanges: structures.changes,
         issues,
         affectedContent,
+        readableChanges,
         contentImpact,
         templateImpact,
     };

@@ -28,6 +28,7 @@ import {
 } from './import';
 import { releaseSource } from './release-source';
 import {
+    authorizedMigrationMediaIds,
     migrationTargetForManifest,
     toMigrationDocument,
 } from '../template-contract/migration-document';
@@ -298,7 +299,7 @@ export const PresetController = createController({
                         const target = migrationTargetForManifest(
                             selected.manifest,
                             site,
-                            content.media.map((item) => item._id),
+                            authorizedMigrationMediaIds(site, content.media),
                         );
                         return previewPublicTemplateUpgrade(site, selected, {
                             document,

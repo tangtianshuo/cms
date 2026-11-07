@@ -2,8 +2,10 @@ import type { LayoutNode } from '../storefront/layout-document';
 import type { ReleaseInput } from '../presets/releases';
 import type { SiteInstallation, SitePage } from '../presets/site-model';
 import type { PresetManifest } from '../presets/catalog';
+import type { Media } from '../media/models/main';
 import { PropType } from '../prop/models/main';
 import { createLegacyEditorAdapter } from './compatibility';
+import { mediaAuthorizedForSite } from '../storefront/section-schema';
 import type { MigrationDocument, MigrationTarget } from './migration-preview';
 
 function clone<T>(value: T): T {
@@ -29,13 +31,7 @@ function fieldValues(
                 field.propId,
                 {
                     key: field.key,
-                    scalar:
-                        !prop?.array &&
-                        [
-                            PropType.STRING,
-                            PropType.NUMBER,
-                            PropType.BOOLEAN,
-                        ].includes(prop?.type as PropType),
+                    scalar: !prop?.array && prop?.type !== PropType.RICH_TEXT,
                 },
             ] as const;
         }),
@@ -149,4 +145,13 @@ export function migrationTargetForManifest(
             site.models.map((model) => [model.key, model.templateId]),
         ),
     };
+}
+
+export function authorizedMigrationMediaIds(
+    site: SiteInstallation,
+    media: Media[],
+): string[] {
+    return media
+        .filter((item) => mediaAuthorizedForSite(item, site))
+        .map((item) => item._id);
 }
