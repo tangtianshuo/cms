@@ -121,6 +121,8 @@ git diff --cached --check
 git commit -m "ci: require versioned cross-repository acceptance before deployment"
 ```
 
+F1 本地实施记录（2026-11-07）：CMS `9b784cf9358aa7b66cdc9275ea683b7c2d9ec7a9`、Gateway `74960c7d5c08bd7b7a6718d1bb0839a763990102`、Templates `2f4c35f37f5f33d8d7c9b922c37d7dc4501d4a32`、Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42`。独立审查及三次限定复审已关闭候选输出引用、单仓 CI 测试依赖及 Python 字节码污染问题。本地验证包含 Node68项、模板发布17项，以及修复后的 CMS 单仓隔离14项/4既有跳过、跨仓必跑回归和受控缓存验证。各测试的具体源码范围见交付进展记录，不合并为一次完整链路通过。公开制品/完整锁、实际签名证明、公网 HTTPS、远程 CI 正反向执行、环境与保护配置仍未验收；本计划的正式步骤及整体状态不提前勾选。
+
 ### Task F2：一致备份、隔离恢复与运行实例重建
 
 **Files:**
