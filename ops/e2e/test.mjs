@@ -4,6 +4,10 @@ import { open, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { cmsRoot, gatewayRoot, runtimeDir, readEnv } from './runtime.mjs';
+if (process.argv[2] === 'launch') {
+    const { runLaunch } = await import('./launch-runner.mjs');
+    process.exitCode = (await runLaunch()).passed ? 0 : 1;
+} else {
 if (process.argv[2] === 'contract') {
     const { runContractRoundtrip } = await import('./contract-roundtrip.mjs');
     await runContractRoundtrip();
@@ -247,4 +251,6 @@ for (const name of names) {
     if (run.status !== 0)
         throw new Error(`${name} failed (${run.status}); see ignored log`);
     console.log(`${name}: PASS`);
+}
+
 }

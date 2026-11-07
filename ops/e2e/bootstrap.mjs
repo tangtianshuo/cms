@@ -14,6 +14,8 @@ if (process.env.E2E_LOCAL_CANDIDATES === '1') {
     await (await import('./local-bootstrap.mjs')).bootstrapLocal();
     process.exit(0);
 }
+if (process.argv[2] === 'launch') throw new Error('Launch does not use seeded bootstrap. Use node ops/e2e/test.mjs launch with a fresh authenticated UI environment.');
+if (process.env.E2E_LEGACY_SEEDED_FIXTURE !== '1') throw new Error('Legacy seeded bootstrap requires explicit E2E_LEGACY_SEEDED_FIXTURE=1; it is not D1 acceptance.');
 const e = await readEnv();
 async function api(route, body, scope = {}) {
     const response = await fetch(`http://127.0.0.1:18080/api/v4/${route}`, {
@@ -112,7 +114,7 @@ try {
             scope = { 'x-bcms-workspace': workspace._id };
         const site = await api(
             'workspaces/current/sites',
-            { name: 'Docker Gateway Store' },
+            { name: 'Docker Gateway Store', requestKey: `legacy-${e.COMPOSE_PROJECT_NAME}-gateway-store` },
             scope,
         );
         scope['x-bcms-site'] = site._id;

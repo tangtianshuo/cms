@@ -3,6 +3,7 @@ import { createController, createControllerMethod, HttpStatus } from '../_server
 import { RP } from '../security/route-protection/main';
 import { Repo } from '../repo';
 import { listGatewayLeads, updateGatewayLead } from './gateway';
+import { GatewayRequestError } from '../presets/gateway-client';
 
 const state = z.object({ status: z.enum(['new', 'contacted', 'qualified', 'closed', 'spam']).optional(), assignedTo: z.string().trim().max(120).optional(), notes: z.string().max(2000).optional() }).strict();
 
@@ -26,7 +27,9 @@ export const LeadsController = createController({
             const site = await selectedSite(errorHandler); const parsed = state.safeParse(request.body);
             if (!parsed.success) throw errorHandler(HttpStatus.BadRequest, 'Invalid lead update');
             const id = (request.params as { id: string }).id;
-            const item = await updateGatewayLead(site._id, id, parsed.data) || await Repo.lead.methods.updateState(id, site._id, parsed.data);
+            let item;
+            try { item = await updateGatewayLead(site._id, id, parsed.data) || await Repo.lead.methods.updateState(id, site._id, parsed.data); }
+            catch (cause) { if (cause instanceof GatewayRequestError && cause.status === 404) throw errorHandler(HttpStatus.NotFound, 'Lead not found'); throw cause; }
             if (!item) throw errorHandler(HttpStatus.NotFound, 'Lead not found');
             return { item };
         } }),

@@ -12,6 +12,7 @@ import { request as httpRequest } from 'node:http';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { BrowserProcesses } from './browser-processes.mjs';
+const launchLocal = process.env.E2E_D1_LOCAL === '1';
 const cmsRoot = fileURLToPath(new URL('../../', import.meta.url));
 if (process.env.E2E_C4_MODE !== 'local') {
     const { validatePlatformLock } = await import(
@@ -104,6 +105,7 @@ let sql,
     traffic,
     tls,
     worker,
+    cmsChild,
     networkOwned = false,
     token,
     cmsAddress;
@@ -153,6 +155,9 @@ async function main() {
         ['cms', cmsRoot],
         ['gateway', gatewayRoot],
         ['templates', templatesRoot],
+        ...(process.env.E2E_PREVIEW_ROOT
+            ? [['preview', process.env.E2E_PREVIEW_ROOT]]
+            : []),
     ]) {
         const paths = [
             ...new Set(
@@ -248,6 +253,21 @@ async function main() {
     const { probeDomain, requestChallenge } = backendRequire(
         path.join(gatewayRoot, 'apps/control/src/domain-probe.ts'),
     );
+    const leadHandlers = backendRequire(
+        path.join(
+            gatewayRoot,
+            'apps/control/app/api/v1/sites/[siteId]/leads/route.ts',
+        ),
+    );
+    const eventHandlers = backendRequire(
+        path.join(
+            gatewayRoot,
+            'apps/control/app/api/v1/sites/[siteId]/events/route.ts',
+        ),
+    );
+    const { readPublicationState } = backendRequire(
+        path.join(gatewayRoot, 'apps/control/src/publication-state.ts'),
+    );
     const { receiveRelease } = backendRequire(
         path.join(gatewayRoot, 'apps/control/src/releases.ts'),
     );
@@ -332,7 +352,9 @@ async function main() {
             ...(body ? { body } : {}),
         });
         let response;
-        const match = /^\/api\/v1\/sites\/([^/]+)\/(.*)$/.exec(req.url);
+        const match = /^\/api\/v1\/sites\/([^/]+)\/(.*)$/.exec(
+            req.url.split('?')[0],
+        );
         if (req.url === '/api/v1/site-provisioning') {
             const authority = authenticateCmsService(req.headers.authorization);
             response = Response.json(
@@ -347,7 +369,21 @@ async function main() {
             const [, siteId, route] = match;
             const action =
                 /^domains\/([^/]+)\/(check|primary|state|remove)$/.exec(route);
-            if (route === 'domains')
+            if (route === 'publication-state')
+                response = await readPublicationState(request, siteId, sql);
+            else if (route === 'leads')
+                response = await leadHandlers[req.method](
+                    request,
+                    { params: Promise.resolve({ siteId }) },
+                    sql,
+                );
+            else if (route === 'events')
+                response = await eventHandlers.GET(
+                    request,
+                    { params: Promise.resolve({ siteId }) },
+                    sql,
+                );
+            else if (route === 'domains')
                 response =
                     req.method === 'GET'
                         ? await domains.readDomainState(request, siteId, sql)
@@ -441,7 +477,7 @@ async function main() {
         'GATEWAY_PUBLIC_SITE_URL',
     ])
         delete env[key];
-    processes.spawn(
+    cmsChild = processes.spawn(
         process.execPath,
         [
             '-r',
@@ -475,15 +511,103 @@ async function main() {
         )?.[1];
         return !!serverToken;
     }, 'signup');
+    const browserEmail = `c4-${identity}@acceptance.invalid`;
+    const browserPassword = randomBytes(24).toString('hex');
     token = (
         await cms('/auth/signup-admin', {
             serverToken,
-            email: `c4-${identity}@acceptance.invalid`,
-            password: randomBytes(24).toString('hex'),
+            email: browserEmail,
+            password: browserPassword,
             firstName: 'C4',
             lastName: 'Local',
         })
     ).accessToken;
+    let uiSites;
+    if (launchLocal) {
+        const buildLog = fs.openSync(
+            path.join(runRoot, 'ui-build.private.log'),
+            'w',
+            0o600,
+        );
+        const build = processes.spawn(
+            'npm',
+            [
+                'run',
+                'build-only',
+                '--',
+                '--outDir',
+                path.join(runRoot, 'ui/dist'),
+            ],
+            {
+                cwd: path.join(cmsRoot, 'ui'),
+                env: {
+                    ...process.env,
+                    VITE_TEMPLATE_PREVIEW_ORIGIN: '',
+                    VITE_TEMPLATE_PREVIEW_RENDERERS: '',
+                    VITE_STOREFRONT_ORIGIN: '',
+                },
+                stdio: ['ignore', buildLog, buildLog],
+            },
+        );
+        fs.closeSync(buildLog);
+        assert.equal(await processes.exit(build), 0, 'Current-source UI build');
+        const browserLog = fs.openSync(
+            path.join(runRoot, 'browser.private.log'),
+            'w',
+            0o600,
+        );
+        const browser = processes.spawn(
+            process.execPath,
+            [
+                'node_modules/@playwright/test/cli.js',
+                'test',
+                '--config',
+                'ops/e2e/playwright.config.mjs',
+                'ops/e2e/launch.spec.mjs',
+                '--project=desktop',
+            ],
+            {
+                cwd: cmsRoot,
+                env: {
+                    ...process.env,
+                    STOREFRONT_E2E_LAUNCH: '1',
+                    STOREFRONT_E2E_LAUNCH_LOCAL: '1',
+                    STOREFRONT_E2E_RUN_ID: identity,
+                    STOREFRONT_E2E_CMS: cmsAddress,
+                    STOREFRONT_E2E_EMAIL: browserEmail,
+                    STOREFRONT_E2E_PASSWORD: browserPassword,
+                    STOREFRONT_E2E_PRIVATE_DIR: path.join(runRoot, 'private'),
+                    STOREFRONT_E2E_RESULTS_DIR: path.join(runRoot, 'browser'),
+                    STOREFRONT_E2E_LAUNCH_RESULTS: path.join(
+                        runRoot,
+                        'ui-cases',
+                    ),
+                },
+                stdio: ['ignore', browserLog, browserLog],
+            },
+        );
+        fs.closeSync(browserLog);
+        report.browserExit = await processes.exit(browser);
+        assert.equal(
+            report.browserExit,
+            0,
+            'Supplementary UI assertions must pass before worker proof',
+        );
+        uiSites = ['aeroframe', 'fireguard'].map((id) =>
+            JSON.parse(
+                fs.readFileSync(
+                    path.join(runRoot, 'ui-cases', id + '.json'),
+                    'utf8',
+                ),
+            ),
+        );
+        assert.ok(
+            uiSites.every((item) => item.site),
+            'Actual UI creation required before local worker proof',
+        );
+        report.browserScope =
+            'Supplementary builtin aeroframe1.0.0 UI creation; exact two-template CREATE remains blocked when public catalog unavailable';
+    }
     const publicGet = (host, url = '/') =>
         new Promise((resolve, reject) => {
             const req = tlsRequest(
@@ -520,14 +644,20 @@ async function main() {
             'utf8',
         ),
     );
+    let faultSeed;
     for (const name of ['Alpha', 'Beta']) {
-        const workspace = await cms('/workspaces', { name });
+        const fromUi = uiSites?.[name === 'Alpha' ? 0 : 1]?.site;
+        const workspace = fromUi
+            ? { _id: fromUi.cmsWorkspaceId }
+            : await cms('/workspaces', { name });
         const selection = { cmsWorkspaceId: workspace._id, cmsSiteId: '' };
-        const site = await cms(
-            '/workspaces/current/sites',
-            { name, requestKey: `c4-${identity}-${name}` },
-            selection,
-        );
+        const site = fromUi
+            ? { _id: fromUi.cmsSiteId }
+            : await cms(
+                  '/workspaces/current/sites',
+                  { name, requestKey: `c4-${identity}-${name}` },
+                  selection,
+              );
         selection.cmsSiteId = site._id;
         let binding;
         await until(async () => {
@@ -675,6 +805,19 @@ async function main() {
             },
             snapshot: bytes.toString('base64'),
         });
+        if (name === 'Alpha')
+            faultSeed = {
+                snapshot,
+                binding,
+                gateway,
+                metadata: {
+                    templateId: 'aeroframe',
+                    templateVersion: '1.0.4',
+                    imageDigest: info.Id,
+                    manifestChecksum:
+                        'sha256:' + sha(JSON.stringify(canonical(manifest))),
+                },
+            };
         const operation = await gateway('publish-operations', {
             releaseId,
             expectedRevision: 0,
@@ -712,6 +855,203 @@ async function main() {
         report.checks[0].contentSha256,
         report.checks[1].contentSha256,
     );
+    if (launchLocal)
+        report.faults = await (
+            await import('./launch-faults.mjs')
+        ).launchFaults({
+            sql,
+            docker,
+            processes,
+            cmsChild,
+            worker,
+            app,
+            gatewayPort: report.gatewayPort,
+            cmsAddress,
+            gatewayRoot,
+            runRoot,
+            freePort,
+            publicGet,
+            sites: report.sites,
+            seed: faultSeed,
+            until,
+            containerIds,
+        });
+    if (launchLocal) {
+        const guardRoot = path.join(runRoot, 'guard-browser');
+        const guardLog = fs.openSync(
+            path.join(runRoot, 'guard-browser.private.log'),
+            'w',
+            0o600,
+        );
+        const canary = randomBytes(24).toString('hex');
+        const guard = processes.spawn(
+            process.execPath,
+            [
+                'node_modules/@playwright/test/cli.js',
+                'test',
+                '--config',
+                'ops/e2e/playwright.config.mjs',
+                'ops/e2e/launch-guard-canary.spec.mjs',
+                '--project=desktop',
+            ],
+            {
+                cwd: cmsRoot,
+                env: {
+                    ...process.env,
+                    STOREFRONT_E2E_CMS: cmsAddress,
+                    STOREFRONT_E2E_EMAIL: browserEmail,
+                    STOREFRONT_E2E_PASSWORD: browserPassword,
+                    STOREFRONT_E2E_GUARD_CANARY: '1',
+                    STOREFRONT_E2E_PRIVATE_CANARY: canary,
+                    STOREFRONT_E2E_RESULTS_DIR: guardRoot,
+                    STOREFRONT_E2E_PRIVATE_DIR: path.join(runRoot, 'private'),
+                },
+                stdio: ['ignore', guardLog, guardLog],
+            },
+        );
+        fs.closeSync(guardLog);
+        assert.equal(
+            await processes.exit(guard),
+            1,
+            'Guard canary must fail closed',
+        );
+        const guardFiles = fs
+            .readdirSync(guardRoot, { recursive: true })
+            .filter((file) => fs.statSync(path.join(guardRoot, file)).isFile());
+        assert.ok(
+            guardFiles.some((file) =>
+                file.endsWith('failure-interaction-timeline.json'),
+            ),
+        );
+        assert.ok(
+            guardFiles.some((file) => file.endsWith('failure-sanitized.png')),
+        );
+        assert.equal(
+            guardFiles.some((file) => /\.(zip|har|webm)$/.test(file)),
+            false,
+        );
+        for (const file of guardFiles.filter((file) =>
+            /\.(json|md|txt)$/.test(file),
+        )) {
+            const text = fs.readFileSync(path.join(guardRoot, file), 'utf8');
+            for (const secret of [canary, browserEmail, browserPassword])
+                assert.equal(text.includes(secret), false);
+            assert.equal(
+                /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(
+                    text,
+                ),
+                false,
+            );
+        }
+        report.guardCanary = {
+            expectedFailure: true,
+            safeTimelineRetained: true,
+            maskedScreenshotRetained: true,
+            secretsAbsent: true,
+        };
+        const marker = 'D1 lead ' + identity;
+        const otherMarker = 'D1 other ' + identity;
+        const eventPath = '/d1-' + identity;
+        async function intake(site, route, body) {
+            const response = await fetch(
+                `http://127.0.0.1:${report.faults.ingestPort}/api/v1/sites/${site.siteId}/${route}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        origin: 'https://' + site.host,
+                        'content-type': 'application/json',
+                    },
+                    body: JSON.stringify(body),
+                },
+            );
+            assert.ok(
+                [200, 202].includes(response.status),
+                'Actual intake accepts owned origin: ' +
+                    response.status +
+                    ' ' +
+                    (await response.clone().text()),
+            );
+            return response.json();
+        }
+        await intake(report.sites[0], 'leads', {
+            source: 'contact',
+            name: marker,
+            email: 'd1@acceptance.invalid',
+            message: marker,
+            idempotencyKey: identity,
+        });
+        await intake(report.sites[1], 'leads', {
+            source: 'contact',
+            name: otherMarker,
+            email: 'd1-other@acceptance.invalid',
+            message: otherMarker,
+            idempotencyKey: identity,
+        });
+        const event = {
+            eventId: randomUUID(),
+            path: eventPath,
+            visitorId: 'd1-' + identity,
+        };
+        assert.equal(
+            (await intake(report.sites[0], 'events', event)).duplicate,
+            false,
+        );
+        assert.equal(
+            (await intake(report.sites[0], 'events', event)).duplicate,
+            true,
+        );
+        const inputPath = path.join(runRoot, 'operations-input.json');
+        fs.writeFileSync(
+            inputPath,
+            JSON.stringify({
+                marker,
+                otherMarker,
+                eventPath,
+                first: { ...report.sites[0], mediaId: uiSites[0].mediaId },
+                second: { ...report.sites[1], mediaId: uiSites[1].mediaId },
+            }),
+            { mode: 0o600 },
+        );
+        const log = fs.openSync(
+            path.join(runRoot, 'operations-browser.private.log'),
+            'w',
+            0o600,
+        );
+        const browser = processes.spawn(
+            process.execPath,
+            [
+                'node_modules/@playwright/test/cli.js',
+                'test',
+                '--config',
+                'ops/e2e/playwright.config.mjs',
+                'ops/e2e/launch-operations.spec.mjs',
+                '--project=desktop',
+            ],
+            {
+                cwd: cmsRoot,
+                env: {
+                    ...process.env,
+                    STOREFRONT_E2E_CMS: cmsAddress,
+                    STOREFRONT_E2E_EMAIL: browserEmail,
+                    STOREFRONT_E2E_PASSWORD: browserPassword,
+                    STOREFRONT_E2E_OPERATIONS: inputPath,
+                    STOREFRONT_E2E_RESULTS_DIR: path.join(
+                        runRoot,
+                        'operations-browser',
+                    ),
+                    STOREFRONT_E2E_PRIVATE_DIR: path.join(runRoot, 'private'),
+                },
+                stdio: ['ignore', log, log],
+            },
+        );
+        fs.closeSync(log);
+        report.operationsBrowserExit = await processes.exit(browser);
+        assert.equal(
+            report.operationsBrowserExit,
+            0,
+            'Actual lead/analytics browser workflow',
+        );
+    }
     const first = report.sites[0],
         second = report.sites[1];
     const added = await cms(
@@ -840,8 +1180,17 @@ async function main() {
         failedCertificateCannotPromote: true,
         previousPrimaryRetained: true,
     });
-    assert.equal(await mongo.db().collection('bcms_site_domains').countDocuments({}), 0);
+    assert.equal(
+        await mongo.db().collection('bcms_site_domains').countDocuments({}),
+        0,
+    );
     report.checks.push({ noLegacyDomainWrites: true });
+    if (launchLocal)
+        assert.equal(
+            report.browserExit,
+            0,
+            'Supplementary UI assertions must pass independently of worker evidence',
+        );
     report.assertionsPassed = true;
 }
 let failure;

@@ -21,6 +21,10 @@ export interface GatewaySiteBinding {
 
 export class GatewayRevisionConflict extends Error {}
 
+export class GatewayRequestError extends Error {
+    constructor(public readonly status: number, message: string) { super(message); this.name = 'GatewayRequestError'; }
+}
+
 export class GatewayUnavailableError extends Error {
     readonly code = 'gateway_unavailable';
     constructor(message = 'Gateway control is unavailable', options?: { cause?: unknown }) {
@@ -144,7 +148,7 @@ export async function gatewayRequest(fetcher: typeof fetch, url: string, secret:
             const failure = await response.json();
             if (typeof failure?.error === 'string' && publicFailureCodes.has(failure.error)) code = failure.error;
         } catch { /* Non-JSON and unrecognized diagnostics remain private. */ }
-        throw new Error(`Gateway request failed (${response.status})${code ? `: ${code}` : ''}`);
+        throw new GatewayRequestError(response.status, `Gateway request failed (${response.status})${code ? `: ${code}` : ''}`);
     }
     const body = await response.json();
     return body;

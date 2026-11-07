@@ -1,6 +1,7 @@
 import { test as base, expect } from '@playwright/test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { finishBrowserEvidence } from './browser-evidence.mjs';
 import { interactionTrace } from './interaction-trace.mjs';
 import { installPublicationReadGuard } from './publication-observation.mjs';
 const timelines = new WeakMap();
@@ -171,9 +172,8 @@ export const test = base.extend({
         const timeline = interactionTrace(page);
         timelines.set(page, timeline);
         await use(page);
-        assertSafe();
-        const trace = timeline.finish();
-        if (testInfo.status !== testInfo.expectedStatus && !page.isClosed()) {
+        await finishBrowserEvidence({ assertSafe, timeline, failed: testInfo.status !== testInfo.expectedStatus, retain: async (trace) => {
+            if (page.isClosed()) return;
             const tracePath = testInfo.outputPath(
                 'failure-interaction-timeline.json',
             );
@@ -207,7 +207,7 @@ export const test = base.extend({
                 body: 'Authenticated product interaction failed. Private login and native network recording are disabled. A fixed-schema interaction timeline is attached.',
                 contentType: 'text/plain',
             });
-        }
+        }});
     },
 });
 export { expect };

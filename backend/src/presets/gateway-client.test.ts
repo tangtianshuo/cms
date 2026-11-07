@@ -148,3 +148,8 @@ test('management transport replaces forged source headers and removes source mod
     }
     assert.equal(original.get('X-CMS-Site'), 'foreign-site');
 });
+
+test('preserves a bounded typed upstream404 without exposing its payload', async () => {
+    const { GatewayRequestError } = await import('./gateway-client');
+    await assert.rejects(gatewayRequest(async () => Response.json({ error: 'private-upstream-body' }, { status: 404 }), 'https://gateway.test/leads', 'private-secret'), error => error instanceof GatewayRequestError && error.status === 404 && error.message === 'Gateway request failed (404)');
+});

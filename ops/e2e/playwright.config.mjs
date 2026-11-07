@@ -8,6 +8,7 @@ if (process.env.FORCE_COLOR) delete process.env.NO_COLOR;
 
 export default defineConfig({
     testDir: '.',
+    // launch.spec checks both viewport sizes on the same freshly created site.
     testMatch: /\/ops\/e2e\/[^/]+\.spec\.mjs$/,
     fullyParallel: false,
     workers: 1,
