@@ -1,3 +1,4 @@
+import { createLaunchDirectory } from './launch-results.mjs';
 import { validatePublicationExpectation } from './publication-observation.mjs';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -199,12 +200,17 @@ if (
                     'Approved installed preview identity differs from PlatformLock',
                 );
         }
-        const output = path.join(
-            root,
-            'docs/verification/evidence/platform-delivery',
-            new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID(),
+        const output = path.resolve(
+            process.env.E2E_PREVIEW_OUTPUT_DIR ||
+                path.join(
+                    root,
+                    'docs/verification/evidence/platform-delivery',
+                    new Date().toISOString().replace(/[:.]/g, '-') +
+                        '-' +
+                        randomUUID(),
+                ),
         );
-        await mkdir(output, { recursive: true });
+        await createLaunchDirectory(output);
         const cells = [];
         let status = 0;
         for (const [templateId, templateVersion] of [

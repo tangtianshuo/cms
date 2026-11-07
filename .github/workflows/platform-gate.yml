@@ -1,0 +1,231 @@
+name: Platform release gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      lock:
+        description: Complete PlatformLock JSON for already built candidates
+        required: true
+        type: string
+      candidates:
+        description: Candidate manifest JSON with immutable service/template image references
+        required: true
+        type: string
+      deploy:
+        description: Activate the verified CMS/Gateway and synchronize AeroFrame
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-release
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      cms: ${{ steps.lock.outputs.cms }}
+      gateway: ${{ steps.lock.outputs.gateway }}
+      templates: ${{ steps.lock.outputs.templates }}
+      preview: ${{ steps.lock.outputs.preview }}
+    steps:
+      - name: Resolve exact trusted repository identities
+        id: lock
+        env:
+          LOCK_JSON: ${{ inputs.lock }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          lock = json.loads(os.environ['LOCK_JSON'])
+          expected = {'cms':'tangtianshuo/cms','gateway':'tangtianshuo/Independent-Website-Gateway','templates':'tangtianshuo/Independent-Website-Templates','preview':'tangtianshuo/Independent-Website-Preview'}
+          assert lock['schemaVersion'] == 1 and lock['contractVersion'] == 1
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              for key, repository in expected.items():
+                  item = lock['repositories'][key]
+                  assert item['repository'] == repository
+                  assert re.fullmatch('[a-f0-9]{40}', item['commit'])
+                  output.write(f"{key}={item['commit']}\n")
+          PY
+
+  platform-gate:
+    needs: resolve
+    # Dedicated disposable runner with approved isolated HTTPS hosts and databases.
+    # These prerequisites are deliberately not replaced by local fixture identities.
+    runs-on: [self-hosted, linux, platform-integration]
+    timeout-minutes: 90
+    environment: platform-integration
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      deployments: ${{ steps.receipt.outputs.deployments }}
+      receipt_sha256: ${{ steps.receipt.outputs.sha256 }}
+    env:
+      E2E_GATE_DIR: ${{ runner.temp }}/platform-${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_RUNTIME_DIR: ${{ runner.temp }}/platform-${{ github.run_id }}-${{ github.run_attempt }}/a4
+      E2E_PLATFORM_LOCK: ${{ runner.temp }}/platform-lock-${{ github.run_id }}-${{ github.run_attempt }}.json
+      E2E_CANDIDATES: ${{ runner.temp }}/platform-candidates-${{ github.run_id }}-${{ github.run_attempt }}.json
+      E2E_GATEWAY_ROOT: ${{ github.workspace }}/gateway
+      E2E_TEMPLATES_ROOT: ${{ github.workspace }}/templates
+      E2E_PREVIEW_ROOT: ${{ github.workspace }}/preview
+      E2E_FORMAL_ARTIFACTS: ${{ vars.PLATFORM_FORMAL_ARTIFACTS }}
+      E2E_FORMAL_PLATFORM_DOMAIN: ${{ vars.PLATFORM_DOMAIN }}
+      E2E_FORMAL_TLS_CERT: ${{ secrets.PLATFORM_TLS_CERT_PATH }}
+      E2E_FORMAL_TLS_KEY: ${{ secrets.PLATFORM_TLS_KEY_PATH }}
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tangtianshuo/cms
+          ref: ${{ needs.resolve.outputs.cms }}
+          path: cms
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tangtianshuo/Independent-Website-Gateway
+          ref: ${{ needs.resolve.outputs.gateway }}
+          path: gateway
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tangtianshuo/Independent-Website-Templates
+          ref: ${{ needs.resolve.outputs.templates }}
+          path: templates
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: tangtianshuo/Independent-Website-Preview
+          ref: ${{ needs.resolve.outputs.preview }}
+          path: preview
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - name: Materialize candidate inputs without shell interpolation
+        env:
+          LOCK_JSON: ${{ inputs.lock }}
+          CANDIDATES_JSON: ${{ inputs.candidates }}
+        run: |
+          umask 077
+          python3 - <<'PY'
+          import json, os
+          for source, destination in [('LOCK_JSON','E2E_PLATFORM_LOCK'),('CANDIDATES_JSON','E2E_CANDIDATES')]:
+              with open(os.environ[destination], 'x') as output:
+                  json.dump(json.loads(os.environ[source]), output)
+                  output.write('\n')
+          PY
+      - name: Install and build locked CMS and Gateway
+        working-directory: cms
+        run: |
+          npm ci --ignore-scripts
+          npm ci --ignore-scripts --prefix backend
+          npm ci --ignore-scripts --prefix ui
+          npm ci --prefix storefront
+          npm run build:types
+          npm run build:backend
+          npm run build:ui
+          npm ci --prefix ../gateway
+          npm run build --workspace @gateway/contracts --prefix ../gateway
+          npm run build --workspace @gateway/traffic --prefix ../gateway
+          npm run build --workspace @gateway/worker --prefix ../gateway
+          npm run build --workspace @gateway/ingest --prefix ../gateway
+          node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - name: Install and build both locked template runtimes
+        working-directory: templates
+        run: |
+          npm ci
+          for target in aeroframe/1.0.4 fireguard/1.0.1; do
+            npm ci --prefix "templates/$target/storefront"
+            npm run build --prefix "templates/$target/storefront"
+          done
+      - name: Verify Preview source
+        working-directory: preview
+        run: |
+          npm test
+          npm run check
+      - name: Run source, registry provenance, A4, D1 and B3 gates
+        working-directory: cms
+        run: node ops/e2e/test.mjs platform-gate
+      - name: Bind deployment inputs to the exact receipt
+        id: receipt
+        run: |
+          python3 - <<'PY'
+          import json, os, hashlib
+          path = os.path.join(os.environ['E2E_GATE_DIR'], 'launch/platform-gate-receipt.json')
+          data = open(path, 'rb').read()
+          receipt = json.loads(data)
+          candidates, repos = receipt['candidates'], receipt['repositories']
+          deployments = []
+          for key in ['cms', 'gateway']:
+              item = candidates['services'][key]
+              deployments.append(dict(component=key, repository=repos[key]['repository'], commit=repos[key]['commit'], digest=item['image'].split('@')[1], version=item['version']))
+          item = next(t for t in candidates['templates'] if t['id'] == 'aeroframe' and t['version'] == '1.0.4')
+          deployments.append(dict(component='templates', repository=repos['templates']['repository'], commit=repos['templates']['commit'], digest=item['image'].split('@')[1], version=item['version']))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('sha256=' + hashlib.sha256(data).hexdigest() + '\n')
+              output.write('deployments=' + json.dumps(deployments, separators=(',',':')) + '\n')
+          PY
+      - name: Attest acceptance and candidate binding
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: ${{ env.E2E_GATE_DIR }}/launch/platform-gate-receipt.json
+      - name: Retain only the safe receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: platform-gate-receipt
+          path: ${{ env.E2E_GATE_DIR }}/launch/platform-gate-receipt.json
+          if-no-files-found: error
+
+  deploy:
+    needs: platform-gate
+    if: inputs.deploy
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        target: ${{ fromJSON(needs.platform-gate.outputs.deployments) }}
+    runs-on: ubuntu-latest
+    environment: platform-production-${{ matrix.target.component }}
+    concurrency:
+      group: platform-deploy-${{ matrix.target.component }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ matrix.target.repository }}
+          ref: ${{ matrix.target.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: platform-gate-receipt
+          path: receipt
+      - name: Verify current-run receipt bytes and provenance
+        env:
+          EXPECTED_SHA256: ${{ needs.platform-gate.outputs.receipt_sha256 }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s  %s\n' "$EXPECTED_SHA256" receipt/platform-gate-receipt.json | sha256sum -c -
+          gh attestation verify receipt/platform-gate-receipt.json --repo tangtianshuo/cms --source-digest "$GITHUB_SHA" --signer-workflow tangtianshuo/cms/.github/workflows/platform-gate.yml
+      - name: Deploy the exact verified candidate digest
+        env:
+          IMAGE_DIGEST: ${{ matrix.target.digest }}
+          RELEASE_VERSION: ${{ matrix.target.version }}
+          LOCKED_COMMIT: ${{ matrix.target.commit }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: GITHUB_SHA="$LOCKED_COMMIT" bash .github/scripts/deploy.sh

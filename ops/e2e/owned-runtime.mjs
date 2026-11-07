@@ -11,8 +11,14 @@ import { createServer as tlsServer, request as tlsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
+import { ownedHttpsPort } from './platform-browser.mjs';
 import { BrowserProcesses } from './browser-processes.mjs';
 export async function runOwnedFixture(options = {}) {
+    assert.ok(
+        !options.platformHttpsUpstreams ||
+            (options.formal === true && process.env.E2E_GATE_B3 === '1'),
+        'HTTPS upstreams are owned F1-only',
+    );
     assert.ok(
         !options.formal ||
             [options.prepare, options.configure, options.execute].every(
@@ -348,7 +354,11 @@ export async function runOwnedFixture(options = {}) {
                 const upstream = httpRequest(
                     {
                         hostname: '127.0.0.1',
-                        port: traffic.port(),
+                        port: ownedHttpsPort(
+                            req.headers.host,
+                            options.platformHttpsUpstreams,
+                            traffic.port(),
+                        ),
                         path: req.url,
                         method: req.method,
                         headers: req.headers,

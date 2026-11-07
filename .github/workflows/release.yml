@@ -153,7 +153,7 @@ jobs:
         id: release
         run: python3 .github/scripts/release.py
 
-  publish-and-deploy:
+  candidate:
     needs: verify
     if: needs.verify.outputs.publish == 'true'
     runs-on: ubuntu-latest
@@ -206,13 +206,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: gh attestation verify "oci://${IMAGE}@${IMAGE_DIGEST}" -R tangtianshuo/cms --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF"
-      - name: Deploy verified image digest
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
-          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash .github/scripts/deploy.sh
+      - name: Record candidate boundary
+        run: echo "Candidate only. Production deployment requires Platform release gate / platform-gate." >> "$GITHUB_STEP_SUMMARY"

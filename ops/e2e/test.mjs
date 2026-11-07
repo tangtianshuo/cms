@@ -4,7 +4,15 @@ import { open, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { cmsRoot, gatewayRoot, runtimeDir, readEnv } from './runtime.mjs';
-if (process.argv[2] === 'launch') {
+if (process.argv[2] === 'platform-gate') {
+    try {
+        const { runPlatformGate } = await import('./quality-gate.mjs');
+        process.exitCode = (await runPlatformGate()).passed ? 0 : 1;
+    } catch (error) {
+        console.error('platform-gate: FAIL: ' + (error.status !== undefined ? 'external_command_failed' : error.message));
+        process.exitCode = 1;
+    }
+} else if (process.argv[2] === 'launch') {
     const { runLaunch } = await import('./launch-runner.mjs');
     process.exitCode = (await runLaunch()).passed ? 0 : 1;
 } else {

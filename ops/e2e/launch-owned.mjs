@@ -1,3 +1,4 @@
+import { runOwnedPreviewMatrix } from './platform-browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -82,10 +83,16 @@ export async function runFormalOwned(env = process.env) {
     const supplied = JSON.parse(
         fs.readFileSync(env.E2E_FORMAL_ARTIFACTS, 'utf8'),
     );
+    const gateB3 = env.E2E_GATE_B3 === '1';
+    const platformHttpsUpstreams = gateB3 ? new Map() : undefined;
+    const cmsPublicOrigin = gateB3
+        ? 'https://cms.' + env.E2E_FORMAL_PLATFORM_DOMAIN
+        : null;
     let previewOrigin, registryPath, bundlesRoot;
     const installed = [];
     const report = await runOwnedFixture({
         formal: true,
+        platformHttpsUpstreams,
         platformDomain: env.E2E_FORMAL_PLATFORM_DOMAIN,
         certPath: env.E2E_FORMAL_TLS_CERT,
         keyPath: env.E2E_FORMAL_TLS_KEY,
@@ -246,7 +253,19 @@ export async function runFormalOwned(env = process.env) {
             until,
         }) {
             const port = await freePort();
-            previewOrigin = 'http://127.0.0.1:' + port;
+            previewOrigin = gateB3
+                ? 'https://preview.' + env.E2E_FORMAL_PLATFORM_DOMAIN
+                : 'http://127.0.0.1:' + port;
+            if (gateB3) {
+                platformHttpsUpstreams.set(
+                    new URL(cmsPublicOrigin).hostname,
+                    Number(new URL(cmsAddress).port),
+                );
+                platformHttpsUpstreams.set(
+                    new URL(previewOrigin).hostname,
+                    port,
+                );
+            }
             report.previewPort = port;
             const log = fs.openSync(
                 path.join(runRoot, 'preview.private.log'),
@@ -265,7 +284,7 @@ export async function runFormalOwned(env = process.env) {
                         PREVIEW_REGISTRY_PATH: registryPath,
                         PREVIEW_BUNDLES_ROOT: bundlesRoot,
                         PREVIEW_PUBLIC_ORIGIN: previewOrigin,
-                        PREVIEW_ADMIN_ORIGIN: cmsAddress,
+                        PREVIEW_ADMIN_ORIGIN: cmsPublicOrigin || cmsAddress,
                     },
                     stdio: ['ignore', log, log],
                 },
@@ -327,7 +346,7 @@ export async function runFormalOwned(env = process.env) {
             } = runtime;
             const browserEnv = {
                 ...env,
-                STOREFRONT_E2E_CMS: cmsAddress,
+                STOREFRONT_E2E_CMS: cmsPublicOrigin || cmsAddress,
                 STOREFRONT_E2E_EMAIL: browserEmail,
                 STOREFRONT_E2E_PASSWORD: browserPassword,
                 STOREFRONT_E2E_PRIVATE_DIR: path.join(runRoot, 'private'),
@@ -427,6 +446,7 @@ export async function runFormalOwned(env = process.env) {
                     workspaceId: binding.workspaceId,
                     host: new URL(binding.siteUrl).hostname,
                     mediaId: proof.mediaId,
+                    marker: proof.marker,
                     target,
                 };
                 report.sites.push(site);
@@ -588,6 +608,16 @@ export async function runFormalOwned(env = process.env) {
                     },
                 );
             }
+            if (gateB3)
+                report.platformPreview = await runOwnedPreviewMatrix(runtime, {
+                    env,
+                    runId,
+                    lockChecksum,
+                    cmsOrigin: cmsPublicOrigin,
+                    previewOrigin,
+                    registryPath,
+                    output: env.E2E_GATE_B3_OUTPUT_DIR,
+                });
             // Recheck the live Preview bytes after the browser has used the actual iframe.
             for (const { record, manifest } of installed)
                 await verifyServedPreview(previewOrigin, record, manifest);
