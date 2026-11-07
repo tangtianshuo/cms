@@ -1,5 +1,6 @@
 import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import {
+    type PropType,
     computed,
     defineComponent,
     onBeforeUnmount,
@@ -33,7 +34,7 @@ interface PresetSummary {
         font: string;
     };
 }
-interface UpgradePreview {
+export interface UpgradePreview {
     compatible: boolean;
     requiresNewInstallation: boolean;
     migrationRequired: boolean;
@@ -53,6 +54,30 @@ interface UpgradePreview {
     readableChanges: string[];
     contentImpact: string[];
     templateImpact: string[];
+}
+
+export interface TemplateAdoptionState {
+    sameTemplate: boolean;
+    installed: boolean;
+    hasPublishedSource: boolean;
+    hasPlan: boolean;
+    busy: boolean;
+    isAdmin: boolean;
+    hasConflicts: boolean;
+    previewCompatible: boolean;
+}
+
+export function canAdoptTemplate(state: TemplateAdoptionState): boolean {
+    return (
+        state.sameTemplate &&
+        !state.installed &&
+        state.hasPublishedSource &&
+        state.hasPlan &&
+        !state.busy &&
+        state.isAdmin &&
+        !state.hasConflicts &&
+        state.previewCompatible
+    );
 }
 
 const presetKey = (item: PresetSummary) =>
@@ -88,6 +113,80 @@ function upgradeIssueText(code: string): string {
     };
     return labels[code] || '需要检查的内容变化';
 }
+
+export const TemplateUpgradePanel = defineComponent({
+    props: {
+        preview: {
+            type: Object as PropType<UpgradePreview>,
+            required: true,
+        },
+        canAdopt: Boolean,
+        adoptLabel: {
+            type: String,
+            required: true,
+        },
+        onAdopt: Function as PropType<() => void>,
+    },
+    setup(props) {
+        return () => (
+            <div class="mb-4 border border-gray/60 p-4 text-sm dark:border-gray">
+                <strong>
+                    {props.preview.compatible
+                        ? '可以保留现有内容并采用此版本'
+                        : props.preview.migrationRequired
+                          ? '需要先完成内容迁移预览'
+                          : '此版本需要新建网站安装'}
+                </strong>
+                {(props.preview.readableChanges?.length ?? 0) > 0 && (
+                    <div class="mt-3">
+                        <span class="font-medium">内容结构变化</span>
+                        <ul class="mt-1 list-disc pl-5 opacity-80">
+                            {props.preview.readableChanges!.map((change) => (
+                                <li>{change}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                {(props.preview.issues?.length ?? 0) > 0 && (
+                    <div class="mt-3" role="alert">
+                        <span class="font-medium text-red">
+                            需要处理的迁移问题
+                        </span>
+                        <ul class="mt-1 list-disc pl-5 text-red">
+                            {props.preview.issues!.map((problem) => (
+                                <li>{upgradeIssueText(problem.code)}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                {(props.preview.affectedContent?.length ?? 0) > 0 && (
+                    <div class="mt-3">
+                        <span class="font-medium">受影响内容</span>
+                        <ul class="mt-1 list-disc pl-5 opacity-80">
+                            {props.preview.affectedContent!.map((item) => (
+                                <li>{item}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                <ul class="mt-2 list-disc pl-5 opacity-80">
+                    {[
+                        ...props.preview.templateImpact,
+                        ...props.preview.contentImpact,
+                    ].map((item) => (
+                        <li>{item}</li>
+                    ))}
+                </ul>
+                <Button
+                    disabled={!props.canAdopt}
+                    onClick={() => props.onAdopt?.()}
+                >
+                    {props.adoptLabel}
+                </Button>
+            </div>
+        );
+    },
+});
 
 export const PresetsView = defineComponent({
     setup() {
@@ -139,16 +238,17 @@ export const PresetsView = defineComponent({
                 !!site.value?.publishedTemplateRecord ===
                     !!selected.value?.sourceCommit,
         );
-        const canAdopt = computed(
-            () =>
-                sameTemplate.value &&
-                !installed.value &&
-                !!selected.value?.sourceCommit &&
-                !!plan.value &&
-                !busy.value &&
-                !!sdk.context?.context.admin &&
-                conflicts.value.length === 0 &&
-                upgradePreview.value?.compatible === true,
+        const canAdopt = computed(() =>
+            canAdoptTemplate({
+                sameTemplate: sameTemplate.value,
+                installed: installed.value,
+                hasPublishedSource: !!selected.value?.sourceCommit,
+                hasPlan: !!plan.value,
+                busy: busy.value,
+                isAdmin: !!sdk.context?.context.admin,
+                hasConflicts: conflicts.value.length > 0,
+                previewCompatible: upgradePreview.value?.compatible === true,
+            }),
         );
         const importInProgress = computed(
             () =>
@@ -720,107 +820,22 @@ export const PresetsView = defineComponent({
                                                 })}
                                             </p>
                                             {upgradePreview.value && (
-                                                <div class="mb-4 border border-gray/60 p-4 text-sm dark:border-gray">
-                                                    <strong>
-                                                        {upgradePreview.value
-                                                            .compatible
-                                                            ? '可以保留现有内容并采用此版本'
-                                                            : upgradePreview
-                                                                    .value
-                                                                    .migrationRequired
-                                                              ? '需要先完成内容迁移预览'
-                                                              : '此版本需要新建网站安装'}
-                                                    </strong>
-                                                    {(upgradePreview.value
-                                                        .readableChanges
-                                                        ?.length ?? 0) > 0 && (
-                                                        <div class="mt-3">
-                                                            <span class="font-medium">
-                                                                内容结构变化
-                                                            </span>
-                                                            <ul class="mt-1 list-disc pl-5 opacity-80">
-                                                                {upgradePreview.value.readableChanges!.map(
-                                                                    (
-                                                                        change,
-                                                                    ) => (
-                                                                        <li>
-                                                                            {
-                                                                                change
-                                                                            }
-                                                                        </li>
-                                                                    ),
-                                                                )}
-                                                            </ul>
-                                                        </div>
+                                                <TemplateUpgradePanel
+                                                    preview={
+                                                        upgradePreview.value
+                                                    }
+                                                    canAdopt={canAdopt.value}
+                                                    adoptLabel={t(
+                                                        'presets.adoptVersion',
+                                                        {
+                                                            version:
+                                                                selected.value
+                                                                    .version,
+                                                        },
                                                     )}
-                                                    {(upgradePreview.value
-                                                        .issues?.length ?? 0) >
-                                                        0 && (
-                                                        <div
-                                                            class="mt-3"
-                                                            role="alert"
-                                                        >
-                                                            <span class="font-medium text-red">
-                                                                需要处理的迁移问题
-                                                            </span>
-                                                            <ul class="mt-1 list-disc pl-5 text-red">
-                                                                {upgradePreview.value.issues!.map(
-                                                                    (
-                                                                        problem,
-                                                                    ) => (
-                                                                        <li>
-                                                                            {upgradeIssueText(
-                                                                                problem.code,
-                                                                            )}
-                                                                        </li>
-                                                                    ),
-                                                                )}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                    {(upgradePreview.value
-                                                        .affectedContent
-                                                        ?.length ?? 0) > 0 && (
-                                                        <div class="mt-3">
-                                                            <span class="font-medium">
-                                                                受影响内容
-                                                            </span>
-                                                            <ul class="mt-1 list-disc pl-5 opacity-80">
-                                                                {upgradePreview.value.affectedContent!.map(
-                                                                    (item) => (
-                                                                        <li>
-                                                                            {
-                                                                                item
-                                                                            }
-                                                                        </li>
-                                                                    ),
-                                                                )}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                    <ul class="mt-2 list-disc pl-5 opacity-80">
-                                                        {[
-                                                            ...upgradePreview
-                                                                .value
-                                                                .templateImpact,
-                                                            ...upgradePreview
-                                                                .value
-                                                                .contentImpact,
-                                                        ].map((item) => (
-                                                            <li>{item}</li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
+                                                    onAdopt={adoptSelected}
+                                                />
                                             )}
-                                            <Button
-                                                disabled={!canAdopt.value}
-                                                onClick={adoptSelected}
-                                            >
-                                                {t('presets.adoptVersion', {
-                                                    version:
-                                                        selected.value.version,
-                                                })}
-                                            </Button>
                                         </div>
                                     )}
                                 {installed.value ? (
