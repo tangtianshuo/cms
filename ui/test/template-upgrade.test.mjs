@@ -2,12 +2,20 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const source = await readFile(new URL('../src/views/dashboard/presets.tsx', import.meta.url), 'utf8');
+const source = await readFile(
+    new URL('../src/views/dashboard/presets.tsx', import.meta.url),
+    'utf8',
+);
 
 test('template management requests an upgrade preview before adopting a public version', () => {
     assert.match(source, /\/api\/v4\/presets\/upgrade/);
     assert.match(source, /upgradePreview\.value\?\.compatible === true/);
     assert.match(source, /requiresNewInstallation/);
+    assert.match(source, /migrationRequired/);
+    assert.match(source, /structureChanges/);
+    assert.match(source, /affectedContent/);
+    assert.match(source, /issues/);
+    assert.match(source, /upgradeIssueText/);
     assert.match(source, /templateImpact/);
     assert.match(source, /contentImpact/);
 });

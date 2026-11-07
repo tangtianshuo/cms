@@ -20,8 +20,15 @@ import type { PublicTemplateRecord, VerifiedPublicTemplate } from './registry';
 import { resolveInstalledPreset } from './installed';
 import {
     classifyTemplateCompatibility,
+    createLegacyEditorAdapter,
     createMigrationPlan,
 } from '../template-contract/compatibility';
+import { compareTemplateStructures } from '../template-contract/model';
+import {
+    previewMigration,
+    type MigrationDocument,
+    type MigrationTarget,
+} from '../template-contract/migration-preview';
 
 export interface ImportSource {
     findSite(): Promise<SiteInstallation | null>;
@@ -57,55 +64,69 @@ export interface ImportPlan {
 export interface TemplateUpgradePreview {
     compatible: boolean;
     requiresNewInstallation: boolean;
+    migrationRequired: boolean;
     migrationPlan?: {
         from: string;
         to: string;
         steps: Array<Record<string, unknown>>;
     };
+    structureChanges?: Array<{
+        kind: string;
+        id: string;
+        from: string;
+        to: string;
+    }>;
+    issues?: Array<{ code: string; path: string }>;
+    affectedContent?: string[];
     contentImpact: string[];
     templateImpact: string[];
-}
-
-function compatibilitySignature(preset: PresetManifest): string {
-    return JSON.stringify({
-        models: preset.models.map((model) => ({
-            key: model.key,
-            singleEntry: model.singleEntry,
-            fields: model.fields.map(
-                ({ key, type, required, array, referenceModel }) => ({
-                    key,
-                    type,
-                    required,
-                    array,
-                    referenceModel,
-                }),
-            ),
-        })),
-        pages: preset.pages.map(({ key, path, modelKey, layout }) => ({
-            key,
-            path,
-            modelKey,
-            layout,
-        })),
-    });
 }
 
 export function previewPublicTemplateUpgrade(
     site: SiteInstallation,
     selected: VerifiedPublicTemplate,
+    migrationInput?: {
+        document: MigrationDocument;
+        target: MigrationTarget;
+    },
 ): TemplateUpgradePreview {
     if (site.presetId !== selected.id)
         throw new Error('Template upgrade must target the installed template');
     const installed = resolveInstalledPreset(site);
-    const schemaCompatible =
-        compatibilitySignature(installed) ===
-        compatibilitySignature(selected.manifest);
+    const installedEditor =
+        installed.editor || createLegacyEditorAdapter(installed).contract;
+    const selectedEditor =
+        selected.manifest.editor ||
+        createLegacyEditorAdapter(selected.manifest).contract;
+    const structures = compareTemplateStructures(
+        installedEditor,
+        selectedEditor,
+        installed.renderer,
+        selected.manifest.renderer,
+    );
+    const issues = [...structures.issues];
+    let schemaCompatible = issues.length === 0;
     const installedRecord = site.publishedTemplateRecord
         ? (JSON.parse(site.publishedTemplateRecord) as PublicTemplateRecord)
         : null;
+    const affectedContent = [
+        ...new Set(
+            structures.changes.map((change) =>
+                change.kind === 'field' || change.kind === 'model'
+                    ? `模型 ${change.id.split('/')[0]} 下的内容需要检查`
+                    : change.kind === 'page'
+                      ? `页面 ${change.id} 需要检查发布路径和内容绑定`
+                      : change.kind === 'section'
+                        ? `区块 ${change.id} 需要检查页面内容`
+                        : `运行能力 ${change.id} 已变化`,
+            ),
+        ),
+    ];
     const contentImpact = schemaCompatible
         ? ['现有内容、页面路径和主题设置会保留。']
-        : ['模板字段或页面结构发生变化，需要新建站点安装。'];
+        : affectedContent.length
+          ? affectedContent
+          : ['模板字段或页面结构发生变化，需要创建迁移预览。'];
     const templateImpact: string[] = [];
     if (site.presetVersion !== selected.version)
         templateImpact.push(
@@ -134,10 +155,45 @@ export function previewPublicTemplateUpgrade(
                 request,
             );
     }
+    const migrationPreview = migrationInput
+        ? previewMigration(
+              migrationInput.document,
+              (migrationPlan?.steps ?? []) as unknown as Parameters<
+                  typeof previewMigration
+              >[1],
+              migrationInput.target,
+          )
+        : null;
+    if (migrationPreview) {
+        issues.push(...migrationPreview.issues);
+        if (migrationPreview.issues.length) schemaCompatible = false;
+    }
+    const actualContentChanges =
+        migrationPreview?.changes.map(
+            (change) =>
+                `${change.kind}:${change.id}:${change.from}→${change.to}`,
+        ) ?? [];
+    const migrationRequired = !schemaCompatible && !!migrationPlan;
+    if (!schemaCompatible && !migrationRequired) {
+        contentImpact.unshift('模板字段或页面结构发生变化，需要新建站点安装。');
+    }
+    if (!schemaCompatible) {
+        issues.push({
+            code: migrationRequired
+                ? 'migration_preview_required'
+                : 'migration_required',
+            path: `${site.presetId}@${site.presetVersion}`,
+        });
+    }
+    affectedContent.push(...actualContentChanges);
     return {
         compatible: schemaCompatible,
-        requiresNewInstallation: !schemaCompatible,
+        requiresNewInstallation: !schemaCompatible && !migrationRequired,
+        migrationRequired,
         ...(migrationPlan ? { migrationPlan } : {}),
+        structureChanges: structures.changes,
+        issues,
+        affectedContent,
         contentImpact,
         templateImpact,
     };
