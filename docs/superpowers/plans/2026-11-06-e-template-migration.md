@@ -87,6 +87,14 @@ git diff --cached --check
 git commit -m "feat: add service template contract acceptance"
 ```
 
+E1 本地实施及限定复审记录（2026-11-07）：最终 CMS `da238da1d391d5f91f170bf3246998b358a20f67`、Templates `bf11776db84aa97c5eba3f4d538d14682e428469`；Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`、Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42` 未变。新增 `service-studio@1.0.0`，模型恰为 service/team-member/site-settings，提供五个服务型页面和四个声明区块；CMS 安装、Entry 指针、参数化页面、预览和发布投影改为契约驱动，没有按 `service-studio` ID 分支，AeroFrame/FireGuard 行为保持。
+
+初始审查发现更新/回滚使用独立安装和手工快照切换、服务/团队集合没有读取多条目、以及缺少本地 B2 安装事务。修复后同一 workspace/site 保留两条不可变 release 并调用既有 rollback；实际浏览器验证两个服务、两个团队、动态 slug、导航、第二次发布和回滚；跨仓测试执行已有 Preview bundle/artifact 构建、摘要校验和幂等安装。最终契约 10/10、CMS 定向 64/64、服务 storefront 7/7、同站 Chromium 1/1，后端类型检查通过，两个旧模板契约回归通过。
+
+本地 B2 记录 manifest checksum `sha256:1706f3984d8c708066a7d759062cf493bd16b54fe8abc9514727fb32332d76f6`、bundle digest `sha256:c1c4f5b59ee33e3dccf04c49f877a64e4eb59392de84b1a85dbf59cb658a8c52`、artifact digest `sha256:d7d95e9d1d066c93d21b00ad66f11fd647385e29804b6f244dfac800a2875c9c`；第二次安装返回 `unchanged`。这些是本地包证据，不是公共 OCI/registry 发布。38 个任务文件当前/提交哈希一致，154 个原始来源文件未变化，任务进程/容器/数据库已清理。
+
+公共 registry/OCI 制品、已部署 Gateway/公共 HTTPS、生产浏览器验收和真实人工建站时间线仍未执行，因此 Task E1 整体保持未勾选。格式化 diff 噪声和合成预览父页作为测试支持这两个 Minor 留最终审查统一判断。
+
 ### Task E2：迁移 dry-run、结构差异和内容校验
 
 **Files:**

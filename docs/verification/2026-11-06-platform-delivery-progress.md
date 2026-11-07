@@ -271,6 +271,14 @@ Final focused evidence passed Gateway 46/46, CMS restore 5/5 and real PostgreSQL
 
 These timings describe a small local dataset. Genuine complete public artifacts/PlatformLock, off-host copy, installed retention/schedule, public Internet DNS/TLS and production cutover remain unperformed. F2 is accepted at the local implementation gate but remains unchecked for formal recovery readiness.
 
+## E1 — Service-oriented third template accepted locally
+
+CMS `da238da1d391d5f91f170bf3246998b358a20f67`; Templates `bf11776db84aa97c5eba3f4d538d14682e428469`. `service-studio@1.0.0` declares service, team-member and site-settings models, five routes and four renderer sections. Installation uses the existing CMS import source, stable prop bindings and ContractSnapshotV1; service collections and team members are projected from real Entries with their published dynamic paths. Existing AeroFrame/FireGuard behavior remains covered.
+
+Initial review found the first browser proof used separate installations and a manual snapshot switch, omitted multi-entry collections, and skipped B2 installation. Fix1 uses one persisted site for initial publication, same-site update, second immutable release and supported rollback; renders two services and two team members with dynamic routes; and runs the existing local Preview package/install transaction with idempotent retry. Cross-repository contract tests passed10/10, focused CMS tests64/64, service storefront7/7, same-site Chromium1/1, backend typechecks passed, and all38 changed-file hashes match executed/committed bytes. Protected original-source audit remains154 checked/0 changed; no task process/container/database remains.
+
+Local B2 evidence records bundle `sha256:c1c4f5b59ee33e3dccf04c49f877a64e4eb59392de84b1a85dbf59cb658a8c52` and artifact `sha256:d7d95e9d1d066c93d21b00ad66f11fd647385e29804b6f244dfac800a2875c9c`; the second install was unchanged. These are local package identities. Public registry/OCI publication, deployed Gateway/HTTPS acceptance and human UAT remain unperformed. Formatter-only review noise and the synthetic preview parent are deferred Minor items; E1 remains unchecked for public release.
+
 ## F3 — Release-aware monitoring and durable alerts accepted locally
 
 Final implementation heads: CMS `bd12cd3fb6e6001c8a765ab6d60b929235197288`, Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`. Public probes bind a page marker and optional release header to the expected F1 template and verified F2 completion; representative assets, strict TLS, certificate age, backup age, public availability, control-plane availability and the authoritative 15-minute publish-failure count are reported separately. The Gateway database helper is read-only and does not participate in publish decisions.

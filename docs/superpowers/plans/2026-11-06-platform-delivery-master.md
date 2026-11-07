@@ -152,7 +152,7 @@ interface AcceptanceEvidence {
 - [ ] C4 域名接入与首次发布闭环。 Local stage and two fix reviews accepted: CMS `9ad35ef`, Gateway `4033e64`. Automatic provisioning, TLS challenge, two-site Docker publication and recovery verified; formal public-chain/PlatformLock/Internet DNS-TLS acceptance pending.
 - [ ] D1 可重复的跨仓浏览器验收（本地实现及两轮修复复审通过：CMS `1637858`、Gateway `7536019`。真实 UI 双站、双向运营、五类故障、两模板当前画布及清理验证通过；正式公共产物/完整锁文件/DNS-TLS 未齐，48 项为 2 blocked、46 not-run，无正式 AcceptanceEvidence）。
 - [ ] D2 生产试运营验收与证据归档。
-- [ ] E1 非商品型第三模板验证。
+- [ ] E1 非商品型第三模板验证（本地实现及修复复审通过：CMS `da238da`、Templates `bf11776`。service-studio 真实 CMS 安装、五页面、多服务/团队、同站二次发布/回滚及本地 B2 打包安装通过；公共制品/Registry/部署验收待执行）。
 - [ ] E2 模板迁移 dry-run 与影响预览。
 - [ ] E3 明确采用、候选发布和升级回滚。
 - [ ] E4 旧站迁移和逐站灰度。
