@@ -1168,8 +1168,18 @@ export async function runOwnedFixture(options = {}) {
                     otherMarker,
                     eventPath,
                     otherEventPath,
-                    first: { ...report.sites[0], mediaId: uiSites[0].mediaId },
-                    second: { ...report.sites[1], mediaId: uiSites[1].mediaId },
+                    runId: process.env.STOREFRONT_E2E_RUN_ID || identity,
+                    scope: 'actual-local-CMS-Gateway-intake-browser',
+                    first: {
+                        ...report.sites[0],
+                        mediaId: uiSites[0].mediaId,
+                        target: { id: 'aeroframe', version: '1.0.0', origin: 'builtin' },
+                    },
+                    second: {
+                        ...report.sites[1],
+                        mediaId: uiSites[1].mediaId,
+                        target: { id: 'aeroframe', version: '1.0.0', origin: 'builtin' },
+                    },
                 }),
                 { mode: 0o600 },
             );

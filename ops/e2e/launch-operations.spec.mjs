@@ -204,17 +204,35 @@ test('actual scoped lead assignment, status, CSV bytes and analytics deduplicati
             .getByRole('button', { name: '重新加载', exact: true })
             .click();
         await expect(page.locator('.studio-metric')).toHaveCount(2);
+        const file = source.resultDirectory
+            ? source.resultDirectory + '/' + input.first.target.id + '.json'
+            : info.outputPath(
+                  'operations-proof-' +
+                      (reverse ? 'second' : 'first') +
+                      '.json',
+              );
         const evidence = {
             scope: source.scope || 'actual-local-CMS-Gateway-intake-browser',
             runId: source.runId,
             lockChecksum: source.lockChecksum,
             target: input.first.target,
-            cases: ['LEADS', 'ANALYTICS', 'ISOLATION'].map((name) => ({
+            site: {
+                cmsWorkspaceId: input.first.cmsWorkspaceId,
+                cmsSiteId: input.first.cmsSiteId,
+                gatewaySiteId: input.first.siteId,
+            },
+            isolatedFrom: {
+                cmsWorkspaceId: input.second.cmsWorkspaceId,
+                cmsSiteId: input.second.cmsSiteId,
+                gatewaySiteId: input.second.siteId,
+            },
+            cases: source.scope === 'formal-operations'
+                ? ['LEADS', 'ANALYTICS', 'ISOLATION'].map((name) => ({
                 id: input.first.target?.id + '/' + name,
                 status: 'passed',
                 reason: 'Current owned runtime intake, authenticated UI and both-direction isolation',
-                artifacts: ['operations-proof.json'],
-            })),
+                artifacts: [file],
+            })) : [],
             assignmentPersisted: true,
             statusPersisted: true,
             downloadContainsSelectedLead: true,
@@ -224,13 +242,6 @@ test('actual scoped lead assignment, status, CSV bytes and analytics deduplicati
             eventDeduplicated: true,
             errorNotZero: true,
         };
-        const file = source.resultDirectory
-            ? source.resultDirectory + '/' + input.first.target.id + '.json'
-            : info.outputPath(
-                  'operations-proof-' +
-                      (reverse ? 'second' : 'first') +
-                      '.json',
-              );
         await writeFile(file, JSON.stringify(evidence, null, 2), {
             mode: 0o600,
         });
