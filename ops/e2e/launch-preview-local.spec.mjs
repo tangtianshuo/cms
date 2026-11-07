@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { test, expect } from './browser-fixture.mjs';
 import { runPreviewScenarios } from './launch-preview.mjs';
 import { openHero, save } from './launch-workspace.mjs';
@@ -58,12 +59,10 @@ test('supporting local artifact renderer executes D1 effective-field and retirem
             proof.checks[name] = await test.step(name, operation);
         },
     });
-    await test
-        .info()
-        .attach('local-preview-proof', {
-            body: JSON.stringify(proof, null, 2),
-            contentType: 'application/json',
-        });
+    await test.info().attach('local-preview-proof', {
+        body: JSON.stringify(proof, null, 2),
+        contentType: 'application/json',
+    });
     expect(proof.previewStatus).toBe('ready');
     expect(Object.keys(proof.checks)).toHaveLength(4);
 });
