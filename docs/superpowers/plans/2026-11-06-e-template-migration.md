@@ -169,6 +169,12 @@ git diff --cached --check
 git commit -m "feat: preview safe template data migrations"
 ```
 
+E2 本地实施及两轮修复复审记录（2026-11-07）：最终 CMS `1ef26e76cd43e2e31f8ef9428b7d05e7742c4413`；Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`、Templates `bf11776db84aa97c5eba3f4d538d14682e428469`、Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42` 未变。实现纯函数 `previewMigration`、安全克隆与白名单 rename/set-default/rename-section、propId→字段文档映射、确定性差异、目标 manifest 全类型/数组/单例/媒体/引用/页面校验，以及只读兼容性和影响预览。
+
+审查修复补全 DATE、ENUMERATION、GROUP_POINTER、WIDGET、数组 shape 和 single-entry 恰一条语义；媒体通过既有同站点授权边界筛选；界面改为人类可读标签/标题/本地化说明，实际 `TemplateUpgradePanel` 由 `PresetsView` 复用，迁移需要前置数据时不开放采用。最终渲染测试 2/2、完整聚焦 38/38、跨仓三模板 10/10，后端与 UI 类型检查通过。预览前后完整 Entry/SiteInstallation/Release/Gateway 状态快照不变；12 个任务文件当前/提交哈希一致，154 个原始来源文件未变化，任务资源已清理。
+
+计划中的 `templates.tsx` 在当前仓库已不存在，实际升级入口是 `presets.tsx`，报告已记录该路径替换。E2 只做预览，候选重建、显式采用、崩溃恢复和回滚由 E3 实现。格式化 diff 噪声与既有 lint 警告继续作为最终审查的 Minor；本任务不执行生产采用或公共发布。
+
 ### Task E3：持久升级操作、候选数据和显式采用
 
 **Files:**

@@ -279,6 +279,14 @@ Initial review found the first browser proof used separate installations and a m
 
 Local B2 evidence records bundle `sha256:c1c4f5b59ee33e3dccf04c49f877a64e4eb59392de84b1a85dbf59cb658a8c52` and artifact `sha256:d7d95e9d1d066c93d21b00ad66f11fd647385e29804b6f244dfac800a2875c9c`; the second install was unchanged. These are local package identities. Public registry/OCI publication, deployed Gateway/HTTPS acceptance and human UAT remain unperformed. Formatter-only review noise and the synthetic preview parent are deferred Minor items; E1 remains unchecked for public release.
 
+## E2 — Safe migration dry-run accepted locally
+
+CMS final head `1ef26e76cd43e2e31f8ef9428b7d05e7742c4413`. The migration preview clones its input, supports only rename-field, set-default and rename-section, preserves false/zero/empty values and stable IDs, rejects prototype-pollution keys/collisions/unknown operations, and deterministically maps installed Entry prop IDs back to contract field keys. Target validation covers all declared shapes, arrays, exactly-one singleton records, site-authorized media, references and page/section declarations. No Entry, SiteInstallation, Release or Gateway state changes during preview.
+
+Independent review found incomplete complex-type validation, workspace-only media scope and implementation identifiers in the UI. Fix1 closed validation and media scope and added human summaries; scoped review required actual rendered proof. Fix2 extracted a production `TemplateUpgradePanel` used by `PresetsView`; the mounted test verifies readable impact, absence of raw model/Entry/field/section IDs and implementation terms, disabled adoption for migration-required previews, explicit adoption for compatible ones and no render-time fetch.
+
+Final rendered UI tests passed2/2, focused regressions38/38 and cross-repository AeroFrame/FireGuard/service-studio tests10/10 with zero skips; backend/UI typechecks passed. All12 task-file hashes match executed/committed bytes; protected original-source audit remains154 checked/0 changed. The plan's stale `templates.tsx` path was mapped to the actual `presets.tsx` upgrade screen. Formatter churn is deferred Minor. E3 owns candidate persistence, adoption and recovery; E2 makes no production claim.
+
 ## F3 — Release-aware monitoring and durable alerts accepted locally
 
 Final implementation heads: CMS `bd12cd3fb6e6001c8a765ab6d60b929235197288`, Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`. Public probes bind a page marker and optional release header to the expected F1 template and verified F2 completion; representative assets, strict TLS, certificate age, backup age, public availability, control-plane availability and the authoritative 15-minute publish-failure count are reported separately. The Gateway database helper is read-only and does not participate in publish decisions.
