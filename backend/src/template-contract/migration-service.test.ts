@@ -5,9 +5,7 @@ import type { Entry } from '../entry/models/main';
 import type { Media } from '../media/models/main';
 import type { PresetManifest } from '../presets/catalog';
 import type { GatewayReleaseSource } from '../presets/gateway-publish';
-import {
-    publishGatewayRelease,
-} from '../presets/gateway-publish';
+import { publishGatewayRelease } from '../presets/gateway-publish';
 import type { GatewayState } from '../presets/gateway-state';
 import type { ReleaseInput, ReleaseRecord } from '../presets/releases';
 import type { SiteInstallation } from '../presets/site-model';
@@ -20,9 +18,7 @@ import {
     prepareMigrationOperation,
     type MigrationRuntime,
 } from './migration-service';
-import {
-    createMemoryMigrationRepository,
-} from './migration-repo';
+import { createMemoryMigrationRepository } from './migration-repo';
 import { createMigrationReleaseSource } from './migration-source';
 import { runMigrationRecoveryTick } from '../presets/gateway-jobs';
 
@@ -481,12 +477,7 @@ test('staging is request-key idempotent and adoption verifies source state', asy
     });
     assert.equal(duplicate.id, first.id);
     await assert.rejects(
-        () =>
-            service.adopt(
-                first.id,
-                `sha256:${'0'.repeat(64)}`,
-                'admin',
-            ),
+        () => service.adopt(first.id, `sha256:${'0'.repeat(64)}`, 'admin'),
         /source changed/i,
     );
     const newerSite = {
@@ -495,12 +486,7 @@ test('staging is request-key idempotent and adoption verifies source state', asy
     };
     h.setSite(newerSite);
     await assert.rejects(
-        () =>
-            service.adopt(
-                first.id,
-                first.sourceChecksum,
-                'admin',
-            ),
+        () => service.adopt(first.id, first.sourceChecksum, 'admin'),
         /site changed/i,
     );
     assert.equal(h.gatewayPublishCount(), 0);
@@ -523,9 +509,7 @@ test('candidate source exposes only namespaced templates and rewritten Entries',
                     meta: [
                         {
                             lng: 'en',
-                            props: [
-                                ...f.entry.meta[0].props,
-                            ],
+                            props: [...f.entry.meta[0].props],
                         },
                     ],
                 },
@@ -550,19 +534,11 @@ test('candidate source exposes only namespaced templates and rewritten Entries',
     });
     const site = await source.findSite();
     const content = await source.loadContent(site!);
-    assert.notEqual(
-        site?.models[0].templateId,
-        f.site.models[0].templateId,
-    );
+    assert.notEqual(site?.models[0].templateId, f.site.models[0].templateId);
     assert.equal(content.templates.length, 1);
     assert.equal(content.entries.length, 1);
-    assert.equal(
-        content.entries[0].templateId,
-        site?.models[0].templateId,
-    );
-    assert.ok(
-        site?.templateNamespace?.includes('migration-'),
-    );
+    assert.equal(content.entries[0].templateId, site?.models[0].templateId);
+    assert.ok(site?.templateNamespace?.includes('migration-'));
 });
 
 test('candidate source completes the existing Gateway publication protocol', async () => {
@@ -588,8 +564,7 @@ test('candidate source completes the existing Gateway publication protocol', asy
         loadContent: async () => {
             throw new Error('candidate source must override');
         },
-        findRelease: async (id: string) =>
-            releases.get(id) || null,
+        findRelease: async (id: string) => releases.get(id) || null,
         insertRelease: async (value: ReleaseRecord) => {
             releases.set(value._id, structuredClone(value));
         },
@@ -683,12 +658,7 @@ test('a rejected Gateway candidate becomes failed without switching the site poi
     });
     await h.runtime.repository.save(operation);
     await assert.rejects(
-        () =>
-            service.adopt(
-                operation.id,
-                operation.sourceChecksum,
-                'admin',
-            ),
+        () => service.adopt(operation.id, operation.sourceChecksum, 'admin'),
         /candidate_unhealthy/,
     );
     const failed = await h.runtime.repository.find(operation.id);
@@ -713,12 +683,7 @@ test('adoption re-reads content checksum even when site updatedAt is unchanged',
     await h.runtime.repository.save(operation);
     h.setChecksumOverride(`sha256:${'f'.repeat(64)}`);
     await assert.rejects(
-        () =>
-            service.adopt(
-                operation.id,
-                operation.sourceChecksum,
-                'admin',
-            ),
+        () => service.adopt(operation.id, operation.sourceChecksum, 'admin'),
         /source changed/i,
     );
     assert.equal(h.gatewayPublishCount(), 0);
@@ -774,10 +739,7 @@ test('pending authoritative publication is reconciled and finalized exactly once
     assert.equal(duplicate.status, 'active');
     assert.equal(h.gatewayPublishCount(), 1);
     assert.equal(h.site().presetVersion, '1.0.1');
-    assert.notEqual(
-        h.site().models[0].templateId,
-        f.site.models[0].templateId,
-    );
+    assert.notEqual(h.site().models[0].templateId, f.site.models[0].templateId);
 });
 
 test('rollback preserves a later draft before restoring the previous complete site', async () => {
@@ -805,19 +767,13 @@ test('rollback preserves a later draft before restoring the previous complete si
         name: 'Later draft',
         updatedAt: operation.candidateSite.updatedAt + 5,
     });
-    const rolledBack = await service.rollback(
-        operation.id,
-        'admin',
-    );
+    const rolledBack = await service.rollback(operation.id, 'admin');
     assert.equal(rolledBack.status, 'rolled-back');
-    assert.equal(
-        rolledBack.laterDraftSite?.name,
-        'Later draft',
-    );
+    assert.equal(rolledBack.laterDraftSite?.name, 'Later draft');
     assert.equal(h.site().name, f.site.name);
     assert.equal(
-        (await h.runtime.repository.find(operation.id))
-            ?.candidateEntries?.length,
+        (await h.runtime.repository.find(operation.id))?.candidateEntries
+            ?.length,
         1,
     );
 });

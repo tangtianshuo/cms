@@ -319,22 +319,21 @@ export function mongoMigrationRepository(): MigrationRepository {
             return record ? migrationOperation(record) : null;
         },
         async listBySite(siteId) {
-            return (
-                await RawMigrationRepo.methods.listBySite(siteId)
-            ).map(migrationOperation);
+            return (await RawMigrationRepo.methods.listBySite(siteId)).map(
+                migrationOperation,
+            );
         },
         async listByStatus(status) {
-            return (
-                await RawMigrationRepo.methods.listByStatus(status)
-            ).map(migrationOperation);
+            return (await RawMigrationRepo.methods.listByStatus(status)).map(
+                migrationOperation,
+            );
         },
     };
 }
 
 export function createMemoryMigrationRepository(): MigrationRepository {
     const values = new Map<string, MigrationOperation>();
-    const clone = (value: MigrationOperation) =>
-        structuredClone(value);
+    const clone = (value: MigrationOperation) => structuredClone(value);
     return {
         async save(value) {
             values.set(value.id, clone(value));

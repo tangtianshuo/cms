@@ -20,12 +20,7 @@ export interface SiteMutationStore {
     ): Promise<boolean>;
     releaseSiteMutation(siteId: string, token: string): Promise<boolean>;
     siteMutationState(siteId: string): Promise<{
-        status:
-            | 'idle'
-            | 'publishing'
-            | 'active'
-            | 'failed'
-            | 'rolled-back';
+        status: 'idle' | 'publishing' | 'active' | 'failed' | 'rolled-back';
         operationId?: string;
     }>;
 }
@@ -52,9 +47,7 @@ const fallbackLocks = new Map<
 >();
 let configuredStore: SiteMutationStore | null = null;
 
-export function setSiteMutationStore(
-    store: SiteMutationStore | null,
-): void {
+export function setSiteMutationStore(store: SiteMutationStore | null): void {
     configuredStore = store;
 }
 
@@ -118,8 +111,7 @@ export async function withSiteMutation<T>(
         if (
             options.mode === 'write' &&
             store &&
-            (await store.siteMutationState(siteId)).status ===
-                'publishing'
+            (await store.siteMutationState(siteId)).status === 'publishing'
         ) {
             throw new SiteMutationConflict();
         }
@@ -127,10 +119,7 @@ export async function withSiteMutation<T>(
         await new Promise((resolve) => setTimeout(resolve, 10));
     }
     try {
-        return await context.run(
-            { siteId, token, mode: options.mode },
-            action,
-        );
+        return await context.run({ siteId, token, mode: options.mode }, action);
     } finally {
         if (store) await store.releaseSiteMutation(siteId, token);
         else {

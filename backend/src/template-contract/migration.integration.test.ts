@@ -34,9 +34,7 @@ test(
             await app.mongo.db?.dropDatabase();
             await app.close();
         });
-        for (const repo of [
-            Repo.siteInstallation,
-        ]) {
+        for (const repo of [Repo.siteInstallation]) {
             await new Promise<void>((resolve, reject) =>
                 repo.init().initialize({
                     fastify: app,
@@ -96,8 +94,7 @@ test(
             { mode: 'migration', operationId: 'operation-1' },
         );
         await assert.rejects(
-            () =>
-                withSiteMutation(siteId, async () => undefined),
+            () => withSiteMutation(siteId, async () => undefined),
             SiteMutationConflict,
         );
         const candidate: SiteInstallation = {
@@ -140,11 +137,8 @@ test(
             true,
         );
         assert.equal(
-            (
-                await Repo.siteInstallation.methods.siteMutationState(
-                    siteId,
-                )
-            ).status,
+            (await Repo.siteInstallation.methods.siteMutationState(siteId))
+                .status,
             'active',
         );
         await withSiteMutation(siteId, async () => undefined);

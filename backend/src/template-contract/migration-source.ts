@@ -8,9 +8,7 @@ export interface MigrationSourceOptions {
     language?: string;
     mediaOrigin?: string;
     currency?: string;
-    update(
-        operation: MigrationOperation,
-    ): Promise<MigrationOperation | void>;
+    update(operation: MigrationOperation): Promise<MigrationOperation | void>;
 }
 
 /**
@@ -41,21 +39,17 @@ export function createMigrationReleaseSource(
                 throw new Error('Migration candidate identity mismatch');
             }
             return {
-                templates: structuredClone(
-                    current.candidateTemplates ?? [],
-                ),
+                templates: structuredClone(current.candidateTemplates ?? []),
                 entries: structuredClone(current.candidateEntries ?? []),
                 media: structuredClone(current.media ?? []),
-                language:
-                    site.language || options.language || 'en',
+                language: site.language || options.language || 'en',
                 mediaOrigin: options.mediaOrigin || '',
                 currency: options.currency || 'USD',
             };
         },
         findRelease: (id) => options.base.findRelease(id),
         insertRelease: (record) => options.base.insertRelease(record),
-        activate: (site, releaseId) =>
-            options.base.activate(site, releaseId),
+        activate: (site, releaseId) => options.base.activate(site, releaseId),
         audit: (event) => options.base.audit(event),
         async saveSite(site, expectedUpdatedAt) {
             if (

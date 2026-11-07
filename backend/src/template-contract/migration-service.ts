@@ -3,9 +3,7 @@ import type { Entry } from '../entry/models/main';
 import type { Media } from '../media/models/main';
 import type { PresetManifest } from '../presets/catalog';
 import type { GatewayReleaseSource } from '../presets/gateway-publish';
-import {
-    publishGatewayRelease,
-} from '../presets/gateway-publish';
+import { publishGatewayRelease } from '../presets/gateway-publish';
 import { resolveGatewayPublishConfig } from '../site-provisioning/config';
 import { isGatewayUnavailable } from '../presets/gateway-client';
 import type { GatewayState } from '../presets/gateway-state';
@@ -132,10 +130,7 @@ function rewritePointers(
     );
 }
 
-function sectionRename(
-    type: string,
-    steps: MigrationStep[],
-): string {
+function sectionRename(type: string, steps: MigrationStep[]): string {
     let result = type;
     for (const step of steps) {
         if (step.op === 'rename-section' && result === step.from) {
@@ -153,17 +148,14 @@ function migratePage(
 ): SitePage {
     const next = clone(page);
     next.entryId = entryIds.get(page.entryId || '') || page.entryId;
-    next.sections = page.sections?.map((type) =>
-        sectionRename(type, steps),
-    );
+    next.sections = page.sections?.map((type) => sectionRename(type, steps));
     next.sectionConfigs = page.sectionConfigs?.map((section) => ({
         ...section,
         type: sectionRename(section.type, steps) as typeof section.type,
-        data: rewritePointers(
-            section.data,
-            templateIds,
-            entryIds,
-        ) as Record<string, unknown>,
+        data: rewritePointers(section.data, templateIds, entryIds) as Record<
+            string,
+            unknown
+        >,
     }));
     const patchLayout = (nodes: unknown): unknown => {
         if (Array.isArray(nodes)) return nodes.map(patchLayout);
@@ -176,16 +168,10 @@ function migratePage(
                 : {}),
             ...(node.props
                 ? {
-                      props: rewritePointers(
-                          node.props,
-                          templateIds,
-                          entryIds,
-                      ),
+                      props: rewritePointers(node.props, templateIds, entryIds),
                   }
                 : {}),
-            ...(node.children
-                ? { children: patchLayout(node.children) }
-                : {}),
+            ...(node.children ? { children: patchLayout(node.children) } : {}),
         };
     };
     if (next.layoutDocument) {
@@ -224,7 +210,9 @@ export function prepareMigrationOperation(
         throw new TypeError('A stable requestKey UUID is required');
     }
     if (site.status !== 'ready' || site.updatedAt !== expectedUpdatedAt) {
-        throw new SiteMutationConflict('Site changed; refresh before upgrading');
+        throw new SiteMutationConflict(
+            'Site changed; refresh before upgrading',
+        );
     }
     if (
         targetRecord.id !== targetManifest.id ||
@@ -356,19 +344,14 @@ export function prepareMigrationOperation(
     const entryIds = new Map<string, string>();
     for (const modelEntries of Object.values(preview.document.models)) {
         for (const entry of modelEntries) {
-            entryIds.set(
-                entry.id,
-                stableId(operationId, 'entry', entry.id),
-            );
+            entryIds.set(entry.id, stableId(operationId, 'entry', entry.id));
         }
     }
     const entryById = new Map(
         releaseInput.entries.map((entry) => [entry._id, entry]),
     );
     const candidateEntries: Entry[] = [];
-    for (const [modelKey, entries] of Object.entries(
-        preview.document.models,
-    )) {
+    for (const [modelKey, entries] of Object.entries(preview.document.models)) {
         const candidateTemplate = modelTemplates.get(modelKey);
         if (!candidateTemplate) continue;
         for (const row of entries) {
@@ -379,14 +362,20 @@ export function prepareMigrationOperation(
                     languageMeta.lng === releaseInput.language
                         ? row.fields
                         : Object.fromEntries(
-                              Object.entries(row.fields).map(
-                                  ([key, value]) => [key, value],
-                              ),
+                              Object.entries(row.fields).map(([key, value]) => [
+                                  key,
+                                  value,
+                              ]),
                           );
                 return {
                     ...structuredClone(languageMeta),
                     props: candidateTemplate.props.flatMap((prop) => {
-                        if (!Object.prototype.hasOwnProperty.call(fields, prop.name)) {
+                        if (
+                            !Object.prototype.hasOwnProperty.call(
+                                fields,
+                                prop.name,
+                            )
+                        ) {
                             return [];
                         }
                         const value = rewritePointers(
@@ -399,7 +388,9 @@ export function prepareMigrationOperation(
                                 id: prop.id,
                                 data: (prop.array
                                     ? value
-                                    : [value]) as typeof languageMeta.props[number]['data'],
+                                    : [
+                                          value,
+                                      ]) as (typeof languageMeta.props)[number]['data'],
                             },
                         ];
                     }),
@@ -498,28 +489,24 @@ export function prepareMigrationOperation(
                                     )!
                                     .fields.map((field) => {
                                         const propId = field.propId;
-                                        const value =
-                                            entry.meta
-                                                .find(
-                                                    (meta) =>
-                                                        meta.lng ===
-                                                        releaseInput.language,
-                                                )
-                                                ?.props.find(
-                                                    (prop) =>
-                                                        prop.id === propId,
-                                                )?.data;
-                                        const prop =
-                                            candidateTemplates
-                                                .find(
-                                                    (template) =>
-                                                        template._id ===
-                                                        entry.templateId,
-                                                )
-                                                ?.props.find(
-                                                    (item) =>
-                                                        item.id === propId,
-                                                );
+                                        const value = entry.meta
+                                            .find(
+                                                (meta) =>
+                                                    meta.lng ===
+                                                    releaseInput.language,
+                                            )
+                                            ?.props.find(
+                                                (prop) => prop.id === propId,
+                                            )?.data;
+                                        const prop = candidateTemplates
+                                            .find(
+                                                (template) =>
+                                                    template._id ===
+                                                    entry.templateId,
+                                            )
+                                            ?.props.find(
+                                                (item) => item.id === propId,
+                                            );
                                         return [
                                             field.key,
                                             prop?.array
@@ -536,13 +523,11 @@ export function prepareMigrationOperation(
             pages: candidateSite.pages.map((page) => ({
                 id: page.key,
                 path: page.path,
-                sections: (page.sectionConfigs || []).map(
-                    (section, index) => ({
-                        id: `${page.key}:${index}:${section.type}`,
-                        type: section.type,
-                        props: section.data,
-                    }),
-                ),
+                sections: (page.sectionConfigs || []).map((section, index) => ({
+                    id: `${page.key}:${index}:${section.type}`,
+                    type: section.type,
+                    props: section.data,
+                })),
             })),
         },
         [],
@@ -588,9 +573,11 @@ export function canFinalizeMigration(
     targetRouteRevision: number,
     state: GatewayState,
 ): boolean {
-    return !!state.active &&
+    return (
+        !!state.active &&
         state.active.releaseId === targetReleaseId &&
-        state.active.routeRevision === targetRouteRevision;
+        state.active.routeRevision === targetRouteRevision
+    );
 }
 
 export interface MigrationGatewayRuntime {
@@ -612,9 +599,7 @@ export interface MigrationGatewayRuntime {
 export interface MigrationRuntime {
     repository: MigrationRepository;
     findSite(siteId: string): Promise<SiteInstallation | null>;
-    sourceChecksum(
-        operation: MigrationOperation,
-    ): Promise<string>;
+    sourceChecksum(operation: MigrationOperation): Promise<string>;
     source(operation: MigrationOperation): GatewayReleaseSource;
     persistCandidate(operation: MigrationOperation): Promise<void>;
     finalize(
@@ -657,12 +642,11 @@ export class MigrationService {
         try {
             await this.runtime.repository.save(operation);
         } catch (cause) {
-            const concurrent =
-                await this.runtime.repository.findByRequestKey(
-                    ownerWorkspace(input.site),
-                    input.site._id,
-                    input.requestKey,
-                );
+            const concurrent = await this.runtime.repository.findByRequestKey(
+                ownerWorkspace(input.site),
+                input.site._id,
+                input.requestKey,
+            );
             if (
                 !concurrent ||
                 concurrent.targetManifestChecksum !==
@@ -691,9 +675,7 @@ export class MigrationService {
         return withSiteMutation(
             operation.cmsSiteId,
             async () => {
-                const site = await this.runtime.findSite(
-                    operation.cmsSiteId,
-                );
+                const site = await this.runtime.findSite(operation.cmsSiteId);
                 if (
                     !site ||
                     site.updatedAt !== operation.expectedUpdatedAt ||
@@ -779,12 +761,9 @@ export class MigrationService {
         return withSiteMutation(
             operation.cmsSiteId,
             async () => {
-                const site = await this.runtime.findSite(
-                    operation.cmsSiteId,
-                );
+                const site = await this.runtime.findSite(operation.cmsSiteId);
                 if (!site) return operation;
-                const state =
-                    await this.runtime.gateway.readState(operation);
+                const state = await this.runtime.gateway.readState(operation);
                 if (
                     canFinalizeMigration(
                         operation.targetReleaseId!,
@@ -796,10 +775,8 @@ export class MigrationService {
                 }
                 if (
                     state.active &&
-                    state.active.releaseId ===
-                        operation.previousReleaseId &&
-                    state.active.routeRevision ===
-                        operation.expectedUpdatedAt
+                    state.active.releaseId === operation.previousReleaseId &&
+                    state.active.routeRevision === operation.expectedUpdatedAt
                 ) {
                     operation = {
                         ...operation,
@@ -831,9 +808,7 @@ export class MigrationService {
         return withSiteMutation(
             operation.cmsSiteId,
             async () => {
-                let site = await this.runtime.findSite(
-                    operation.cmsSiteId,
-                );
+                let site = await this.runtime.findSite(operation.cmsSiteId);
                 if (!site) throw new Error('Site not found');
                 if (
                     site.updatedAt !== operation.candidateSite.updatedAt &&
@@ -852,16 +827,13 @@ export class MigrationService {
                 );
                 if (
                     !state.active ||
-                    state.active.releaseId !==
-                        operation.previousReleaseId
+                    state.active.releaseId !== operation.previousReleaseId
                 ) {
                     throw new Error(
                         'Gateway did not confirm the previous release',
                     );
                 }
-                site = (await this.runtime.findSite(
-                    operation.cmsSiteId,
-                ))!;
+                site = (await this.runtime.findSite(operation.cmsSiteId))!;
                 if (
                     !(await this.runtime.restore(
                         operation,
@@ -891,9 +863,7 @@ export class MigrationService {
         site: SiteInstallation,
     ): Promise<MigrationOperation> {
         await this.runtime.persistCandidate(operation);
-        if (
-            !(await this.runtime.finalize(operation, site.updatedAt))
-        ) {
+        if (!(await this.runtime.finalize(operation, site.updatedAt))) {
             throw new SiteMutationConflict(
                 'Site changed before migration finalization',
             );
@@ -907,9 +877,7 @@ export class MigrationService {
         return active;
     }
 
-    private async requireOperation(
-        id: string,
-    ): Promise<MigrationOperation> {
+    private async requireOperation(id: string): Promise<MigrationOperation> {
         const operation = await this.runtime.repository.find(id);
         if (!operation) throw new Error('Migration operation not found');
         return operation;
@@ -931,11 +899,7 @@ export function adoptMigration(
     expectedSourceChecksum: string,
     actorId: string,
 ): Promise<MigrationOperation> {
-    return requireDefault().adopt(
-        operationId,
-        expectedSourceChecksum,
-        actorId,
-    );
+    return requireDefault().adopt(operationId, expectedSourceChecksum, actorId);
 }
 
 export function reconcileMigration(
@@ -957,8 +921,7 @@ export function rollbackMigration(
     return requireDefault().rollback(operationId, actorId);
 }
 
-export const inMemoryMigrationRepository =
-    createMemoryMigrationRepository;
+export const inMemoryMigrationRepository = createMemoryMigrationRepository;
 
 export type { MigrationDocument };
 
@@ -976,8 +939,7 @@ function defaultRuntime(): MigrationRuntime {
         });
     return {
         repository,
-        findSite: (siteId) =>
-            Repo.siteInstallation.methods.findFresh(siteId),
+        findSite: (siteId) => Repo.siteInstallation.methods.findFresh(siteId),
         async sourceChecksum(operation) {
             const site = await Repo.siteInstallation.methods.findFresh(
                 operation.cmsSiteId,
@@ -1052,12 +1014,12 @@ function defaultRuntime(): MigrationRuntime {
                     operation.requestKey,
                     config,
                 );
-                const candidate =
-                    await migrationSource.findSite();
+                const candidate = await migrationSource.findSite();
                 const intent = candidate?.gatewayPublishIntent
-                    ? (JSON.parse(
-                          candidate.gatewayPublishIntent,
-                      ) as { releaseId?: string; revision?: number })
+                    ? (JSON.parse(candidate.gatewayPublishIntent) as {
+                          releaseId?: string;
+                          revision?: number;
+                      })
                     : null;
                 if (!intent?.releaseId) {
                     throw new Error(
@@ -1068,9 +1030,7 @@ function defaultRuntime(): MigrationRuntime {
                 return {
                     state,
                     targetReleaseId: intent.releaseId,
-                    targetRouteRevision:
-                        intent.revision ??
-                        (state.revision + 1),
+                    targetRouteRevision: intent.revision ?? state.revision + 1,
                 };
             },
             async readState(operation) {
@@ -1081,9 +1041,10 @@ function defaultRuntime(): MigrationRuntime {
             },
             async rollback(migrationSource, operation) {
                 const config = await resolveGatewayPublishConfig();
-                const latestSite = await Repo.siteInstallation.methods.findFresh(
-                    operation.cmsSiteId,
-                );
+                const latestSite =
+                    await Repo.siteInstallation.methods.findFresh(
+                        operation.cmsSiteId,
+                    );
                 const rollbackSource = {
                     ...migrationSource,
                     findSite: async () => latestSite,

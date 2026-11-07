@@ -14,7 +14,10 @@ function memoryStore(): SiteMutationStore {
     >();
     const states = new Map<
         string,
-        { status: 'idle'|'publishing'|'active'|'failed'|'rolled-back'; operationId?: string }
+        {
+            status: 'idle' | 'publishing' | 'active' | 'failed' | 'rolled-back';
+            operationId?: string;
+        }
     >();
     return {
         async claimSiteMutation(
@@ -85,10 +88,7 @@ test('persistent publishing state blocks normal writes after the migration lease
         'site-a',
         async () => {
             assert.equal(
-                (await withSiteMutation(
-                    'site-a',
-                    async () => 'nested',
-                )),
+                await withSiteMutation('site-a', async () => 'nested'),
                 'nested',
             );
         },
