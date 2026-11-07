@@ -104,6 +104,8 @@ git diff --cached --check
 git commit -m "test: add complete self-service site acceptance flow"
 ```
 
+D1 本地实施记录（2026-11-07）：CMS `16378582ae45ceb7d07e0ddd242f7143aea6c84d`、Gateway `7536019750100d537156a93a5c3c81edc8030c08` 已完成本地实现和两轮独立修复复审。正式运行器具备隔离环境生命周期、精确产物身份校验、48 项必需集合、当前运行证据校验和失败保护。实际 UI 内容创作、双向运营、五类故障恢复以及两模板真实本地渲染器的语言/站点当前画布验证通过；原来源文件保持不变，隔离资源已清理。公共精确版本产物、完整 PlatformLock 和授权 DNS/TLS 条件仍缺失，正式结果保持 2 blocked、46 not-run，不生成 AcceptanceEvidence，整项不得勾选完成。F1 可继续实现严格门禁，不能把这些支持性结果作为正式放行。
+
 ### Task D2：生产验收站与 10 分钟目标复验
 
 **Files:**
