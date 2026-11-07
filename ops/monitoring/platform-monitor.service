@@ -1,0 +1,18 @@
+[Unit]
+Description=Platform public availability and recovery-readiness probe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=platform-monitor
+Group=platform-monitor
+UMask=0077
+EnvironmentFile=/etc/platform-monitoring/credentials.env
+ExecStart=/usr/bin/node /opt/platform-delivery/cms/ops/monitoring/probe.mjs --config /etc/platform-monitoring/config.json
+TimeoutStartSec=120s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/platform-monitoring
