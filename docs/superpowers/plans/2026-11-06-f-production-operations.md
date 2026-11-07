@@ -208,6 +208,12 @@ git diff --cached --check
 git commit -m "feat: back up and restore consistent platform state"
 ```
 
+F2 本地实施及限定复审记录（2026-11-07）：最终 CMS `06ff20e0292b04d869b9af65d1307f68de134071`、Gateway `1c94455588c54390f1fe3cb2e482f4aed5f18a06`；Templates `2f4c35f37f5f33d8d7c9b922c37d7dc4501d4a32`、Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42` 未变。实现包含逐文件完整性校验、并发写入者排除、真实 Docker Compose 监督、原生 PostgreSQL/MongoDB 一致备份、随机隔离目标恢复、陈旧 SQL/Mongo 租约 fencing、逻辑发布状态保留和物理运行实例重建。初始独立审查发现恢复 worker 可在同一 Docker 守护进程上误清理源站容器，以及重建时遗漏询盘入口；修复为持久化恢复作用域、独立容器标签和全链路作用域校验，并将配置化 intake origin 传入重建、再发布及回滚实例。
+
+最终本地验证：CMS 恢复完整性 5 项、Gateway 定向与真实 Docker/作用域回归 46 项、真实 PostgreSQL worker 回归 40 项、初始 Python 完整性/生命周期 20 项均通过且无跳过。最终同守护进程共存演练让源站与恢复站各自的 active、previous 和 pending candidate 同时跨三个真实 collector 周期存活，两侧只清理自己的废弃容器；恢复公开页面采样 59/59 为 HTTP 200，备份 6,749 ms、恢复到可访问内容 3,169 ms，随后恢复实例重新发布 revision 3、回滚基线 revision 4，并验证联系表单和询盘入口。14 个修复文件的当前、提交及最终执行 SHA256 一致，直接调用方仓库保持干净；自有数据库、容器和监听端口清理完成，共享 PostgreSQL/MongoDB 保持运行，154 个原始来源文件未变化。
+
+上述数据来自小型本地数据集，不代表生产规模 RTO/RPO。真实完整 PlatformLock/公共制品、异机副本、已安装每日保留策略、生产切换和真实外部通知仍未执行，所有正式步骤及 Task F2 整体状态保持未勾选。
+
 ### Task F3：真实可用性探测与告警
 
 **Files:**
