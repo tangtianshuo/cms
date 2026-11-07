@@ -9,6 +9,10 @@ import { createMongoDBRepository } from '../_server/modules/mongodb';
 import { Config } from '../config';
 import type { ProvisioningCode, ProvisioningStore } from '../site-provisioning/service';
 import { type SiteInstallation, SiteInstallationSchema } from './site-model';
+import {
+    setSiteMutationStore,
+    type SiteMutationMode,
+} from '../template-contract/site-mutation';
 
 function installationDraft(site: SiteInstallation) {
     const { provisioning: _provisioning, creationRequestKey: _creationKey, creationName: _creationName, currentReleaseId: _release, publishedReleaseIds: _history,
@@ -28,6 +32,16 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
     findSelected(): Promise<SiteInstallation | null>;
     findFresh(id: string): Promise<SiteInstallation | null>;
     withDomainLock<T>(siteId: string, action: () => Promise<T>): Promise<T>;
+    claimSiteMutation(siteId: string, token: string, mode: SiteMutationMode, operationId: string | undefined,
+        now: number, leaseUntil: number): Promise<boolean>;
+    releaseSiteMutation(siteId: string, token: string): Promise<boolean>;
+    settleMigrationState(siteId: string, operationId: string,
+        status: 'active'|'failed'|'rolled-back'): Promise<boolean>;
+    siteMutationState(siteId: string): Promise<{ status: 'idle'|'publishing'|'active'|'failed'|'rolled-back'; operationId?: string }>;
+    finalizeMigration(siteId: string, operationId: string, expectedUpdatedAt: number,
+        candidate: SiteInstallation): Promise<boolean>;
+    restoreMigrationSite(siteId: string, operationId: string, expectedUpdatedAt: number,
+        previous: SiteInstallation): Promise<boolean>;
     setPrimaryDomain(siteId: string, id: string, audit: DomainPrimaryAudit): Promise<void>;
     pendingDomainAudits(siteId: string): Promise<DomainPrimaryAudit[]>;
     acknowledgeDomainAudit(siteId: string, eventId: string): Promise<void>;
@@ -130,6 +144,145 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                     cache.remove(siteId);
                 }
             },
+            async claimSiteMutation(siteId, token, mode, operationId, now, leaseUntil) {
+                const lockAvailable = {
+                    $or: [
+                        { migrationMutationUntil: { $exists: false } },
+                        { migrationMutationUntil: { $lt: now } },
+                    ],
+                };
+                const query = mode === 'migration'
+                    ? { _id: siteId, ...lockAvailable }
+                    : {
+                          _id: siteId,
+                          ...lockAvailable,
+                          migrationState: {
+                              $ne: 'publishing' as const,
+                          },
+                      };
+                const result = await mdb.updateOne(query, {
+                    $set: {
+                        migrationMutationToken: token,
+                        migrationMutationUntil: leaseUntil,
+                        ...(mode === 'migration' && operationId
+                            ? {
+                                  migrationState: 'publishing',
+                                  migrationOperationId: operationId,
+                              }
+                            : {}),
+                    },
+                });
+                cache.remove(siteId);
+                return result.matchedCount === 1;
+            },
+            async releaseSiteMutation(siteId, token) {
+                const result = await mdb.updateOne(
+                    { _id: siteId, migrationMutationToken: token },
+                    {
+                        $unset: {
+                            migrationMutationToken: '',
+                            migrationMutationUntil: '',
+                        },
+                    },
+                );
+                cache.remove(siteId);
+                return result.matchedCount === 1;
+            },
+            async settleMigrationState(siteId, operationId, status) {
+                const result = await mdb.updateOne(
+                    {
+                        _id: siteId,
+                        migrationOperationId: operationId,
+                    },
+                    {
+                        $set: { migrationState: status },
+                        $unset: {
+                            migrationMutationToken: '',
+                            migrationMutationUntil: '',
+                        },
+                    },
+                );
+                cache.remove(siteId);
+                return result.matchedCount === 1;
+            },
+            async siteMutationState(siteId) {
+                const site = await identityCollection.findOne({
+                    _id: siteId,
+                });
+                if (!site) throw new Error('Site not found');
+                const status = site.migrationState;
+                return {
+                    status:
+                        status === 'publishing' ||
+                        status === 'active' ||
+                        status === 'failed' ||
+                        status === 'rolled-back'
+                            ? status
+                            : 'idle',
+                    ...(site.migrationOperationId
+                        ? { operationId: site.migrationOperationId }
+                        : {}),
+                };
+            },
+            async finalizeMigration(
+                siteId,
+                operationId,
+                expectedUpdatedAt,
+                candidate,
+            ) {
+                const draft = installationDraft(candidate);
+                const result = await mdb.updateOne(
+                    {
+                        ...workspaceFilter(),
+                        _id: siteId,
+                        updatedAt: expectedUpdatedAt,
+                        migrationOperationId: operationId,
+                        migrationState: 'publishing',
+                    },
+                    {
+                        $set: {
+                            ...draft,
+                            migrationState: 'active',
+                            migrationOperationId: operationId,
+                            updatedAt: Math.max(
+                                Date.now(),
+                                expectedUpdatedAt + 1,
+                            ),
+                        },
+                    },
+                );
+                cache.remove(siteId);
+                return result.matchedCount === 1;
+            },
+            async restoreMigrationSite(
+                siteId,
+                operationId,
+                expectedUpdatedAt,
+                previous,
+            ) {
+                const draft = installationDraft(previous);
+                const result = await mdb.updateOne(
+                    {
+                        ...workspaceFilter(),
+                        _id: siteId,
+                        updatedAt: expectedUpdatedAt,
+                        migrationOperationId: operationId,
+                    },
+                    {
+                        $set: {
+                            ...draft,
+                            migrationState: 'rolled-back',
+                            migrationOperationId: operationId,
+                            updatedAt: Math.max(
+                                Date.now(),
+                                expectedUpdatedAt + 1,
+                            ),
+                        },
+                    },
+                );
+                cache.remove(siteId);
+                return result.matchedCount === 1;
+            },
             async setPrimaryDomain(siteId, id, audit) {
                 const lock = domainLock.getStore();
                 if (!lock || lock.siteId !== siteId) throw new Error('Domain changed; reload');
@@ -157,7 +310,11 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                 if (ownerWorkspace(site) !== workspaceId() || (workspaceContext()?.siteId && workspaceContext()?.siteId !== site._id)) throw new Error('Site access denied');
                 const draft = installationDraft(site);
                 const updatedAt = Math.max(Date.now(), site.updatedAt + 1);
-                const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id }, { $set: { ...draft, updatedAt } });
+                const result = await mdb.updateOne({
+                    ...workspaceFilter(),
+                    _id: site._id,
+                    migrationState: { $ne: 'publishing' },
+                }, { $set: { ...draft, updatedAt } });
                 if (result.matchedCount !== 1) throw new Error('Site not found in workspace');
                 site.updatedAt = updatedAt;
                 cache.remove(site._id);
@@ -170,7 +327,12 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
                 for (const page of draft.pages) {
                     if (page.creationReceipt?.siteUpdatedAt === 0 && page.creationReceipt.expectedUpdatedAt === expectedUpdatedAt) page.creationReceipt.siteUpdatedAt = updatedAt;
                 }
-                const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id, updatedAt: expectedUpdatedAt }, {
+                const result = await mdb.updateOne({
+                    ...workspaceFilter(),
+                    _id: site._id,
+                    updatedAt: expectedUpdatedAt,
+                    migrationState: { $ne: 'publishing' },
+                }, {
                     $set: { ...draft, updatedAt },
                 });
                 cache.remove(site._id);
@@ -188,6 +350,7 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
             },
             async activate(site, releaseId) {
                 const result = await mdb.updateOne({ ...workspaceFilter(), _id: site._id, updatedAt: site.updatedAt,
+                    migrationState: { $ne: 'publishing' },
                     currentReleaseId: site.currentReleaseId || { $exists: false } }, {
                     $set: { currentReleaseId: releaseId, updatedAt: Math.max(Date.now(), site.updatedAt + 1) },
                     $addToSet: { publishedReleaseIds: releaseId },
@@ -205,3 +368,5 @@ export const SiteInstallationRepo = createMongoDBRepository<SiteInstallation, {
         };
     },
 });
+
+setSiteMutationStore(SiteInstallationRepo.methods);

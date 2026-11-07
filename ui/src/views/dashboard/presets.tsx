@@ -36,6 +36,7 @@ interface PresetSummary {
 }
 export interface UpgradePreview {
     compatible: boolean;
+    adoptable?: boolean;
     requiresNewInstallation: boolean;
     migrationRequired: boolean;
     migrationPlan?: {
@@ -65,6 +66,7 @@ export interface TemplateAdoptionState {
     isAdmin: boolean;
     hasConflicts: boolean;
     previewCompatible: boolean;
+    previewAdoptable?: boolean;
 }
 
 export function canAdoptTemplate(state: TemplateAdoptionState): boolean {
@@ -76,7 +78,7 @@ export function canAdoptTemplate(state: TemplateAdoptionState): boolean {
         !state.busy &&
         state.isAdmin &&
         !state.hasConflicts &&
-        state.previewCompatible
+        (state.previewAdoptable ?? state.previewCompatible)
     );
 }
 
@@ -207,6 +209,7 @@ export const PresetsView = defineComponent({
         const loading = ref(true);
         const busy = ref(false);
         const error = ref('');
+        const adoptionRequestKeys = new Map<string, string>();
         let refreshTimer: ReturnType<typeof setInterval> | undefined;
         const origin = import.meta.env.VITE_STOREFRONT_ORIGIN
             ? new URL(import.meta.env.VITE_STOREFRONT_ORIGIN).origin
@@ -248,6 +251,8 @@ export const PresetsView = defineComponent({
                 isAdmin: !!sdk.context?.context.admin,
                 hasConflicts: conflicts.value.length > 0,
                 previewCompatible: upgradePreview.value?.compatible === true,
+                previewAdoptable:
+                    upgradePreview.value?.adoptable === true,
             }),
         );
         const importInProgress = computed(
@@ -421,10 +426,16 @@ export const PresetsView = defineComponent({
 
         async function adoptSelected() {
             if (!canAdopt.value || !selected.value || !site.value) return;
+            const requestKey =
+                adoptionRequestKeys.get(selectedKey.value) ||
+                crypto.randomUUID();
+            adoptionRequestKeys.set(selectedKey.value, requestKey);
             busy.value = true;
             error.value = '';
             try {
-                await sdk.send<SiteInstallation>({
+                const result = await sdk.send<{
+                    status?: 'planned'|'staged'|'publishing'|'active'|'failed'|'rolled-back';
+                }>({
                     url: '/api/v4/presets/import',
                     method: 'POST',
                     data: {
@@ -433,10 +444,16 @@ export const PresetsView = defineComponent({
                         manifestChecksum: selected.value.manifestChecksum,
                         mode: 'adopt',
                         expectedUpdatedAt: site.value.updatedAt,
+                        requestKey,
                     },
                 });
                 await refreshSite();
-                window.bcms.notification.success(t('presets.versionAdopted'));
+                if (result.status === 'active') {
+                    adoptionRequestKeys.delete(selectedKey.value);
+                    window.bcms.notification.success(t('presets.versionAdopted'));
+                } else {
+                    error.value = t('presets.upgradeProcessing');
+                }
             } catch (cause) {
                 error.value = userErrorMessage(cause);
                 await refreshSite();

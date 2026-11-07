@@ -18,6 +18,7 @@ import { ReleaseRepo, ReleaseAuditRepo } from '@bcms/selfhosted-backend/presets/
 import { LeadRepo } from './leads/repo';
 import { AnalyticsRepo } from './analytics/repo';
 import { SiteGatewayBindingRepo } from './site-provisioning/repo';
+import { mongoMigrationRepository } from './template-contract/migration-repo';
 
 export class Repo {
     static readonly resourceShare = ResourceShareRepo;
@@ -42,4 +43,5 @@ export class Repo {
     static readonly lead = LeadRepo;
     static readonly analytics = AnalyticsRepo;
     static readonly siteGatewayBinding = SiteGatewayBindingRepo;
+    static readonly migrationOperation = mongoMigrationRepository();
 }

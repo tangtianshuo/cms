@@ -20,7 +20,6 @@ import { buildChecklist } from './checklist';
 import { getPreset, listPresets } from './catalog';
 import { resolveInstalledPreset } from './installed';
 import {
-    adoptPublicTemplate,
     importPreset,
     planImport,
     previewPublicTemplateUpgrade,
@@ -43,6 +42,12 @@ import { gatewayBound } from './gateway-publish';
 import { buildSiteOperationsStatus } from './operations';
 import { ownerWorkspace } from '../workspaces/context';
 import { validateSectionMediaReferences } from '../storefront/section-schema';
+import {
+    adoptMigration,
+    rollbackMigration,
+    stageMigration,
+} from '../template-contract/migration-service';
+import type { MigrationStep } from '../template-contract/migration-preview';
 
 const importBody = z
     .object({
@@ -59,6 +64,8 @@ const importBody = z
         includeDemo: z.boolean().optional(),
         mode: z.enum(['import', 'adopt']).optional(),
         expectedUpdatedAt: z.number().int().nonnegative().optional(),
+        requestKey: z.string().uuid().optional(),
+        sourceChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
     })
     .strict();
 
@@ -587,13 +594,14 @@ export const PresetController = createController({
                 path: '/import',
                 type: 'post',
                 preRequestHandler: RP.createWorkspaceAdminCheck(),
-                async handler({ request, errorHandler }) {
+                async handler({ request, token, errorHandler }) {
                     const parsed = importBody.safeParse(request.body);
                     if (
                         !parsed.success ||
                         (parsed.data.mode === 'adopt' &&
                             (!parsed.data.presetVersion ||
-                                parsed.data.expectedUpdatedAt === undefined)) ||
+                                parsed.data.expectedUpdatedAt === undefined ||
+                                !parsed.data.requestKey)) ||
                         (parsed.data.mode !== 'adopt' && !parsed.data.siteName)
                     )
                         throw errorHandler(
@@ -632,15 +640,48 @@ export const PresetController = createController({
                                 throw new Error(
                                     'Only verified public versions can be adopted',
                                 );
-                            return await adoptPublicTemplate(
-                                {
-                                    presetId: parsed.data.presetId,
-                                    presetVersion: parsed.data.presetVersion!,
-                                    expectedUpdatedAt:
-                                        parsed.data.expectedUpdatedAt!,
+                            const site =
+                                await Repo.siteInstallation.methods.findSelected();
+                            if (!site)
+                                throw new Error(
+                                    'Installed site is unavailable',
+                                );
+                            const content =
+                                await releaseSource().loadContent(site);
+                            const migration =
+                                selected.manifest.compatibility?.migrations.find(
+                                    (item) =>
+                                        item.from ===
+                                        `${site.presetId}@${site.presetVersion}`,
+                                );
+                            const operation = await stageMigration({
+                                site,
+                                requestKey: parsed.data.requestKey!,
+                                expectedUpdatedAt:
+                                    parsed.data.expectedUpdatedAt!,
+                                actorId: token.payload.userId,
+                                targetManifest: selected.manifest,
+                                targetRecord: {
+                                    schemaVersion: 1,
+                                    id: selected.id,
+                                    version: selected.version,
+                                    manifestChecksum:
+                                        selected.manifestChecksum,
+                                    imageRepository:
+                                        selected.imageRepository,
+                                    imageDigest: selected.imageDigest,
+                                    sourceCommit: selected.sourceCommit,
+                                    manifestPath: `templates/${selected.id}/${selected.version}/template.json`,
+                                    status: 'available',
                                 },
-                                importSource(),
-                                selected,
+                                input: { site, ...content },
+                                steps: (migration?.steps || []) as MigrationStep[],
+                            });
+                            return await adoptMigration(
+                                operation.id,
+                                parsed.data.sourceChecksum ||
+                                    operation.sourceChecksum,
+                                token.payload.userId,
                             );
                         }
                         return await withWorkspaceCreation(
@@ -668,7 +709,60 @@ export const PresetController = createController({
                             cause instanceof Error
                                 ? cause.message
                                 : 'Import failed';
-                        throw errorHandler(HttpStatus.BadRequest, message);
+                        throw errorHandler(
+                            (cause as { status?: number }).status === 409
+                                ? HttpStatus.Conflict
+                                : HttpStatus.BadRequest,
+                            message,
+                        );
+                    }
+                },
+            }),
+            migrationStatus: createControllerMethod({
+                path: '/migrations/:operationId',
+                type: 'get',
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                async handler({ request, errorHandler }) {
+                    const { operationId } = request.params as {
+                        operationId: string;
+                    };
+                    const operation =
+                        await Repo.migrationOperation.find(operationId);
+                    const site =
+                        await Repo.siteInstallation.methods.findSelected();
+                    if (
+                        !operation ||
+                        !site ||
+                        operation.cmsWorkspaceId !== ownerWorkspace(site)
+                    ) {
+                        throw errorHandler(
+                            HttpStatus.NotFound,
+                            'Migration operation not found',
+                        );
+                    }
+                    return operation;
+                },
+            }),
+            migrationRollback: createControllerMethod({
+                path: '/migrations/:operationId/rollback',
+                type: 'post',
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                async handler({ request, token, errorHandler }) {
+                    const { operationId } = request.params as {
+                        operationId: string;
+                    };
+                    try {
+                        return await rollbackMigration(
+                            operationId,
+                            token.payload.userId,
+                        );
+                    } catch (cause) {
+                        throw errorHandler(
+                            HttpStatus.Conflict,
+                            cause instanceof Error
+                                ? cause.message
+                                : 'Migration rollback failed',
+                        );
                     }
                 },
             }),

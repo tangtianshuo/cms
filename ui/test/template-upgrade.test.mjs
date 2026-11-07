@@ -224,3 +224,30 @@ test('keeps ordinary adoption explicit and render-only', async () => {
         globalThis.fetch = originalFetch;
     }
 });
+
+test('allows explicit adoption only after an issue-free migration preview is ready', () => {
+    const base = {
+        sameTemplate: true,
+        installed: false,
+        hasPublishedSource: true,
+        hasPlan: true,
+        busy: false,
+        isAdmin: true,
+        hasConflicts: false,
+        previewCompatible: false,
+    };
+    assert.equal(
+        presetsModule.canAdoptTemplate({
+            ...base,
+            previewAdoptable: false,
+        }),
+        false,
+    );
+    assert.equal(
+        presetsModule.canAdoptTemplate({
+            ...base,
+            previewAdoptable: true,
+        }),
+        true,
+    );
+});

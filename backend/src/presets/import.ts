@@ -63,6 +63,7 @@ export interface ImportPlan {
 
 export interface TemplateUpgradePreview {
     compatible: boolean;
+    adoptable?: boolean;
     requiresNewInstallation: boolean;
     migrationRequired: boolean;
     migrationPlan?: {
@@ -236,7 +237,10 @@ export function previewPublicTemplateUpgrade(
     if (!schemaCompatible && !migrationRequired) {
         contentImpact.unshift('模板字段或页面结构发生变化，需要新建站点安装。');
     }
-    if (!schemaCompatible) {
+    if (
+        !schemaCompatible &&
+        !(migrationRequired && migrationPreview?.issues.length === 0)
+    ) {
         issues.push({
             code: migrationRequired
                 ? 'migration_preview_required'
@@ -247,6 +251,10 @@ export function previewPublicTemplateUpgrade(
     affectedContent.push(...actualContentChanges);
     return {
         compatible: schemaCompatible,
+        adoptable:
+            schemaCompatible ||
+            (migrationRequired &&
+                migrationPreview?.issues.length === 0),
         requiresNewInstallation: !schemaCompatible && !migrationRequired,
         migrationRequired,
         ...(migrationPlan ? { migrationPlan } : {}),

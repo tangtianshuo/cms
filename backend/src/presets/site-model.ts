@@ -59,6 +59,10 @@ export interface SiteInstallation extends MongoDBEntry {
     domainRevision?: number;
     domainMutationToken?: string;
     domainMutationUntil?: number;
+    migrationMutationToken?: string;
+    migrationMutationUntil?: number;
+    migrationState?: 'publishing' | 'active' | 'failed' | 'rolled-back';
+    migrationOperationId?: string;
     currentReleaseId?: string;
     publishedReleaseIds?: string[];
 }
@@ -126,6 +130,10 @@ export const SiteInstallationSchema: ObjectSchema = {
     domainRevision: { __type: 'number', __required: false },
     domainMutationToken: { __type: 'string', __required: false },
     domainMutationUntil: { __type: 'number', __required: false },
+    migrationMutationToken: { __type: 'string', __required: false },
+    migrationMutationUntil: { __type: 'number', __required: false },
+    migrationState: { __type: 'string', __required: false },
+    migrationOperationId: { __type: 'string', __required: false },
     currentReleaseId: { __type: 'string', __required: false },
     publishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
     operations: { __type: 'object', __required: false, __child: {

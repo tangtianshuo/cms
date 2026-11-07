@@ -15,6 +15,8 @@ import {
     QueueError,
 } from '@bcms/selfhosted-utils/queue';
 import { PropType } from '@bcms/selfhosted-backend/prop/models/main';
+import { workspaceContext } from '../workspaces/context';
+import { withSiteMutation } from '../template-contract/site-mutation';
 
 export interface TemplateRepoMethods {
     findAllByPropGroupPointer(groupId: string): Promise<Template[]>;
@@ -43,6 +45,21 @@ export const TemplateRepo = createMongoDBRepository<
         const title = previous?.props.find(prop => prop.name === 'title');
         const nextTitle = item.props.find(prop => prop.name === 'title');
         if (title && (!nextTitle || nextTitle.id !== title.id || nextTitle.type !== PropType.STRING) && (await Repo.entry.methods.findAllByTemplateId(item._id)).length) throw new ContentScopeError('Title property mapping cannot change while template entries exist');
+    },
+    aroundWrite: (items, action) => {
+        const siteIds = [
+            ...new Set(
+                items
+                    .map((item) => item.siteId || workspaceContext()?.siteId)
+                    .filter((siteId): siteId is string => !!siteId),
+            ),
+        ];
+        let write = action;
+        for (const siteId of siteIds) {
+            const nested = write;
+            write = () => withSiteMutation(siteId, nested);
+        }
+        return write();
     },
     methods({ mdb, cache }) {
         const latches: {

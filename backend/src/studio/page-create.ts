@@ -1,6 +1,6 @@
 import type { Entry } from '../entry/models/main';
 import type { SiteInstallation } from '../presets/site-model';
-import { createPageDraft, pageDraft, type PageDraft, type PageDraftUpdate } from '../presets/pages';
+import { createPageDraft, pageDraft, withPageMutation, type PageDraft, type PageDraftUpdate } from '../presets/pages';
 import { pageOperationIds } from './business';
 export interface PageCreateSource {
     findEntry(id: string): Promise<Entry | null>;
@@ -21,7 +21,7 @@ function pageSemantics(page: PageDraft) {
 function sameContent(a: Entry, b: Entry) {
     return a.templateId === b.templateId && a.siteId === b.siteId && a.groupId === b.groupId && JSON.stringify(a.meta) === JSON.stringify(b.meta) && JSON.stringify(a.content) === JSON.stringify(b.content) && JSON.stringify(a.statuses) === JSON.stringify(b.statuses);
 }
-export async function createStudioPage(site: SiteInstallation, operationId: string, entry: Entry,
+async function createStudioPageUnlocked(site: SiteInstallation, operationId: string, entry: Entry,
     input: PageCreateInput, source: PageCreateSource, expectedUpdatedAt = site.updatedAt): Promise<PageCreateReceipt> {
     const ids = pageOperationIds(site._id, operationId);
     if (entry._id !== ids.entryId) throw new Error('Invalid page operation identity');
@@ -57,4 +57,24 @@ export async function createStudioPage(site: SiteInstallation, operationId: stri
         throw Object.assign(new Error(`Page content saved as Entry ${ids.entryId}, but routes changed. Refresh and retry the same operation to bind it.`), { status: 409 });
     }
     return { ...pageDraft(updated, ids.pageKey)!, siteUpdatedAt: updated.updatedAt, entryUpdatedAt };
+}
+
+export async function createStudioPage(
+    site: SiteInstallation,
+    operationId: string,
+    entry: Entry,
+    input: PageCreateInput,
+    source: PageCreateSource,
+    expectedUpdatedAt = site.updatedAt,
+): Promise<PageCreateReceipt> {
+    return withPageMutation(site._id, () =>
+        createStudioPageUnlocked(
+            site,
+            operationId,
+            entry,
+            input,
+            source,
+            expectedUpdatedAt,
+        ),
+    );
 }

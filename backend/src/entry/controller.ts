@@ -40,6 +40,7 @@ import { assertSiteCapability } from '../authorization/site-access';
 import { workspaceContext } from '../workspaces/context';
 import { prepareEntryCreate } from '@bcms/selfhosted-backend/entry/create';
 import { validateEntrySiteReferences } from './site-references';
+import { withSiteMutation } from '../template-contract/site-mutation';
 
 async function assertEntrySite(templateId: string, entry?: Entry, write = false) {
     const context = workspaceContext();
@@ -624,7 +625,14 @@ export const EntryController = createController({
                     });
                     if (template.siteId) entry.siteId = template.siteId;
                     await validateEntrySiteReferences(entry, template, Repo);
-                    entry = await Repo.entry.add(entry);
+                    const siteId =
+                        entry.siteId ||
+                        template.siteId ||
+                        workspaceContext()?.siteId;
+                    if (!siteId) throw errorHandler(HttpStatus.BadRequest, 'Selected site is required');
+                    entry = await withSiteMutation(siteId, () =>
+                        Repo.entry.add(entry),
+                    );
                     SocketManager.channelEmit(
                         ['global'],
                         'entry',
@@ -800,7 +808,18 @@ export const EntryController = createController({
                     }
                     if (body.groupId !== undefined) entry.groupId = body.groupId;
                     await validateEntrySiteReferences(entry, template, Repo, lng.code);
-                    entry = await Repo.entry.update(entry, false, body.expectedUpdatedAt);
+                    const siteId =
+                        entry.siteId ||
+                        template.siteId ||
+                        workspaceContext()?.siteId;
+                    if (!siteId) throw errorHandler(HttpStatus.BadRequest, 'Selected site is required');
+                    entry = await withSiteMutation(siteId, () =>
+                        Repo.entry.update(
+                            entry!,
+                            false,
+                            body.expectedUpdatedAt,
+                        ),
+                    );
                     SocketManager.channelEmit(
                         ['global'],
                         'entry',
@@ -876,7 +895,12 @@ export const EntryController = createController({
                             `Entry with ID "${params.entryId}" does not exist`,
                         );
                     }
-                    await Repo.entry.deleteById(entry._id);
+                    const siteId =
+                        entry.siteId || workspaceContext()?.siteId;
+                    if (!siteId) throw errorHandler(HttpStatus.BadRequest, 'Selected site is required');
+                    await withSiteMutation(siteId, () =>
+                        Repo.entry.deleteById(entry._id),
+                    );
                     SocketManager.channelEmit(
                         ['global'],
                         'entry',

@@ -6,6 +6,8 @@ import { resolveGatewayPublishConfigs } from '../site-provisioning/config';
 import { gatewayBound } from './gateway-publish';
 import { recoverGatewayPublication } from './gateway-recovery';
 import { releaseSource } from './release-source';
+import { Repo } from '../repo';
+import { reconcileMigration } from '../template-contract/migration-service';
 
 type RecoveryAction = (config: GatewayPublishConfig) => Promise<void>;
 type RecoveryErrorHandler = (cause: unknown) => void;
@@ -38,6 +40,39 @@ export async function runGatewayRecoveryTick(
     }
 }
 
+export async function runMigrationRecoveryTick(
+    list: () => Promise<
+        Array<{ id: string; cmsWorkspaceId: string; cmsSiteId: string }>
+    > = () => Repo.migrationOperation.listByStatus('publishing'),
+    reconcile: (id: string) => Promise<unknown> = reconcileMigration,
+    report: RecoveryErrorHandler = reportRecoveryFailure,
+) {
+    let operations;
+    try {
+        operations = await list();
+    } catch (cause) {
+        report(cause);
+        return;
+    }
+    for (const operation of operations) {
+        try {
+            await runWithWorkspace(
+                {
+                    workspaceId: operation.cmsWorkspaceId,
+                    siteId: operation.cmsSiteId,
+                    actorId: '__migration-recovery',
+                    admin: true,
+                    instanceAdmin: true,
+                    role: 'admin',
+                },
+                () => reconcile(operation.id),
+            );
+        } catch (cause) {
+            report(cause);
+        }
+    }
+}
+
 export function createGatewayReconciliationJob(): Module {
     return { name: 'Gateway publication recovery', initialize({ fastify, next }) {
         let running = false;
@@ -47,6 +82,7 @@ export function createGatewayReconciliationJob(): Module {
             running = true;
             try {
                 await runGatewayRecoveryTick();
+                await runMigrationRecoveryTick();
             } finally { running = false; }
         }
         const timer = setInterval(() => { void tick(); }, 15000);

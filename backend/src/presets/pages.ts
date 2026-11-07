@@ -13,6 +13,14 @@ import {
     type LayoutContract,
     type LayoutDocument,
 } from '../storefront/layout-document';
+import { withSiteMutation } from '../template-contract/site-mutation';
+
+export function withPageMutation<T>(
+    siteId: string,
+    action: () => Promise<T>,
+): Promise<T> {
+    return withSiteMutation(siteId, action);
+}
 
 const sectionOptions: Record<
     string,

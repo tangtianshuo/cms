@@ -12,6 +12,8 @@ import {
     QueueError,
 } from '@bcms/selfhosted-utils/queue';
 import type { EntryContentNodeWidgetAttr } from '@bcms/selfhosted-backend/entry/models/content';
+import { workspaceContext } from '../workspaces/context';
+import { withSiteMutation } from '../template-contract/site-mutation';
 
 export interface EntryRepoMethods {
     findAllByTemplateId(templateId: string): Promise<Entry[]>;
@@ -24,7 +26,25 @@ export const EntryRepo = createMongoDBRepository<Entry, EntryRepoMethods>({
     schema: EntrySchema,
     beforeIndexes: migrateEntryGroups,
     prepareWrite: prepareEntryWrite,
-    aroundWrite: (entries, action) => Repo.entryGroup.methods.withWrites(entries.map(entry => entry.groupId!), action),
+    aroundWrite: (entries, action) => {
+        const siteIds = [
+            ...new Set(
+                entries
+                    .map((entry) => entry.siteId || workspaceContext()?.siteId)
+                    .filter((siteId): siteId is string => !!siteId),
+            ),
+        ];
+        let write = () =>
+            Repo.entryGroup.methods.withWrites(
+                entries.map((entry) => entry.groupId!),
+                action,
+            );
+        for (const siteId of siteIds) {
+            const nested = write;
+            write = () => withSiteMutation(siteId, nested);
+        }
+        return write();
+    },
     indexes: [{ key: { workspaceId: 1, groupId: 1, titleKeys: 1 }, name: 'workspace_group_language_title_unique', unique: true,
         partialFilterExpression: { titleKeys: { $type: 'array' } } }],
     methods({ mdb, cache }) {

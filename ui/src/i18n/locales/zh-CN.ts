@@ -164,6 +164,7 @@ export const zhCN: typeof en = {
         adoptHint: "采用 v{version} 会保留现有内容、页面和主题设置。发布后新模板才会在独立站生效。",
         adoptVersion: "采用 v{version}",
         versionAdopted: "已采用模板版本，现有内容已保留。",
+        upgradeProcessing: "升级正在安全进行，新版本确认前将暂停此站点的内容编辑。",
         gatewayReleaseHint: "先采用公开模板并保存内容，再校验发布。部署通过后会自动更新独立站。",
         gatewayNotPublished: "尚未通过此发布流程发布。",
         publicationDiagnostics: '发布诊断信息',

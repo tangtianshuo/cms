@@ -66,6 +66,7 @@ import { AnalyticsController } from './analytics/controller';
 import { ReleaseController } from '@bcms/selfhosted-backend/presets/release-controller';
 import { createSiteProvisioningJob } from './site-provisioning/jobs';
 import { createGatewayReconciliationJob } from './presets/gateway-jobs';
+import { TemplateMigrationOperationRepo } from './template-contract/migration-repo';
 
 async function main() {
     await createServer({
@@ -276,6 +277,7 @@ async function main() {
             Repo.storefrontReleaseAudit.init(),
             Repo.siteDomain.init(),
             Repo.siteDomainAudit.init(),
+            TemplateMigrationOperationRepo.init(),
             MigrationRepo.init(),
             // @inject-repo
 

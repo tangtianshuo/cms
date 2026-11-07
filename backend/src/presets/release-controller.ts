@@ -16,6 +16,7 @@ export { releaseSource } from './release-source';
 import { reconcileGatewayState, snapshotFingerprint } from './gateway-state';
 import { recoverGatewayPublication } from './gateway-recovery';
 import { observeGatewayPublication } from './gateway-observation';
+import { withSiteMutation } from '../template-contract/site-mutation';
 
 const publishBody = z.object({ expectedReleaseId: z.string(), target: z.literal('gateway').optional(), requestKey: z.string().optional(),
     snapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict();
@@ -163,16 +164,19 @@ export const ReleaseController = createController({
                     const site = await Repo.siteInstallation.methods.findSelected();
                     const { config, preparation } = await releaseGateway(site, parsed.data.target === 'gateway');
                     if (preparation && (!preparation.allowed || parsed.data.target !== 'gateway')) throw errorHandler(HttpStatus.Conflict, 'Site publication environment is not ready');
+                    if (!site) throw errorHandler(HttpStatus.NotFound, 'Site not found');
                     try {
-                        if (parsed.data.target === 'gateway') {
-                            if (!parsed.data.requestKey) throw new Error('Gateway publication requestKey is required');
-                            if (!config) throw new Error('Site publication environment is not ready');
-                            return await publishGatewayRelease(releaseSource(), token.payload.userId,
-                                parsed.data.expectedReleaseId, parsed.data.requestKey, config, fetch, buildRelease,
-                                { snapshotHash: parsed.data.snapshotHash });
-                        }
-                        const record = await publishRelease(releaseSource(), token.payload.userId, parsed.data.expectedReleaseId, parsed.data.snapshotHash);
-                        return { releaseId: record._id };
+                        return await withSiteMutation(site._id, async () => {
+                            if (parsed.data.target === 'gateway') {
+                                if (!parsed.data.requestKey) throw new Error('Gateway publication requestKey is required');
+                                if (!config) throw new Error('Site publication environment is not ready');
+                                return await publishGatewayRelease(releaseSource(), token.payload.userId,
+                                    parsed.data.expectedReleaseId, parsed.data.requestKey, config, fetch, buildRelease,
+                                    { snapshotHash: parsed.data.snapshotHash });
+                            }
+                            const record = await publishRelease(releaseSource(), token.payload.userId, parsed.data.expectedReleaseId, parsed.data.snapshotHash);
+                            return { releaseId: record._id };
+                        });
                     } catch (cause) {
                         throw errorHandler(cause instanceof GatewayRevisionConflict ? HttpStatus.Conflict : HttpStatus.BadRequest,
                             cause instanceof Error ? cause.message : 'Publication failed');
@@ -188,15 +192,18 @@ export const ReleaseController = createController({
                     const site = await Repo.siteInstallation.methods.findSelected();
                     const { config, preparation } = await releaseGateway(site);
                     if (preparation && !preparation.allowed) throw errorHandler(HttpStatus.Conflict, 'Site publication environment is not ready');
+                    if (!site) throw errorHandler(HttpStatus.NotFound, 'Site not found');
                     try {
-                        if (config && gatewayBound(site, config)) {
-                            if (!parsed.data.requestKey) throw new Error('Gateway rollback requestKey is required');
-                            return await publishGatewayRelease(releaseSource(), token.payload.userId,
-                                parsed.data.expectedReleaseId, parsed.data.requestKey, config, fetch, buildRelease,
-                                { restoreReleaseId: parsed.data.releaseId });
-                        }
-                        await rollbackRelease(releaseSource(), token.payload.userId, parsed.data.releaseId, parsed.data.expectedReleaseId);
-                        return { releaseId: parsed.data.releaseId };
+                        return await withSiteMutation(site._id, async () => {
+                            if (config && gatewayBound(site, config)) {
+                                if (!parsed.data.requestKey) throw new Error('Gateway rollback requestKey is required');
+                                return await publishGatewayRelease(releaseSource(), token.payload.userId,
+                                    parsed.data.expectedReleaseId, parsed.data.requestKey, config, fetch, buildRelease,
+                                    { restoreReleaseId: parsed.data.releaseId });
+                            }
+                            await rollbackRelease(releaseSource(), token.payload.userId, parsed.data.releaseId, parsed.data.expectedReleaseId);
+                            return { releaseId: parsed.data.releaseId };
+                        });
                     } catch (cause) {
                         throw errorHandler(HttpStatus.BadRequest, cause instanceof Error ? cause.message : 'Rollback failed');
                     }

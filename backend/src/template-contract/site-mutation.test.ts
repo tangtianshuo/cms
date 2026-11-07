@@ -1,0 +1,111 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+    setSiteMutationStore,
+    withSiteMutation,
+    SiteMutationConflict,
+    type SiteMutationStore,
+} from './site-mutation';
+
+function memoryStore(): SiteMutationStore {
+    const leases = new Map<
+        string,
+        { token: string; until: number; mode: 'write' | 'migration' }
+    >();
+    const states = new Map<
+        string,
+        { status: 'idle'|'publishing'|'active'|'failed'|'rolled-back'; operationId?: string }
+    >();
+    return {
+        async claimSiteMutation(
+            siteId,
+            token,
+            mode,
+            operationId,
+            now,
+            leaseUntil,
+        ) {
+            const lease = leases.get(siteId);
+            if (lease && lease.until > now) return false;
+            if (
+                mode === 'write' &&
+                states.get(siteId)?.status === 'publishing'
+            ) {
+                return false;
+            }
+            leases.set(siteId, { token, until: leaseUntil, mode });
+            if (mode === 'migration' && operationId) {
+                states.set(siteId, {
+                    status: 'publishing',
+                    operationId,
+                });
+            }
+            return true;
+        },
+        async releaseSiteMutation(siteId, token) {
+            if (leases.get(siteId)?.token !== token) return false;
+            leases.delete(siteId);
+            return true;
+        },
+        async siteMutationState(siteId) {
+            return states.get(siteId) || { status: 'idle' as const };
+        },
+    };
+}
+
+test.afterEach(() => setSiteMutationStore(null));
+
+test('serializes normal writes for the same site and isolates other sites', async () => {
+    const events: string[] = [];
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const first = withSiteMutation('site-a', async () => {
+        events.push('a-start');
+        await blocked;
+        events.push('a-end');
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    const second = withSiteMutation('site-a', async () => {
+        events.push('a-second');
+    });
+    await withSiteMutation('site-b', async () => {
+        events.push('b');
+    });
+    assert.deepEqual(events, ['a-start', 'b']);
+    release();
+    await Promise.all([first, second]);
+    assert.deepEqual(events, ['a-start', 'b', 'a-end', 'a-second']);
+});
+
+test('persistent publishing state blocks normal writes after the migration lease is released', async () => {
+    setSiteMutationStore(memoryStore());
+    await withSiteMutation(
+        'site-a',
+        async () => {
+            assert.equal(
+                (await withSiteMutation(
+                    'site-a',
+                    async () => 'nested',
+                )),
+                'nested',
+            );
+        },
+        { mode: 'migration', operationId: 'operation-1' },
+    );
+    await assert.rejects(
+        () => withSiteMutation('site-a', async () => undefined),
+        SiteMutationConflict,
+    );
+});
+
+test('nested calls reuse the site lease instead of deadlocking or stealing it', async () => {
+    setSiteMutationStore(memoryStore());
+    const value = await withSiteMutation('site-a', async () =>
+        withSiteMutation('site-a', async () =>
+            withSiteMutation('site-a', async () => 7),
+        ),
+    );
+    assert.equal(value, 7);
+});

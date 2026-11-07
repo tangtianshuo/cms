@@ -31,6 +31,7 @@ import { normalizeSiteOperations } from '../presets/operations';
 import { validateDeclaredSectionProperties, validateSectionMediaReferences, mediaAuthorizedForSite } from '../storefront/section-schema';
 import { editorSchemaForSite } from '../template-contract/editor-schema';
 import { buildContentForm, validateContentValues } from '../content-editor/schema-form';
+import { withSiteMutation } from '../template-contract/site-mutation';
 
 const structuredValueSchema = z.object({ kind: z.literal('prop-data'), data: z.union([z.array(z.unknown()), z.object({ _id: z.string().min(1), props: z.array(z.unknown()).optional(), items: z.array(z.unknown()).optional() }).strict()]) }).strict();
 const studioValueSchema = z.union([structuredValueSchema, z.string(), z.number().finite(), z.boolean(), z.array(z.object({ _id: z.string().min(1), alt_text: z.string().optional(), caption: z.string().optional() }).strict()), z.array(z.object({ tid: z.string().min(1), eid: z.string().min(1) }).strict())]);
@@ -201,6 +202,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
             if (!parsed.success || (parsed.data.entryId && parsed.data.expectedUpdatedAt === undefined)) throw errorHandler(HttpStatus.BadRequest, 'Invalid Studio content request');
             try {
                 const site = await selectedSite();
+                return await withSiteMutation(site._id, async () => {
                 const key = (request.params as { modelKey: string }).modelKey;
                 const template = await installedModel(site, key);
                 assertStudioWrite(template._id, parsed.data.entryId ? 'put' : 'post');
@@ -231,6 +233,7 @@ export const StudioController = createController({ name: 'Studio', path: '/api/v
                     EventManager.trigger(previous ? 'update' : 'add', 'entry', saved).catch(cause => console.error(cause));
                 }
                 return { id: saved._id, updatedAt: saved.updatedAt };
+                });
             } catch (cause) { throw errorHandler((cause as { status?: number }).status || HttpStatus.BadRequest, validationFailure(cause)); }
         } }),
         addPage: createControllerMethod({ path: '/pages', type: 'post', preRequestHandler: RP.createSiteCapabilityCheck('pages.manage'), async handler({ request, errorHandler }) {

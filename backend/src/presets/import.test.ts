@@ -733,6 +733,8 @@ test('data migration preview identifies affected entries without mutating site o
         document,
         target,
     });
+    assert.equal(preview.migrationRequired, true);
+    assert.equal(preview.adoptable, true);
     assert.ok(
         preview.affectedContent?.some(
             (item) =>

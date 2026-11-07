@@ -163,6 +163,7 @@ export const en = {
         adoptHint: "Adopt v{version} while keeping your content, pages, and theme settings. Publish to apply the new template to your storefront.",
         adoptVersion: "Adopt v{version}",
         versionAdopted: "Template adopted. Your content has been preserved.",
+        upgradeProcessing: "The upgrade is safely in progress. Editing is paused for this site until the new version is confirmed.",
         gatewayReleaseHint: "Adopt a public template and save your content, then validate and publish. The storefront updates after deployment checks pass.",
         gatewayNotPublished: "No publication through this flow yet.",
         publicationDiagnostics: 'Publication diagnostics',
