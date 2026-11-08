@@ -8,6 +8,7 @@ import type { ViewNames } from '@bcms/selfhosted-ui/views';
 import type { LayoutNames } from '@bcms/selfhosted-ui/layouts';
 import type { DefineComponent } from 'vue';
 import { LoginView } from '@bcms/selfhosted-ui/views/login';
+import { legacyContentRouteRecords } from './legacy-content-routes';
 
 interface RouteRecordRawExtended
     extends Omit<RouteRecordRaw, 'name' | 'children' | 'meta'> {
@@ -71,11 +72,24 @@ const routes: Array<RouteRecordRawExtended> = [
         component: () =>
             import(/* webpackChunkName: "home" */ './views/dashboard/home'),
     },
-    ...(['workspaces', 'domains', 'entry-groups', 'shares'] as const).map((page) => ({
-        path: `/d/${page}`, name: ({ workspaces: 'WorkspacesView', domains: 'DomainsView', 'entry-groups': 'EntryGroupsView', shares: 'SharesView' } as const)[page],
-        meta: { titleKey: `workspace.${page}`, layout: 'DashboardLayout' as const },
-        component: () => import(`./views/dashboard/${page}.tsx`),
-    })),
+    ...(['workspaces', 'domains', 'entry-groups', 'shares'] as const).map(
+        (page) => ({
+            path: `/d/${page}`,
+            name: (
+                {
+                    workspaces: 'WorkspacesView',
+                    domains: 'DomainsView',
+                    'entry-groups': 'EntryGroupsView',
+                    shares: 'SharesView',
+                } as const
+            )[page],
+            meta: {
+                titleKey: `workspace.${page}`,
+                layout: 'DashboardLayout' as const,
+            },
+            component: () => import(`./views/dashboard/${page}.tsx`),
+        }),
+    ),
     {
         path: '/d/studio',
         name: 'StudioView',
@@ -116,33 +130,9 @@ const routes: Array<RouteRecordRawExtended> = [
             titleKey: 'presets.sitePreviewTitle',
             layout: 'NoneLayout',
         },
-        component: () =>
-            import('./views/dashboard/site-preview'),
+        component: () => import('./views/dashboard/site-preview'),
     },
-    {
-        path: '/d/template',
-        name: 'TemplatesView',
-        meta: {
-            titleKey: 'routes.templates',
-            layout: 'DashboardLayout',
-        },
-        component: () =>
-            import(
-                /* webpackChunkName: "template" */ './views/dashboard/templates'
-            ),
-    },
-    {
-        path: '/d/template/:templateId',
-        name: 'TemplateView',
-        meta: {
-            titleKey: 'routes.template',
-            layout: 'DashboardLayout',
-        },
-        component: () =>
-            import(
-                /* webpackChunkName: "template" */ './views/dashboard/template'
-            ),
-    },
+    ...(legacyContentRouteRecords as RouteRecordRawExtended[]),
     {
         path: '/d/group',
         name: 'GroupsView',
@@ -183,9 +173,7 @@ const routes: Array<RouteRecordRawExtended> = [
             layout: 'DashboardLayout',
         },
         component: () =>
-            import(
-                /* webpackChunkName: "widget" */ './views/dashboard/widget'
-            ),
+            import(/* webpackChunkName: "widget" */ './views/dashboard/widget'),
     },
     {
         path: '/d/media',
@@ -232,26 +220,6 @@ const routes: Array<RouteRecordRawExtended> = [
             import(
                 /* webpackChunkName: "api-key" */ './views/dashboard/api-key'
             ),
-    },
-    {
-        path: '/d/template/:templateId/entry',
-        name: 'EntriesView',
-        meta: {
-            titleKey: 'routes.entries',
-            layout: 'DashboardLayout',
-        },
-        component: () =>
-            import(/* webpackChunkName: "entry" */ './views/dashboard/entries'),
-    },
-    {
-        path: '/d/template/:templateId/entry/:entryId',
-        name: 'EntryView',
-        meta: {
-            titleKey: 'routes.entry',
-            layout: 'DashboardLayout',
-        },
-        component: () =>
-            import(/* webpackChunkName: "entry" */ './views/dashboard/entry'),
     },
     {
         path: '/d/plugin/:pluginId',

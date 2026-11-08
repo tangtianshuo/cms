@@ -22,6 +22,10 @@ import {
 } from '@bcms/selfhosted-ui/components/prop/_input-wrapper';
 import { NumberInput } from '@bcms/selfhosted-ui/components/inputs/number';
 import { useI18n } from 'vue-i18n';
+import {
+    isRequiredNumberMissing,
+    requiredNumbersAreComplete,
+} from '@bcms/selfhosted-ui/util/required-number';
 
 export const PropNumberInput = defineComponent({
     props: {
@@ -72,9 +76,12 @@ export const PropNumberInput = defineComponent({
                         errors.value.push('');
                         errorUnsubs.push(
                             props.propValidator.register(() => {
-                                if (!(props.value.data as number[])[i]) {
-                                    errors.value[i] =
-                                        t('props.requiredNumber');
+                                if (
+                                    isRequiredNumberMissing(
+                                        (props.value.data as number[])[i],
+                                    )
+                                ) {
+                                    errors.value[i] = t('props.requiredNumber');
                                     return false;
                                 }
                                 errors.value[i] = '';
@@ -86,9 +93,12 @@ export const PropNumberInput = defineComponent({
                     errors.value.push('');
                     errorUnsubs.push(
                         props.propValidator.register(() => {
-                            if (!(props.value.data as number[])[0]) {
-                                errors.value[0] =
-                                    t('props.requiredNumber');
+                            if (
+                                !requiredNumbersAreComplete([
+                                    (props.value.data as number[])[0],
+                                ])
+                            ) {
+                                errors.value[0] = t('props.requiredNumber');
                                 return false;
                             }
                             errors.value[0] = '';

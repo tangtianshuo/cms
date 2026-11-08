@@ -1,51 +1,129 @@
 import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
-import { defineComponent, onBeforeUnmount, onMounted, ref, type PropType } from 'vue';
+import {
+    computed,
+    defineComponent,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    type PropType,
+} from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Button } from '@bcms/selfhosted-ui/components/button';
-import { createPublicationAction, normalizePublishStatus, publicationSuccessMessageKey, type PublishStatus } from './gateway-publication';
+import {
+    createPublicationAction,
+    normalizePublishStatus,
+    publicationSuccessMessageKey,
+    type PublishStatus,
+} from './gateway-publication';
 import { publishedSiteUrl } from './published-site-url';
 
-interface Publication { requestKey?: string; operationId: string; releaseId: string; status: PublishStatus; failureCode?: string; reason?: string; activeRevision?: number; operation?: 'publish' | 'rollback' }
-interface GatewayInfo { preparation?: { status: 'pending' | 'running' | 'ready' | 'failed'; allowed: boolean }; configured: boolean; bound: boolean; siteUrl: string; publicHostname?: string; defaultHost?: string; publishStatus: (Omit<Publication, 'status'> & { status: string }) | null }
+interface Publication {
+    requestKey?: string;
+    operationId: string;
+    releaseId: string;
+    status: PublishStatus;
+    failureCode?: string;
+    reason?: string;
+    activeRevision?: number;
+    operation?: 'publish' | 'rollback';
+}
+interface GatewayInfo {
+    preparation?: {
+        status: 'pending' | 'running' | 'ready' | 'failed';
+        allowed: boolean;
+    };
+    configured: boolean;
+    bound: boolean;
+    siteUrl: string;
+    publicHostname?: string;
+    defaultHost?: string;
+    publishStatus: (Omit<Publication, 'status'> & { status: string }) | null;
+}
 
 interface History {
     currentReleaseId: string;
-    items: Array<{ _id: string; createdAt: number; createdBy: string; pageCount: number }>;
-    audit: Array<{ createdAt: number; actorId: string; operation: string; releaseId: string; error: string }>;
+    items: Array<{
+        _id: string;
+        createdAt: number;
+        createdBy: string;
+        pageCount: number;
+    }>;
+    audit: Array<{
+        createdAt: number;
+        actorId: string;
+        operation: string;
+        releaseId: string;
+        error: string;
+    }>;
 }
 interface Preflight {
     snapshotHash?: string;
-    issueDetails?: Array<{ code: string; message: string; modelKey?: string; entryId?: string; field?: string; pageKey?: string }>;
+    issueDetails?: Array<{
+        code: string;
+        message: string;
+        modelKey?: string;
+        entryId?: string;
+        field?: string;
+        pageKey?: string;
+    }>;
     valid: boolean;
     expectedReleaseId: string;
     issues: string[];
     pageCount: number;
-    diff: { added: string[]; changed: string[]; removed: string[]; navigationChanged: boolean;
-        mediaChanged?: boolean; templateChanged?: boolean; templateVersion?: string;
-        redirects: Array<{ from: string; to: string }> } | null;
+    diff: {
+        added: string[];
+        changed: string[];
+        removed: string[];
+        navigationChanged: boolean;
+        mediaChanged?: boolean;
+        templateChanged?: boolean;
+        templateVersion?: string;
+        redirects: Array<{ from: string; to: string }>;
+    } | null;
 }
 
 export const ReleaseManager = defineComponent({
-    props: { onSaved: { type: Function as PropType<() => Promise<void>>, required: true } },
+    props: {
+        onSaved: {
+            type: Function as PropType<() => Promise<void>>,
+            required: true,
+        },
+        showAdvancedDiagnostics: { type: Boolean, default: false },
+    },
     setup(props) {
         const { t } = useI18n();
         const sdk = window.bcms.sdk;
-        const history = ref<History>({ currentReleaseId: '', items: [], audit: [] });
+        const history = ref<History>({
+            currentReleaseId: '',
+            items: [],
+            audit: [],
+        });
         const preflight = ref<Preflight | null>(null);
         const busy = ref(false);
         const error = ref('');
         const gateway = ref<GatewayInfo | null>(null);
         const publication = ref<Publication | null>(null);
         const phase = ref<PublishStatus>('draft');
-        const action = createPublicationAction(sessionStorage,
+        const showDiagnostics = computed(() =>
+            Boolean(
+                props.showAdvancedDiagnostics ||
+                    sdk.context?.context.instanceAdmin,
+            ),
+        );
+        const action = createPublicationAction(
+            sessionStorage,
             `${encodeURIComponent(sdk.context?.context.workspaceId || '')}/${encodeURIComponent(sdk.context?.context.siteId || '')}`,
-            () => crypto.randomUUID());
+            () => crypto.randomUUID(),
+        );
         let preparationTimer: ReturnType<typeof setTimeout> | undefined;
-        const preparationBlocked = () => gateway.value?.preparation?.allowed === false;
+        const preparationBlocked = () =>
+            gateway.value?.preparation?.allowed === false;
         let pollTimer: ReturnType<typeof setTimeout> | undefined;
         let disposed = false;
-        const origin = new URL(import.meta.env.VITE_STOREFRONT_ORIGIN || 'http://localhost:3000').origin;
+        const origin = new URL(
+            import.meta.env.VITE_STOREFRONT_ORIGIN || 'http://localhost:3000',
+        ).origin;
         function siteUrl() {
             return publishedSiteUrl(gateway.value, origin);
         }
@@ -55,11 +133,23 @@ export const ReleaseManager = defineComponent({
             action.complete(value.status, value.requestKey);
             if (value.status === 'publishing') schedulePoll();
             if (value.status === 'failed') preflight.value = null;
-            if ((value.status === 'ready' || value.status === 'rolled-back') && notify) {
+            if (
+                (value.status === 'ready' || value.status === 'rolled-back') &&
+                notify
+            ) {
                 preflight.value = null;
                 await refreshHistory();
                 await props.onSaved();
-                window.bcms.notification.success(t(value.status === 'rolled-back' ? 'presets.releaseRestored' : publicationSuccessMessageKey(Boolean(gateway.value?.bound), value.status)));
+                window.bcms.notification.success(
+                    t(
+                        value.status === 'rolled-back'
+                            ? 'presets.releaseRestored'
+                            : publicationSuccessMessageKey(
+                                  Boolean(gateway.value?.bound),
+                                  value.status,
+                              ),
+                    ),
+                );
             }
         }
         function schedulePoll() {
@@ -67,14 +157,40 @@ export const ReleaseManager = defineComponent({
             if (disposed || publication.value?.status !== 'publishing') return;
             pollTimer = setTimeout(async () => {
                 const id = publication.value?.operationId;
-                if (!id) { await refresh().catch(cause => { error.value = userErrorMessage(cause); schedulePoll(); }); return; }
-                try {
-                    const result = await sdk.send<{ id: string; releaseId: string; status: string; failureCode?: string; reason?: string; activeRevision?: number }>({
-                        url: `/api/v4/presets/releases/gateway/operations/${encodeURIComponent(id)}`, method: 'GET',
+                if (!id) {
+                    await refresh().catch((cause) => {
+                        error.value = userErrorMessage(cause);
+                        schedulePoll();
                     });
-                    if (disposed || publication.value?.operationId !== id) return;
+                    return;
+                }
+                try {
+                    const result = await sdk.send<{
+                        id: string;
+                        releaseId: string;
+                        status: string;
+                        failureCode?: string;
+                        reason?: string;
+                        activeRevision?: number;
+                    }>({
+                        url: `/api/v4/presets/releases/gateway/operations/${encodeURIComponent(id)}`,
+                        method: 'GET',
+                    });
+                    if (disposed || publication.value?.operationId !== id)
+                        return;
                     error.value = '';
-                    await acceptPublication({ ...publication.value, ...result, status: normalizePublishStatus(result.status, publication.value.operation || 'publish'), operationId: result.id }, true);
+                    await acceptPublication(
+                        {
+                            ...publication.value,
+                            ...result,
+                            status: normalizePublishStatus(
+                                result.status,
+                                publication.value.operation || 'publish',
+                            ),
+                            operationId: result.id,
+                        },
+                        true,
+                    );
                 } catch (cause) {
                     if (disposed) return;
                     error.value = userErrorMessage(cause);
@@ -83,39 +199,73 @@ export const ReleaseManager = defineComponent({
             }, 2500);
         }
         async function refreshHistory() {
-            history.value = await sdk.send<History>({ url: '/api/v4/presets/releases/', method: 'GET' });
+            history.value = await sdk.send<History>({
+                url: '/api/v4/presets/releases/',
+                method: 'GET',
+            });
         }
         async function refresh() {
-            const info = await sdk.send<GatewayInfo>({ url: '/api/v4/presets/releases/gateway', method: 'GET' });
+            const info = await sdk.send<GatewayInfo>({
+                url: '/api/v4/presets/releases/gateway',
+                method: 'GET',
+            });
             gateway.value = info;
             if (preparationTimer) clearTimeout(preparationTimer);
             if (preparationBlocked()) {
                 preflight.value = null;
-                if (!disposed) preparationTimer = setTimeout(() => run(refresh), 5000);
+                if (!disposed)
+                    preparationTimer = setTimeout(() => run(refresh), 5000);
             }
             await refreshHistory();
-            if (info.bound && info.publishStatus) await acceptPublication({ ...info.publishStatus, status: normalizePublishStatus(info.publishStatus.status, info.publishStatus.operation || 'publish') });
+            if (info.bound && info.publishStatus)
+                await acceptPublication({
+                    ...info.publishStatus,
+                    status: normalizePublishStatus(
+                        info.publishStatus.status,
+                        info.publishStatus.operation || 'publish',
+                    ),
+                });
         }
         async function run(operation: () => Promise<void>) {
             if (busy.value) return;
             busy.value = true;
             error.value = '';
-            try { await operation(); }
-            catch (cause) { error.value = userErrorMessage(cause); }
-            finally { busy.value = false; }
+            try {
+                await operation();
+            } catch (cause) {
+                error.value = userErrorMessage(cause);
+            } finally {
+                busy.value = false;
+            }
         }
         async function check() {
             await run(async () => {
                 phase.value = 'checking';
                 preflight.value = null;
                 await refresh();
-                if (preparationBlocked()) { phase.value = 'draft'; return; }
-                preflight.value = await sdk.send<Preflight>({ url: '/api/v4/presets/releases/check', method: 'POST' });
-                if (!publication.value || publication.value.status !== 'publishing') phase.value = 'draft';
+                if (preparationBlocked()) {
+                    phase.value = 'draft';
+                    return;
+                }
+                preflight.value = await sdk.send<Preflight>({
+                    url: '/api/v4/presets/releases/check',
+                    method: 'POST',
+                });
+                if (
+                    !publication.value ||
+                    publication.value.status !== 'publishing'
+                )
+                    phase.value = 'draft';
             });
         }
         async function publish() {
-            if (preparationBlocked() || !preflight.value?.valid || !gateway.value || publication.value?.status === 'publishing') return;
+            if (
+                preparationBlocked() ||
+                !preflight.value?.valid ||
+                !gateway.value ||
+                publication.value?.status === 'publishing'
+            )
+                return;
             const expectedReleaseId = preflight.value.expectedReleaseId;
             const snapshotHash = preflight.value.snapshotHash;
             await run(async () => {
@@ -124,117 +274,484 @@ export const ReleaseManager = defineComponent({
                     const requestKey = action.request();
                     let result: Publication;
                     try {
-                        result = await sdk.send<Publication>({ url: '/api/v4/presets/releases/publish', method: 'POST',
-                            data: { expectedReleaseId, snapshotHash, target: 'gateway', requestKey } });
+                        result = await sdk.send<Publication>({
+                            url: '/api/v4/presets/releases/publish',
+                            method: 'POST',
+                            data: {
+                                expectedReleaseId,
+                                snapshotHash,
+                                target: 'gateway',
+                                requestKey,
+                            },
+                        });
                     } catch (cause) {
                         await refresh().catch(() => undefined);
                         throw cause;
                     }
-                    await acceptPublication({ ...result, requestKey, status: normalizePublishStatus(result.status) }, true);
+                    await acceptPublication(
+                        {
+                            ...result,
+                            requestKey,
+                            status: normalizePublishStatus(result.status),
+                        },
+                        true,
+                    );
                     preflight.value = null;
                     return;
                 }
-                const result = await sdk.send<{ releaseId: string }>({ url: '/api/v4/presets/releases/publish', method: 'POST', data: { expectedReleaseId, snapshotHash } });
+                const result = await sdk.send<{ releaseId: string }>({
+                    url: '/api/v4/presets/releases/publish',
+                    method: 'POST',
+                    data: { expectedReleaseId, snapshotHash },
+                });
                 preflight.value = null;
                 await refresh();
                 await props.onSaved();
                 phase.value = 'snapshot-created';
-                publication.value = { operationId: '', releaseId: result.releaseId, status: 'snapshot-created' };
-                window.bcms.notification.success(t('presets.releaseSnapshotCreated'));
+                publication.value = {
+                    operationId: '',
+                    releaseId: result.releaseId,
+                    status: 'snapshot-created',
+                };
+                window.bcms.notification.success(
+                    t('presets.releaseSnapshotCreated'),
+                );
             });
         }
         async function rollback(releaseId: string) {
-            if (preparationBlocked() || !gateway.value || publication.value?.status === 'publishing') return;
+            if (
+                preparationBlocked() ||
+                !gateway.value ||
+                publication.value?.status === 'publishing'
+            )
+                return;
             await run(async () => {
-                const requestKey = gateway.value?.bound ? action.request(`rollback/${releaseId}`) : undefined;
+                const requestKey = gateway.value?.bound
+                    ? action.request(`rollback/${releaseId}`)
+                    : undefined;
                 try {
-                    const result = await sdk.send<Publication>({ url: '/api/v4/presets/releases/rollback', method: 'POST',
-                        data: { releaseId, expectedReleaseId: history.value.currentReleaseId, ...(requestKey ? { requestKey } : {}) } });
+                    const result = await sdk.send<Publication>({
+                        url: '/api/v4/presets/releases/rollback',
+                        method: 'POST',
+                        data: {
+                            releaseId,
+                            expectedReleaseId: history.value.currentReleaseId,
+                            ...(requestKey ? { requestKey } : {}),
+                        },
+                    });
                     preflight.value = null;
-                    if (gateway.value?.bound) { await acceptPublication({ ...result, requestKey, operation: 'rollback', status: normalizePublishStatus(result.status, 'rollback') }, true); return; }
+                    if (gateway.value?.bound) {
+                        await acceptPublication(
+                            {
+                                ...result,
+                                requestKey,
+                                operation: 'rollback',
+                                status: normalizePublishStatus(
+                                    result.status,
+                                    'rollback',
+                                ),
+                            },
+                            true,
+                        );
+                        return;
+                    }
                     await refresh();
                     await props.onSaved();
                     phase.value = 'rolled-back';
-                    window.bcms.notification.success(t('presets.releaseRestored'));
-                } catch (cause) { await refresh().catch(() => undefined); throw cause; }
+                    window.bcms.notification.success(
+                        t('presets.releaseRestored'),
+                    );
+                } catch (cause) {
+                    await refresh().catch(() => undefined);
+                    throw cause;
+                }
             });
         }
         onMounted(() => run(refresh));
-        onBeforeUnmount(() => { disposed = true; if (pollTimer) clearTimeout(pollTimer); if (preparationTimer) clearTimeout(preparationTimer); });
-        return () => <section id="releases" class="mt-12 border-t border-gray/60 pt-8 dark:border-gray">
-            <h2 class="text-lg font-semibold">{t('presets.releasesTitle')}</h2>
-            <p class="mt-2 max-w-3xl text-sm opacity-70">{t(gateway.value?.bound ? 'presets.gatewayReleaseHint' : 'presets.releaseHint')}</p>
-            {preparationBlocked() && <div role="status" class="mt-3 border-l-4 border-gray bg-gray/10 px-3 py-2 text-sm">
-                <strong>{gateway.value?.preparation?.status === 'failed' ? '准备失败，请管理员重试。' : gateway.value?.preparation?.status === 'ready' ? '发布环境暂不可用，请稍后重试或联系管理员。' : '正在准备发布环境。'}</strong>
-                <p>你可以继续编辑网站内容，环境就绪后即可发布。</p>
-            </div>}
-            {gateway.value && !preparationBlocked() && !gateway.value.bound && <div role="status" class={`mt-3 border-l-4 px-3 py-2 text-sm ${publication.value?.status === 'snapshot-created' ? 'border-yellow bg-yellow/10' : 'border-gray bg-gray/10'}`}>
-                <strong>{publication.value?.status === 'snapshot-created' ? '发布快照已生成，但独立站尚未上线。' : '当前站点仅编辑 CMS 草稿。'}</strong>
-                <p>{gateway.value.configured
-                    ? 'Gateway 控制面已配置，但当前站点尚未绑定到对应 Gateway 站点。请管理员完成站点映射后再发布。'
-                    : 'Gateway 发布服务尚未完成配置。完成站点绑定、域名入口和 HTTPS 路由前，不会显示“独立站已发布”。联系管理员并提供当前 siteId 以便绑定。'}</p>
-            </div>}
-            {gateway.value?.bound && <p role="status" class="mt-3 text-sm">
-                {t(`presets.gatewayStatus.${publication.value?.status || phase.value}`)}
-                {publication.value?.failureCode && <span class="ml-2">{userErrorMessage(publication.value.failureCode)}</span>}
-                {publication.value?.activeRevision ? <span class="ml-2 opacity-70">Revision {publication.value.activeRevision}</span> : null}
-            </p>}
-            {gateway.value?.bound && publication.value?.status === 'failed' && publication.value.failureCode &&
-                <details class="mt-2 text-sm">
-                    <summary class="cursor-pointer">{t('presets.publicationDiagnostics')}</summary>
-                    <p class="mt-2 break-all">{t('presets.publicationFailureCode')} <code>{publication.value.failureCode}</code></p>
-                    <p class="break-all">{t('presets.publicationOperationId')} <code>{publication.value.operationId}</code></p>
-                </details>}
-            {gateway.value && <p class="mt-3 text-sm">{history.value.currentReleaseId
-                ? t('presets.activeRelease', { id: history.value.currentReleaseId.slice(0, 8) }) : t('presets.noRelease')}</p>
-            }
-            <div class="mt-4 flex flex-wrap items-center gap-4">
-                <Button disabled={busy.value || publication.value?.status === 'publishing'} kind="secondary" onClick={check}>{t(gateway.value?.bound ? 'presets.checkGatewayRelease' : 'presets.checkRelease')}</Button>
-                <Button disabled={busy.value || preparationBlocked() || !gateway.value || !preflight.value?.valid || publication.value?.status === 'publishing'} onClick={publish}>{t(gateway.value?.bound ? 'presets.publishRelease' : 'presets.createSnapshot')}</Button>
-                {gateway.value?.bound && history.value.currentReleaseId && siteUrl() && <a href={siteUrl()} target="_blank" rel="noopener noreferrer" class="text-sm underline">{t('presets.openSite')}</a>}
-            </div>
-            {busy.value && <p role="status" class="mt-3 text-sm">{t('common.loading')}</p>}
-            {error.value && <p role="alert" class="mt-3 border-l-4 border-red bg-error px-3 py-2 text-sm leading-relaxed text-dark">{error.value}</p>}
-            {preflight.value && <div class="mt-5 border border-gray/60 p-4 text-sm dark:border-gray">
-                <strong>{preflight.value.valid ? t('presets.releaseValid', { count: preflight.value.pageCount }) : t('presets.releaseInvalid')}</strong>
-                {(preflight.value.issueDetails?.length ? preflight.value.issueDetails : preflight.value.issues.map(message => ({ message }))).map((issue: { message: string; modelKey?: string; entryId?: string; field?: string; pageKey?: string }) => <div role="alert" class="mt-2 text-red">
-                    <p>{userErrorMessage(issue.message)}{issue.field && <span class="ml-2">({issue.field})</span>}</p>
-                    {(issue.modelKey || issue.pageKey) && <RouterLink class="underline" to={{ path: '/d/studio', query: { section: issue.pageKey ? 'pages' : 'content', modelKey: issue.modelKey, entryId: issue.entryId, pageKey: issue.pageKey } }}>定位并修正 →</RouterLink>}
-                </div>)}
-                {preflight.value.diff && <div class="mt-3 grid gap-4 sm:grid-cols-3">
-                    {(['added', 'changed', 'removed'] as const).map((kind) => <div>
-                        <p class="font-medium">{t(`presets.releaseDiff.${kind}`)}</p>
-                        {preflight.value!.diff![kind].map((path) => <p class="mt-1 break-all">{path}</p>)}
-                        {!preflight.value!.diff![kind].length && <span class="opacity-60">—</span>}
-                    </div>)}
-                    {preflight.value.diff.navigationChanged && <p>{t('presets.navigationChanged')}</p>}
-                    {preflight.value.diff.mediaChanged && <p>{t('presets.releaseDiff.media')}</p>}
-                    {preflight.value.diff.templateChanged && <p>{t('presets.releaseDiff.template', { version: preflight.value.diff.templateVersion })}</p>}
-                    {!!preflight.value.diff.redirects.length && <div class="sm:col-span-3">
-                        <p class="font-medium">{t('presets.redirects')}</p>
-                        {preflight.value.diff.redirects.map((item) => <p class="mt-1">{item.from} → {item.to}</p>)}
-                    </div>}
-                </div>}
-            </div>}
-            {gateway.value && !!history.value.items.length && <div class="mt-6 overflow-x-auto">
-                <table class="w-full text-left text-sm">
-                    <thead><tr><th class="py-2">{t('presets.releaseVersion')}</th><th>{t('presets.releaseCreated')}</th>
-                        <th>{t('presets.releaseActor')}</th><th>{t('presets.pagesTitle')}</th><th /></tr></thead>
-                    <tbody>{history.value.items.map((item) => <tr class="border-t border-gray/40">
-                        <td class="py-3">{item._id.slice(0, 8)} {item._id === history.value.currentReleaseId && t('presets.currentRelease')}</td>
-                        <td>{new Date(item.createdAt).toLocaleString()}</td><td>{item.createdBy}</td><td>{item.pageCount}</td>
-                        <td>{item._id !== history.value.currentReleaseId && <Button disabled={busy.value || preparationBlocked() || publication.value?.status === 'publishing'}
-                            onClick={() => rollback(item._id)}>{t('presets.rollbackRelease')}</Button>}</td>
-                    </tr>)}</tbody>
-                </table>
-            </div>}
-            {gateway.value && !!history.value.audit.length && <details class="mt-5 text-sm">
-                <summary class="cursor-pointer">{t('presets.releaseAudit')}</summary>
-                {history.value.audit.map((event) => <p class={`mt-2 ${event.error ? 'text-red' : ''}`}>
-                    {new Date(event.createdAt).toLocaleString()} · {event.actorId} · {event.operation} · {event.releaseId.slice(0, 8)}
-                    {event.error ? ` · ${userErrorMessage(event.error)}` : ` · ${t('presets.releaseSuccess')}`}
-                </p>)}
-            </details>}
-        </section>;
+        onBeforeUnmount(() => {
+            disposed = true;
+            if (pollTimer) clearTimeout(pollTimer);
+            if (preparationTimer) clearTimeout(preparationTimer);
+        });
+        return () => (
+            <section
+                id="releases"
+                class="mt-12 border-t border-gray/60 pt-8 dark:border-gray"
+            >
+                <h2 class="text-lg font-semibold">
+                    {t('presets.releasesTitle')}
+                </h2>
+                <p class="mt-2 max-w-3xl text-sm opacity-70">
+                    {t(
+                        gateway.value?.bound
+                            ? 'presets.gatewayReleaseHint'
+                            : 'presets.releaseHint',
+                    )}
+                </p>
+                {preparationBlocked() && (
+                    <div
+                        role="status"
+                        class="mt-3 border-l-4 border-gray bg-gray/10 px-3 py-2 text-sm"
+                    >
+                        <strong>
+                            {gateway.value?.preparation?.status === 'failed'
+                                ? '准备失败，请管理员重试。'
+                                : gateway.value?.preparation?.status === 'ready'
+                                  ? '发布环境暂不可用，请稍后重试或联系管理员。'
+                                  : '正在准备发布环境。'}
+                        </strong>
+                        <p>你可以继续编辑网站内容，环境就绪后即可发布。</p>
+                    </div>
+                )}
+                {gateway.value &&
+                    !preparationBlocked() &&
+                    !gateway.value.bound && (
+                        <div
+                            role="status"
+                            class={`mt-3 border-l-4 px-3 py-2 text-sm ${publication.value?.status === 'snapshot-created' ? 'border-yellow bg-yellow/10' : 'border-gray bg-gray/10'}`}
+                        >
+                            <strong>
+                                {publication.value?.status ===
+                                'snapshot-created'
+                                    ? '发布快照已生成，但独立站尚未上线。'
+                                    : '当前站点仅编辑 CMS 草稿。'}
+                            </strong>
+                            <p>
+                                {gateway.value.configured
+                                    ? '当前网站尚未连接到发布服务，请联系平台管理员完成接入。'
+                                    : '发布服务尚未完成配置。接入完成后即可检查并更新网站。'}
+                            </p>
+                            {showDiagnostics.value && (
+                                <details class="mt-2 text-xs opacity-80">
+                                    <summary class="cursor-pointer">
+                                        平台诊断
+                                    </summary>
+                                    <p>
+                                        configured=
+                                        {String(gateway.value.configured)} ·
+                                        bound={String(gateway.value.bound)} ·
+                                        site=
+                                        {encodeURIComponent(
+                                            sdk.context?.context.siteId || '',
+                                        )}
+                                    </p>
+                                </details>
+                            )}
+                        </div>
+                    )}
+                {gateway.value?.bound && (
+                    <p role="status" class="mt-3 text-sm">
+                        {t(
+                            `presets.gatewayStatus.${publication.value?.status || phase.value}`,
+                        )}
+                        {publication.value?.failureCode && (
+                            <span class="ml-2">
+                                {userErrorMessage(
+                                    publication.value.failureCode,
+                                )}
+                            </span>
+                        )}
+                        {showDiagnostics.value &&
+                        publication.value?.activeRevision ? (
+                            <span class="ml-2 opacity-70">
+                                Revision {publication.value.activeRevision}
+                            </span>
+                        ) : null}
+                    </p>
+                )}
+                {showDiagnostics.value &&
+                    gateway.value?.bound &&
+                    publication.value?.status === 'failed' &&
+                    publication.value.failureCode && (
+                        <details class="mt-2 text-sm">
+                            <summary class="cursor-pointer">
+                                {t('presets.publicationDiagnostics')}
+                            </summary>
+                            <p class="mt-2 break-all">
+                                {t('presets.publicationFailureCode')}{' '}
+                                <code>{publication.value.failureCode}</code>
+                            </p>
+                            <p class="break-all">
+                                {t('presets.publicationOperationId')}{' '}
+                                <code>{publication.value.operationId}</code>
+                            </p>
+                        </details>
+                    )}
+                {gateway.value && (
+                    <p class="mt-3 text-sm">
+                        {history.value.currentReleaseId
+                            ? showDiagnostics.value
+                                ? t('presets.activeRelease', {
+                                      id: history.value.currentReleaseId.slice(
+                                          0,
+                                          8,
+                                      ),
+                                  })
+                                : t('presets.activeUpdate')
+                            : t('presets.noRelease')}
+                    </p>
+                )}
+                <div class="mt-4 flex flex-wrap items-center gap-4">
+                    <Button
+                        disabled={
+                            busy.value ||
+                            publication.value?.status === 'publishing'
+                        }
+                        kind="secondary"
+                        onClick={check}
+                    >
+                        {t(
+                            gateway.value?.bound
+                                ? 'presets.checkGatewayRelease'
+                                : 'presets.checkRelease',
+                        )}
+                    </Button>
+                    <Button
+                        disabled={
+                            busy.value ||
+                            preparationBlocked() ||
+                            !gateway.value ||
+                            !preflight.value?.valid ||
+                            publication.value?.status === 'publishing'
+                        }
+                        onClick={publish}
+                    >
+                        {t(
+                            gateway.value?.bound
+                                ? 'presets.publishRelease'
+                                : 'presets.createSnapshot',
+                        )}
+                    </Button>
+                    {gateway.value?.bound &&
+                        history.value.currentReleaseId &&
+                        siteUrl() && (
+                            <a
+                                href={siteUrl()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sm underline"
+                            >
+                                {t('presets.openSite')}
+                            </a>
+                        )}
+                </div>
+                {busy.value && (
+                    <p role="status" class="mt-3 text-sm">
+                        {t('common.loading')}
+                    </p>
+                )}
+                {error.value && (
+                    <p
+                        role="alert"
+                        class="mt-3 border-l-4 border-red bg-error px-3 py-2 text-sm leading-relaxed text-dark"
+                    >
+                        {error.value}
+                    </p>
+                )}
+                {preflight.value && (
+                    <div class="mt-5 border border-gray/60 p-4 text-sm dark:border-gray">
+                        <strong>
+                            {preflight.value.valid
+                                ? t('presets.releaseValid', {
+                                      count: preflight.value.pageCount,
+                                  })
+                                : t('presets.releaseInvalid')}
+                        </strong>
+                        {(preflight.value.issueDetails?.length
+                            ? preflight.value.issueDetails
+                            : preflight.value.issues.map((message) => ({
+                                  message,
+                              }))
+                        ).map(
+                            (issue: {
+                                message: string;
+                                modelKey?: string;
+                                entryId?: string;
+                                field?: string;
+                                pageKey?: string;
+                            }) => (
+                                <div role="alert" class="mt-2 text-red">
+                                    <p>
+                                        {userErrorMessage(issue.message)}
+                                        {showDiagnostics.value &&
+                                            issue.field && (
+                                                <span class="ml-2">
+                                                    ({issue.field})
+                                                </span>
+                                            )}
+                                    </p>
+                                    {(issue.modelKey || issue.pageKey) && (
+                                        <RouterLink
+                                            class="underline"
+                                            to={{
+                                                path: '/d/studio',
+                                                query: {
+                                                    section: issue.pageKey
+                                                        ? 'pages'
+                                                        : 'content',
+                                                    modelKey: issue.modelKey,
+                                                    entryId: issue.entryId,
+                                                    pageKey: issue.pageKey,
+                                                },
+                                            }}
+                                        >
+                                            定位并修正 →
+                                        </RouterLink>
+                                    )}
+                                </div>
+                            ),
+                        )}
+                        {preflight.value.diff && (
+                            <div class="mt-3 grid gap-4 sm:grid-cols-3">
+                                {(['added', 'changed', 'removed'] as const).map(
+                                    (kind) => (
+                                        <div>
+                                            <p class="font-medium">
+                                                {t(
+                                                    `presets.releaseDiff.${kind}`,
+                                                )}
+                                            </p>
+                                            {preflight.value!.diff![kind].map(
+                                                (path) => (
+                                                    <p class="mt-1 break-all">
+                                                        {path}
+                                                    </p>
+                                                ),
+                                            )}
+                                            {!preflight.value!.diff![kind]
+                                                .length && (
+                                                <span class="opacity-60">
+                                                    —
+                                                </span>
+                                            )}
+                                        </div>
+                                    ),
+                                )}
+                                {preflight.value.diff.navigationChanged && (
+                                    <p>{t('presets.navigationChanged')}</p>
+                                )}
+                                {preflight.value.diff.mediaChanged && (
+                                    <p>{t('presets.releaseDiff.media')}</p>
+                                )}
+                                {preflight.value.diff.templateChanged && (
+                                    <p>
+                                        {t('presets.releaseDiff.template', {
+                                            version:
+                                                preflight.value.diff
+                                                    .templateVersion,
+                                        })}
+                                    </p>
+                                )}
+                                {!!preflight.value.diff.redirects.length && (
+                                    <div class="sm:col-span-3">
+                                        <p class="font-medium">
+                                            {t('presets.redirects')}
+                                        </p>
+                                        {preflight.value.diff.redirects.map(
+                                            (item) => (
+                                                <p class="mt-1">
+                                                    {item.from} → {item.to}
+                                                </p>
+                                            ),
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+                {gateway.value && !!history.value.items.length && (
+                    <div class="mt-6 overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr>
+                                    <th class="py-2">
+                                        {t('presets.releaseVersion')}
+                                    </th>
+                                    <th>{t('presets.releaseCreated')}</th>
+                                    <th>{t('presets.releaseActor')}</th>
+                                    <th>{t('presets.pagesTitle')}</th>
+                                    <th />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {history.value.items.map((item, itemIndex) => (
+                                    <tr class="border-t border-gray/40">
+                                        <td class="py-3">
+                                            {showDiagnostics.value
+                                                ? item._id.slice(0, 8)
+                                                : t('presets.updateNumber', {
+                                                      number:
+                                                          history.value.items
+                                                              .length -
+                                                          itemIndex,
+                                                  })}{' '}
+                                            {item._id ===
+                                                history.value
+                                                    .currentReleaseId &&
+                                                t('presets.currentRelease')}
+                                        </td>
+                                        <td>
+                                            {new Date(
+                                                item.createdAt,
+                                            ).toLocaleString()}
+                                        </td>
+                                        <td>
+                                            {showDiagnostics.value
+                                                ? item.createdBy
+                                                : t('presets.updatedByManager')}
+                                        </td>
+                                        <td>{item.pageCount}</td>
+                                        <td>
+                                            {item._id !==
+                                                history.value
+                                                    .currentReleaseId && (
+                                                <Button
+                                                    disabled={
+                                                        busy.value ||
+                                                        preparationBlocked() ||
+                                                        publication.value
+                                                            ?.status ===
+                                                            'publishing'
+                                                    }
+                                                    onClick={() =>
+                                                        rollback(item._id)
+                                                    }
+                                                >
+                                                    {t(
+                                                        'presets.rollbackRelease',
+                                                    )}
+                                                </Button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+                {showDiagnostics.value &&
+                    gateway.value &&
+                    !!history.value.audit.length && (
+                        <details class="mt-5 text-sm">
+                            <summary class="cursor-pointer">
+                                {t('presets.releaseAudit')}
+                            </summary>
+                            {history.value.audit.map((event) => (
+                                <p
+                                    class={`mt-2 ${event.error ? 'text-red' : ''}`}
+                                >
+                                    {new Date(event.createdAt).toLocaleString()}{' '}
+                                    · {event.actorId} · {event.operation} ·{' '}
+                                    {event.releaseId.slice(0, 8)}
+                                    {event.error
+                                        ? ` · ${userErrorMessage(event.error)}`
+                                        : ` · ${t('presets.releaseSuccess')}`}
+                                </p>
+                            ))}
+                        </details>
+                    )}
+            </section>
+        );
     },
 });
