@@ -297,6 +297,16 @@ Independent review exposed and two fix rounds closed six Critical issues: bypass
 
 Final focused tests passed43/43; real Mongo/Studio concurrency and recovery passed4/4; cross-repository template tests10/10 and actual service browser update/rollback1/1. Backend/UI types passed. Real Mongo covers two concurrent site adoptions, an editable unrelated site, owner conflicts, Gateway-active/pre-CAS, post-CAS/save-failure and Gateway-rollback/site-restore interruption with complete identity/Entry/media/tuple assertions. All28 final-file hashes match committed bytes; source audit remains154/0. Public OCI adoption, deployed Gateway, production cutover and human UAT remain unperformed. Formatter churn is deferred Minor.
 
+## E4 — Per-site legacy migration and runtime rollout accepted locally
+
+CMS final head `16b42cfef4ef5fa9c07ceee88c15d4c56d2bfbab`; Gateway `99484cc186c350c02aa06a31e9f2539f00d8627d`. Legacy migration planning is deterministic and read-only, assigns explicit `legacy|artifact` runtime mode to the candidate, and reports media/snapshot issues through the production HTTP controller. Apply/rollback CLI operations require explicit site and operation IDs and reuse E3 staged adoption. Gateway stores immutable migration artifacts with checksum-bound identity: equal requests replay, changed identity returns the dedicated HTTP409 conflict.
+
+Artifact runtime never silently falls back to CMS. Legacy mode is an explicit compatibility adapter and ignores stale artifact configuration; missing/invalid artifacts fail closed. Historical legacy releases can roll back while the current site is still artifact mode without triggering forward layout requirements. Individual site rollback preserves other sites and retained media, then reapply uses a new complete release.
+
+Final focused evidence passed CMS38/38, CLI/runtime11/11, cross-repository10/10 and actual service browser rollback1/1. On the author-authorized Linux host, isolated temporary resources proved real controller HTTP422 issue preservation1/1, Gateway HTTP409 artifact identity2/2, and a combined runtime sequence covering legacy/artifact coexistence, CMS shutdown, page/image/redirect/sitemap, worker interruption, missing artifact/media, checksum failure, per-site rollback and reapply. Existing `nova-cms-validation` was not modified; all task containers, networks and temp directories were removed. The final26 hashes match committed bytes and protected-source audit remains154/0.
+
+Public registry/OCI publication, production domain switch and real-user UAT remain unperformed. Formatter churn and the cleanup audit's reference to an earlier runtime receipt are deferred Minor; E4 remains unchecked for production rollout.
+
 ## F3 — Release-aware monitoring and durable alerts accepted locally
 
 Final implementation heads: CMS `bd12cd3fb6e6001c8a765ab6d60b929235197288`, Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`. Public probes bind a page marker and optional release header to the expected F1 template and verified F2 completion; representative assets, strict TLS, certificate age, backup age, public availability, control-plane availability and the authoritative 15-minute publish-failure count are reported separately. The Gateway database helper is read-only and does not participate in publish decisions.

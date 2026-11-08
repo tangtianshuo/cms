@@ -294,6 +294,12 @@ git diff --cached --check
 git commit -m "feat: migrate legacy sites with per-site rollback"
 ```
 
+E4 本地实施及限定复审记录（2026-11-08）：最终 CMS `16b42cfef4ef5fa9c07ceee88c15d4c56d2bfbab`、Gateway `99484cc186c350c02aa06a31e9f2539f00d8627d`；Templates `bf11776db84aa97c5eba3f4d538d14682e428469`、Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42` 未变。实现逐站 `plan|apply|rollback --site`、确定性 layout/block ID、显式 `runtimeMode`、E3 候选采用复用、Gateway 不可变 ReleaseArtifact 生成、legacy 兼容读开关和 artifact 缺产物 fail-closed；无全站默认切换。
+
+独立审查及修复关闭生产 plan 错误丢失安全 issues、artifact identity 冲突误报503、显式 legacy 仍读取旧 artifact、历史 legacy snapshot 回滚触发新布局守卫，以及隔离组合演练覆盖不足。真实 Linux 测试机使用临时 Mongo/Postgres/network/container：CMS 控制器 HTTP422 issues 1/1、Gateway artifact 首次/幂等/冲突 HTTP409 2/2、运行时双站共存及 CMS 停机、页面/图片/重定向/sitemap、worker 中断、缺产物、缺媒体、checksum、逐站回滚和重放全部通过。仅创建并清理 `platform-e4-*` 隔离资源，未修改现有 `nova-cms-validation`。
+
+CMS focused 38/38、CLI/runtime 11/11、跨仓 10/10、实际服务浏览器回滚 1/1；CMS/Gateway 类型检查通过。26 个任务文件当前/提交哈希一致，154 个原始来源文件未变化。公共 registry/OCI 发布、生产域名切换和真实 UAT 仍未执行；格式化噪声与 cleanup audit 旧收据引用作为非阻塞 Minor 留最终审查。
+
 Gateway：
 
 ```sh
