@@ -20,6 +20,7 @@ import { buildChecklist } from './checklist';
 import { getPreset, listPresets } from './catalog';
 import { resolveInstalledPreset } from './installed';
 import {
+    adoptPublicTemplate,
     importPreset,
     planImport,
     previewPublicTemplateUpgrade,
@@ -756,6 +757,19 @@ export const PresetController = createController({
                                         item.from ===
                                         `${site.presetId}@${site.presetVersion}`,
                                 );
+                            if (!migration) {
+                                return await adoptPublicTemplate(
+                                    {
+                                        presetId: parsed.data.presetId,
+                                        presetVersion:
+                                            parsed.data.presetVersion!,
+                                        expectedUpdatedAt:
+                                            parsed.data.expectedUpdatedAt!,
+                                    },
+                                    importSource(),
+                                    selected,
+                                );
+                            }
                             const operation = await stageMigration({
                                 site,
                                 requestKey: parsed.data.requestKey!,
