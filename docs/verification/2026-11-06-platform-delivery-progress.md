@@ -331,6 +331,23 @@ The mounted UI and focused backend tests pass; Linux controller/Mongo lifecycle2
 
 The final scoped review accepts the three UI/security/validation fixes. One Important acceptance gap remains: E4 has component-level real Mongo/CLI and PostgreSQL/runtime evidence, but still needs one single isolated sequence with two sites, real Mongo plus PostgreSQL, E3 publication/CAS and the actual Gateway worker boundary. The final branch should not be described as merge-ready or production-ready until that combined drill passes. Public artifacts/lock, remote CI/protection, Internet DNS/TLS, off-host backup, external alerts, production cutover and human UAT remain external gates.
 
+## Final branch verification
+
+Final local heads: CMS `57c2caf6a0df3b278a54fc139b8c738f18e31d2e`, Gateway `f2cc58f908b62edf82eedcc6f5ade30e43f79db1`, Templates `bf11776db84aa97c5eba3f4d538d14682e428469`, Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42`. All four managed worktrees are clean.
+
+Fresh finishing-suite results:
+
+- CMS backend: 334 tests, 307 passed, 27 environment skips, 0 failures. Serial force-exit mode is required because the existing Studio controller test leaves a live WebSocket/timer handle after its assertions.
+- CMS UI/storefront: 164 tests, 163 passed, 1 existing skip, 0 failures.
+- Gateway workspaces: 195 passed, 89 environment skips, 0 failures; control's existing database suites remain covered separately by the isolated Linux PostgreSQL runs.
+- Templates full suite on Linux with Docker: 66 passed, 1 existing optional-runtime skip, 0 failures.
+- Preview: 23 passed, 1 existing skip, 0 failures.
+- Final regression fixes: legacy editor routes/roles 6/6, provisioning URL/redirect/body-bound tests7/7, real Linux controller+CLI lifecycle2/2, Gateway isolated PostgreSQL artifact HTTP2/2. Backend/UI/control/worker typechecks and Prisma validation pass.
+
+The finishing pass also corrected a stale UI test that expected the removed “Gateway” term and a Node 22 provisioning job fixture that initialized before its configuration environment. No product acceptance thresholds were weakened.
+
+**Current disposition:** 25/25 tasks have local implementations and independent task gates, with formal and production evidence still pending. The whole branch is not ready to merge because the final review's E4 combined two-site/PostgreSQL+worker lifecycle remains unexecuted. No Linux task containers, networks or temp directories remain, and the existing production Compose/data were not modified.
+
 ## Finishing-suite verification
 
 Fresh final-code runs found and corrected two test/build issues:
