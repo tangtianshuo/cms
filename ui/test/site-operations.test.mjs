@@ -7,7 +7,8 @@ const handler = fs.readFileSync(new URL('../src/sdk/handlers/studio.ts', import.
 
 test('website settings exposes SEO, sharing, analytics and unavailable contact form state', () => {
     for (const label of ['搜索引擎标题', '搜索引擎描述', '社交分享图片', '网站图标', '统计工具 ID']) assert.match(studio, new RegExp(label));
-    assert.match(studio, /请先配置 Gateway 询盘服务/);
+    assert.match(studio, /联系表单暂未启用/);
+    assert.doesNotMatch(studio, /Gateway 询盘服务/);
     assert.match(handler, /operations\?: SiteOperations/);
 });
 
