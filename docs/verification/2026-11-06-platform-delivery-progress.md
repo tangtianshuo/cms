@@ -333,7 +333,7 @@ The final scoped review accepts the three UI/security/validation fixes. One Impo
 
 ## Final branch verification
 
-Final local heads: CMS `57c2caf6a0df3b278a54fc139b8c738f18e31d2e`, Gateway `f2cc58f908b62edf82eedcc6f5ade30e43f79db1`, Templates `bf11776db84aa97c5eba3f4d538d14682e428469`, Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42`. All four managed worktrees are clean.
+Final code heads: CMS `57c2caf6a0df3b278a54fc139b8c738f18e31d2e`, Gateway `f2cc58f908b62edf82eedcc6f5ade30e43f79db1`, Templates `bf11776db84aa97c5eba3f4d538d14682e428469`, Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42`. All four managed worktrees are clean.
 
 Fresh finishing-suite results:
 
