@@ -331,6 +331,16 @@ The mounted UI and focused backend tests pass; Linux controller/Mongo lifecycle2
 
 The final scoped review accepts the three UI/security/validation fixes. One Important acceptance gap remains: E4 has component-level real Mongo/CLI and PostgreSQL/runtime evidence, but still needs one single isolated sequence with two sites, real Mongo plus PostgreSQL, E3 publication/CAS and the actual Gateway worker boundary. The final branch should not be described as merge-ready or production-ready until that combined drill passes. Public artifacts/lock, remote CI/protection, Internet DNS/TLS, off-host backup, external alerts, production cutover and human UAT remain external gates.
 
+## Finishing-suite verification
+
+Fresh final-code runs found and corrected two test/build issues:
+
+- Gateway Next/control compilation now imports queue observation from a dedicated read-only module instead of traversing worker retry code. Full Gateway tests pass88 with19 environment-driven skips and0 failures; builds, Prisma validation and typechecks pass.
+- The CMS website-settings regression now asserts the final user-facing “联系表单暂未启用” state and continues to reject the internal “Gateway” term. Correctly configured full backend verification passes307 with27 environment skips and0 failures; serial full UI/storefront verification passes163 with1 skip and0 failures.
+- Preview passes23 with1 skip and0 failures. Templates passes65 with1 skip; its one local Docker-environment test was independently run on Linux with a task-prefixed image and passes1/1.
+
+The final branch heads are CMS `837a9200ee9d9e65b7c2aebb3133b98ee45c8235` and Gateway `f2cc58f908b62edf82eedcc6f5ade30e43f79db1`; Templates `bf11776db84aa97c5eba3f4d538d14682e428469` and Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42` remain unchanged. This is a local implementation completion with one explicit E4 combined-lifecycle evidence blocker, not a production readiness claim.
+
 ## F3 — Release-aware monitoring and durable alerts accepted locally
 
 Final implementation heads: CMS `bd12cd3fb6e6001c8a765ab6d60b929235197288`, Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`. Public probes bind a page marker and optional release header to the expected F1 template and verified F2 completion; representative assets, strict TLS, certificate age, backup age, public availability, control-plane availability and the authoritative 15-minute publish-failure count are reported separately. The Gateway database helper is read-only and does not participate in publish decisions.
