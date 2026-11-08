@@ -1,8 +1,19 @@
 #!/usr/bin/env node
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const actions = new Set(['plan', 'apply', 'rollback']);
+
+class MigrationRequestError extends Error {
+    constructor(status, message, issues = []) {
+        super(message);
+        this.name = 'MigrationRequestError';
+        this.status = status;
+        this.issues = issues;
+    }
+}
 
 function required(value, name) {
     if (typeof value !== 'string' || !value)
@@ -90,9 +101,62 @@ async function request(path, options = {}) {
     } catch {
         body = null;
     }
-    if (!response.ok)
-        throw new Error(`CMS migration request failed (${response.status})`);
+    if (!response.ok) {
+        const value =
+            body && typeof body === 'object'
+                ? body
+                : { message: 'CMS migration request failed' };
+        throw new MigrationRequestError(
+            response.status,
+            typeof value.message === 'string'
+                ? value.message
+                : `CMS migration request failed (${response.status})`,
+            Array.isArray(value.issues)
+                ? value.issues
+                      .filter(
+                          (issue) =>
+                              issue &&
+                              typeof issue.code === 'string' &&
+                              typeof issue.path === 'string',
+                      )
+                      .map((issue) => ({
+                          code: issue.code,
+                          path: issue.path,
+                      }))
+                : [],
+        );
+    }
     return body;
+}
+
+async function stableRequestKey(site, supplied) {
+    if (supplied) return supplied;
+    const directory = process.env.CMS_MIGRATION_STATE_DIR || '.migration-state';
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const filename = `${createHash('sha256').update(site).digest('hex')}.request-key`;
+    const path = join(directory, filename);
+    try {
+        const existing = (await readFile(path, 'utf8')).trim();
+        if (!/^[0-9a-f-]{36}$/i.test(existing))
+            throw new Error('Stored migration request key is invalid');
+        return existing;
+    } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+    }
+    const generated = randomUUID();
+    try {
+        await writeFile(path, generated + '\n', {
+            flag: 'wx',
+            mode: 0o600,
+        });
+        return generated;
+    } catch (error) {
+        if (error?.code !== 'EEXIST') throw error;
+        const winner = (await readFile(path, 'utf8')).trim();
+        if (!/^[0-9a-f-]{36}$/i.test(winner))
+            throw new Error('Stored migration request key is invalid');
+        return winner;
+    }
 }
 
 async function operationFor(id, site) {
@@ -105,13 +169,15 @@ async function operationFor(id, site) {
 async function main() {
     const args = parseMigrateArgs(process.argv.slice(2));
     if (args.action === 'plan') {
-        return request('/migrations/legacy/plan', {
+        const requestKey = await stableRequestKey(args.site, args.requestKey);
+        const result = await request('/migrations/legacy/plan', {
             method: 'POST',
             body: JSON.stringify({
                 siteId: args.site,
-                requestKey: args.requestKey || randomUUID(),
+                requestKey,
             }),
         });
+        return { ...result, requestKey };
     }
     const operation = await operationFor(args.operation, args.site);
     if (args.action === 'rollback') {
@@ -143,7 +209,13 @@ if (
         console.log(JSON.stringify(await main()));
     } catch (error) {
         console.error(
-            error instanceof Error ? error.message : 'Migration failed',
+            JSON.stringify({
+                error:
+                    error instanceof Error ? error.message : 'Migration failed',
+                ...(error instanceof MigrationRequestError
+                    ? { status: error.status, issues: error.issues }
+                    : {}),
+            }),
         );
         process.exitCode = 1;
     }

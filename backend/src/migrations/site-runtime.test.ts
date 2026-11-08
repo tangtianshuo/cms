@@ -157,6 +157,21 @@ test('legacy planning reports missing media without changing source', () => {
     assert.equal(input.site.pages[0].layoutDocument, undefined);
 });
 
+test('legacy planning returns structured issues for an incompatible installed snapshot', () => {
+    const input = legacyFixture();
+    input.site.presetManifestSnapshot = '{"id":"other","version":"9.9.9"}';
+    const before = JSON.stringify(input.site);
+    const result = planLegacySiteMigration(input.site, input);
+    assert.deepEqual(result.issues, [
+        {
+            code: 'template_snapshot_incompatible',
+            path: 'template',
+        },
+    ]);
+    assert.equal(JSON.stringify(input.site), before);
+    assert.equal(result.candidateSite.runtimeMode, 'legacy');
+});
+
 test('staged migration applies legacy layouts only to the candidate', () => {
     const input = legacyFixture();
     const preset = getPreset('atelier')!;

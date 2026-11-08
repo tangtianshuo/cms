@@ -27,7 +27,20 @@ export function planLegacySiteMigration(
     if (input.site._id !== site._id) {
         throw new Error('Release input belongs to another site');
     }
-    const preset = resolveInstalledPreset(site);
+    let preset: PresetManifest;
+    try {
+        preset = resolveInstalledPreset(site);
+    } catch {
+        return {
+            candidateSite: structuredClone(site),
+            issues: [
+                {
+                    code: 'template_snapshot_incompatible',
+                    path: 'template',
+                },
+            ],
+        };
+    }
     const candidateSite = applyLegacyCandidateLayouts(site, preset);
     const issues: Array<{ code: string; path: string }> = [];
     for (const page of candidateSite.pages) {

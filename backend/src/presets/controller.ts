@@ -344,6 +344,30 @@ export const PresetController = createController({
                             ),
                         };
                     } catch (cause) {
+                        const issues = (
+                            cause as {
+                                issues?: Array<{
+                                    code?: unknown;
+                                    path?: unknown;
+                                }>;
+                            }
+                        ).issues;
+                        if (Array.isArray(issues)) {
+                            throw errorHandler(HttpStatus.UnprocessableEntity, {
+                                message:
+                                    'Legacy migration plan has unresolved issues',
+                                issues: issues
+                                    .filter(
+                                        (issue) =>
+                                            typeof issue.code === 'string' &&
+                                            typeof issue.path === 'string',
+                                    )
+                                    .map((issue) => ({
+                                        code: issue.code,
+                                        path: issue.path,
+                                    })),
+                            });
+                        }
                         throw errorHandler(
                             HttpStatus.BadRequest,
                             cause instanceof Error

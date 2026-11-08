@@ -25,7 +25,16 @@ node ops/migrate-site.mjs plan \
 
 The output contains the operation ID, source checksum and candidate page layout version. Planning converts legacy section configs into deterministic template layout nodes and sets the candidate runtime mode to `artifact`, but it does not modify the installed site, active release, route revision or `runtimeMode`.
 
-Planning must stop with an error when any media, required field, page route, section or reference is invalid. Do not bypass a plan issue by deleting content or editing the database directly.
+If `--request-key` is omitted, the CLI stores one private request key per
+`--site` under `CMS_MIGRATION_STATE_DIR` (default `.migration-state`) before
+sending the request. Retrying a lost response reuses that key and therefore the
+same staged operation. Supply an explicit stable key when managing this state
+externally. Use a new key only when intentionally creating a new plan.
+
+Planning must stop with a nonzero JSON result when any media, required field,
+page route, section or reference is invalid. The result includes safe `code`
+and `path` values for each issue. Do not bypass a plan issue by deleting content
+or editing the database directly.
 
 ## Apply
 
