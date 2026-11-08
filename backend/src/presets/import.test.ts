@@ -573,6 +573,66 @@ test('upgrade preview accepts a compatible visual update and reports its impact'
     assert.match(preview.contentImpact.join(' '), /保留/);
 });
 
+test('compatible patch upgrades do not run an undeclared migration target check', async () => {
+    const memory = memorySource();
+    const installed = await importPreset(
+        { presetId: 'aeroframe', siteName: 'Field', includeDemo: false },
+        memory.source,
+    );
+    const selected = {
+        schemaVersion: 1 as const,
+        id: 'aeroframe',
+        version: '1.0.5',
+        manifestChecksum: `sha256:${'a'.repeat(64)}`,
+        imageRepository:
+            'ghcr.io/tangtianshuo/independent-website-templates/aeroframe',
+        imageDigest: `sha256:${'b'.repeat(64)}`,
+        sourceCommit: 'c'.repeat(40),
+        manifestPath: 'templates/aeroframe/1.0.5/template.json',
+        status: 'available' as const,
+        manifest: {
+            ...getPreset('aeroframe', '1.0.0')!,
+            version: '1.0.1',
+        },
+    } as VerifiedPublicTemplate;
+    selected.manifest.version = selected.version;
+    selected.manifest.renderer = {
+        ...selected.manifest.renderer!,
+        templateVersion: selected.version,
+    };
+    const document = {
+        models: {
+            product: [{ id: 'product-a', fields: { sku: null } }],
+        },
+        pages: [],
+    };
+    const target = {
+        models: {
+            product: {
+                fields: [
+                    {
+                        key: 'sku',
+                        type: 'STRING',
+                        required: false,
+                        array: false,
+                    },
+                ],
+            },
+        },
+        pages: [],
+        sections: [],
+    };
+    const preview = previewPublicTemplateUpgrade(installed, selected, {
+        document,
+        target,
+    });
+    assert.equal(preview.compatible, true);
+    assert.equal(preview.adoptable, true);
+    assert.equal(preview.requiresNewInstallation, false);
+    assert.equal(preview.migrationRequired, false);
+    assert.deepEqual(preview.issues, []);
+});
+
 test('upgrade preview refuses a structural version change without a migration plan', async () => {
     const memory = memorySource();
     const installed = await importPreset(

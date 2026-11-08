@@ -209,10 +209,10 @@ export function previewPublicTemplateUpgrade(
                 request,
             );
     }
-    const migrationPreview = migrationInput
+    const migrationPreview = migrationInput && migrationPlan
         ? previewMigration(
               migrationInput.document,
-              (migrationPlan?.steps ?? []) as unknown as Parameters<
+              migrationPlan.steps as unknown as Parameters<
                   typeof previewMigration
               >[1],
               migrationInput.target,
