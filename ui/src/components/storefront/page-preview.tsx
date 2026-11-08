@@ -9,7 +9,7 @@ import { Button } from '@bcms/selfhosted-ui/components/button';
 import { availablePreviewPages, buildPagePreviewRequest,
     type PreviewSiteContext } from '@bcms/selfhosted-ui/util/page-preview';
 import { createPreviewGate } from './preview-state';
-import { isPreviewReady, loadPreviewRuntime, overlayPagePreview, resolvePreviewTarget, sendRendererPreview, type PreviewRuntime } from '@bcms/selfhosted-ui/util/template-preview';
+import { isPreviewOriginRequest, isPreviewReady, loadPreviewRuntime, overlayPagePreview, resolvePreviewTarget, sendPreviewOrigin, sendRendererPreview, type PreviewRuntime } from '@bcms/selfhosted-ui/util/template-preview';
 
 export const PagePreview = defineComponent({
     props: {
@@ -57,6 +57,11 @@ export const PagePreview = defineComponent({
             const expected = target.value.mode === 'template' && target.value.templateId && target.value.templateVersion
                 ? { id: target.value.templateId, version: target.value.templateVersion }
                 : undefined;
+            if (isPreviewOriginRequest(event, frame.value, target.value.origin, expected)) {
+                if (expected)
+                    sendPreviewOrigin(frame.value, target.value.origin!, expected);
+                return;
+            }
             if (!isPreviewReady(event, frame.value, target.value.origin, expected)) return;
             frameReady.value = true;
             connectionError.value = '';

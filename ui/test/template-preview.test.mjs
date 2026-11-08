@@ -81,6 +81,52 @@ test('ready handshake only accepts the chosen origin and actual iframe source', 
   assert.equal(preview.isPreviewReady({ ...event, data: { type: 'other' } }, target, config.templateOrigin), false);
 });
 
+test('private renderer can request the verified parent origin without a build-time origin', () => {
+    const child = {};
+    const target = { contentWindow: child };
+    const expected = { id: 'aeroframe', version: '1.0.5' };
+    const event = {
+        origin: 'https://preview.example',
+        source: child,
+        data: {
+            type: 'storefront:preview-needs-origin',
+            protocolVersion: 1,
+            templateId: expected.id,
+            templateVersion: expected.version,
+        },
+    };
+    assert.equal(
+        preview.isPreviewOriginRequest(
+            event,
+            target,
+            'https://preview.example',
+            expected,
+        ),
+        true,
+    );
+    assert.equal(
+        preview.isPreviewOriginRequest(
+            { ...event, origin: 'https://attacker.test' },
+            target,
+            'https://preview.example',
+            expected,
+        ),
+        false,
+    );
+    assert.equal(
+        preview.isPreviewOriginRequest(
+            {
+                ...event,
+                data: { ...event.data, templateVersion: '1.0.4' },
+            },
+            target,
+            'https://preview.example',
+            expected,
+        ),
+        false,
+    );
+});
+
 test('unsaved single page overlays the saved snapshot without losing cards or mutating source', () => {
   assert.equal(typeof preview.overlayPagePreview, 'function');
   const saved = snapshot(); const page = content(); page.seo.title = 'Unsaved';
@@ -167,7 +213,7 @@ test('switching the whole-site view clears its descriptor and rejects the previo
   let editorFrameCreatedBeforeListener = false;
   const runtime = { templateId: 'aeroframe', templateVersion: '1.0.3', protocolVersion: 1,
     digest: `sha256:${'d'.repeat(64)}`, url: 'https://preview.example/preview/aeroframe/1.0.3/' };
-  globalThis.window = { addEventListener: (name, listener) => listeners.set(name, listener),
+  globalThis.window = { location: { origin: 'https://cms.example' }, addEventListener: (name, listener) => listeners.set(name, listener),
     removeEventListener: name => listeners.delete(name), bcms: { sdk: {
       context: { site: { name: 'Site' }, workspace: { name: 'Workspace' } },
       send: async ({ url, selectorOverride }) => {
@@ -228,11 +274,20 @@ test('switching the whole-site view clears its descriptor and rejects the previo
     assert.equal(editorFrameCreatedBeforeListener, false, 'the parent must listen before loading the private renderer');
     editorFrame.props.onLoad();
     assert.equal(messages.length, 2, 'iframe load alone must not send a private draft');
-    listeners.get('message')(ready(editorFrame.contentWindow)); assert.equal(messages.length, 3);
+    listeners.get('message')({
+      origin: 'https://preview.example',
+      source: editorFrame.contentWindow,
+      data: { type: 'storefront:preview-needs-origin', protocolVersion: 1, templateId: 'aeroframe', templateVersion: '1.0.3' },
+    });
+    assert.equal(messages.length, 3);
+    assert.equal(messages[2][0].type, 'storefront:preview-origin');
+    assert.equal(messages[2][0].origin, 'https://cms.example');
+    assert.equal(messages[2][1], 'https://preview.example');
+    listeners.get('message')(ready(editorFrame.contentWindow)); assert.equal(messages.length, 4);
     props.previewPayload = { ...snapshot(), siteName: 'Unsaved change' }; await flush();
-    assert.equal(messages.length, 4, 'same-site draft edits retain the verified handshake');
+    assert.equal(messages.length, 5, 'same-site draft edits retain the verified handshake');
     props.previewUrl = 'https://preview.example/preview/aeroframe/1.0.4/'; props.templateVersion = '1.0.4';
     props.previewPayload = { ...snapshot(), siteId: 'site-c' }; await flush();
-    assert.equal(messages.length, 4, 'changing identity must retire the previous handshake before sending');
+    assert.equal(messages.length, 5, 'changing identity must retire the previous handshake before sending');
   } finally { app?.unmount(); globalThis.window = originalWindow; await server.close(); }
 });

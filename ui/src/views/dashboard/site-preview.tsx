@@ -2,7 +2,7 @@ import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { isPreviewReady, loadPreviewRuntime, resolvePreviewTarget, sendRendererPreview, type PreviewRuntime } from '@bcms/selfhosted-ui/util/template-preview';
+import { isPreviewOriginRequest, isPreviewReady, loadPreviewRuntime, resolvePreviewTarget, sendPreviewOrigin, sendRendererPreview, type PreviewRuntime } from '@bcms/selfhosted-ui/util/template-preview';
 
 export const SitePreviewView = defineComponent({
     setup() {
@@ -41,6 +41,11 @@ export const SitePreviewView = defineComponent({
             const expected = target.value.mode === 'template' && target.value.templateId && target.value.templateVersion
                 ? { id: target.value.templateId, version: target.value.templateVersion }
                 : undefined;
+            if (isPreviewOriginRequest(event, frame.value, target.value.origin, expected)) {
+                if (expected)
+                    sendPreviewOrigin(frame.value, target.value.origin!, expected);
+                return;
+            }
             if (!isPreviewReady(event, frame.value, target.value.origin, expected)) return;
             ready.value = true;
             connectionError.value = '';

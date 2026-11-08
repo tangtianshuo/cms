@@ -133,6 +133,45 @@ export function isPreviewReady(event: Pick<MessageEvent, 'origin' | 'source' | '
         (!expectedTemplate || event.data.templateId === expectedTemplate.id && event.data.templateVersion === expectedTemplate.version));
 }
 
+export function isPreviewOriginRequest(
+    event: Pick<MessageEvent, 'origin' | 'source' | 'data'>,
+    frame: { contentWindow: unknown } | undefined,
+    expectedOrigin?: string,
+    expectedTemplate?: { id: string; version: string },
+): boolean {
+    return Boolean(
+        canonicalOrigin(expectedOrigin) &&
+            frame?.contentWindow &&
+            event.source === frame.contentWindow &&
+            event.origin === expectedOrigin &&
+            event.data?.type === 'storefront:preview-needs-origin' &&
+            event.data.protocolVersion === 1 &&
+            (!expectedTemplate ||
+                (event.data.templateId === expectedTemplate.id &&
+                    event.data.templateVersion === expectedTemplate.version)),
+    );
+}
+
+export function sendPreviewOrigin(
+    frame: { contentWindow?: { postMessage: (value: unknown, origin: string) => void } | null } | undefined,
+    targetOrigin: string,
+    template: { id: string; version: string },
+): void {
+    if (!canonicalOrigin(targetOrigin)) return;
+    const origin = canonicalOrigin(window.location.origin);
+    if (!origin) return;
+    frame?.contentWindow?.postMessage(
+        {
+            type: 'storefront:preview-origin',
+            protocolVersion: 1,
+            templateId: template.id,
+            templateVersion: template.version,
+            origin,
+        },
+        targetOrigin,
+    );
+}
+
 export function overlayPagePreview(saved: unknown, pageContent: unknown, options: {
     pageKey: string; entryId: string; language: string; settings: boolean;
 }) {

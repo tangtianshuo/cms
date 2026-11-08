@@ -6,7 +6,12 @@ import { SectionPropertyFields } from './section-property-fields';
 import { sectionPropertyFields } from './section-property-state';
 import type { NavigationNode } from './navigation-editor';
 import { moveNavigationNode, moveNode, toggleNode, updateNodeProps, type VisualNode } from './visual-editor-state';
-import { isPreviewReady, sendRendererPreview } from '../../util/template-preview';
+import {
+    isPreviewOriginRequest,
+    isPreviewReady,
+    sendPreviewOrigin,
+    sendRendererPreview,
+} from '../../util/template-preview';
 
 export interface VisualLayoutDocument { version: 1; mode: 'template'; root: VisualNode[] }
 
@@ -99,6 +104,18 @@ export const VisualPageEditor = defineComponent({
             const expected = props.templateId && props.templateVersion
                 ? { id: props.templateId, version: props.templateVersion }
                 : undefined;
+            if (
+                isPreviewOriginRequest(
+                    event,
+                    previewFrame.value,
+                    origin,
+                    expected,
+                )
+            ) {
+                if (expected)
+                    sendPreviewOrigin(previewFrame.value, origin, expected);
+                return;
+            }
             if (isPreviewReady(event, previewFrame.value, origin, expected)) {
                 previewReady.value = true;
                 deliverPreview();
