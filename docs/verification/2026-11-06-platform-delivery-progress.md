@@ -307,6 +307,16 @@ Final focused evidence passed CMS38/38, CLI/runtime11/11, cross-repository10/10 
 
 Public registry/OCI publication, production domain switch and real-user UAT remain unperformed. Formatter churn and the cleanup audit's reference to an earlier runtime receipt are deferred Minor; E4 remains unchecked for production rollout.
 
+## F4 — Fair publication scheduling and retries accepted locally
+
+CMS `eda77d0886643f6b82dbc669a68b83449705a961`; Gateway `9d15d470035deaf487636fb4e97923cb0b7d7eb8`. Publication enqueue now enforces configurable site/workspace/global pending and active limits, returns 429 with Retry-After, and applies a five-second per-site start interval. Claims use a short PostgreSQL advisory-lock transaction and SKIP LOCKED, select by site start time and operation age, and never hold the scheduling lock through Docker or network work.
+
+Persisted retry fields and exact bounded exponential delays cover only transient registry/gateway/Docker failures. Authentication, 404, malformed responses and identity/digest mismatches are permanent. Uncertain route activation reconciles the authoritative Gateway tuple before another attempt; stale leases cannot finalize newer work. C4 domain operations retain same-site exclusion without consuming publication slots.
+
+Independent review found permanent errors treated as transient, ignored configurable site leases, incomplete fairness evidence and missing aggregate monitoring. Fixes use structured Docker errors and real claim SQL values, support two workspaces/four sites, worker restart, expired lease, a permanent failure and 133 continuous healthy-page samples, and expose bounded queue/active capacity through Gateway publication state and F3 alerts/runbook guidance.
+
+Final evidence: Gateway focused42/42; isolated Linux PostgreSQL claim6/6, operations10/10 and control14/14; CMS fairness/monitoring31/31; cross-repository10/10; all builds, Prisma validation and types passed. All32 final-file hashes match committed bytes and protected-source audit remains154/0. Existing production Compose was untouched and all `platform-f4-*` resources were removed. Sustained production load, public deployment and human UAT remain unperformed; formatter-only diff noise is a deferred Minor.
+
 ## F3 — Release-aware monitoring and durable alerts accepted locally
 
 Final implementation heads: CMS `bd12cd3fb6e6001c8a765ab6d60b929235197288`, Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`. Public probes bind a page marker and optional release header to the expected F1 template and verified F2 completion; representative assets, strict TLS, certificate age, backup age, public availability, control-plane availability and the authoritative 15-minute publish-failure count are reported separately. The Gateway database helper is read-only and does not participate in publish decisions.

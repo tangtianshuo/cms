@@ -343,6 +343,12 @@ git diff --cached --check
 git commit -m "feat: schedule publish operations fairly with bounded retries"
 ```
 
+F4 本地实施及限定复审记录（2026-11-08）：最终 CMS `eda77d0886643f6b82dbc669a68b83449705a961`、Gateway `9d15d470035deaf487636fb4e97923cb0b7d7eb8`；Templates `bf11776db84aa97c5eba3f4d538d14682e428469`、Preview `5ee66507a9da81e262b72e06f213be4a2b34fe42` 未变。实现可配置同站/工作区/全局 active 与 pending 配额、原子 429/Retry-After、5秒启动间隔、短 advisory-lock 公平 claim、持久 `nextAttemptAt/lastFailureCode/lastPublishStartedAt`、精确指数退避和 route-unknown reconciliation；C4 domain change 的同站互斥和 E3 迁移恢复保持。
+
+审查修复区分永久与临时 Docker/registry 错误，认证、404、manifest/digest 错误不再重试；`maxSiteLeases` 实际进入 SQL；公平演练改为两个工作区四站点，覆盖永久失败、worker 重启、过期租约和133次健康页面连续探测；Gateway publication-state 和 F3 告警接入有界队列深度/active容量指标，调参与429/退避边界纳入运维文档。
+
+最终验证：Gateway focused 42/42、真实 Linux PostgreSQL claim6/6、operations10/10、control14/14；CMS fairness/monitoring31/31；跨仓10/10；Gateway builds/typechecks、Prisma validate、CMS backend/UI typecheck通过。32个任务文件当前/提交哈希一致，154个原始来源文件未变化；Linux `platform-f4-*` 容器/网络/临时目录清理完成，现有生产 Compose 未修改。未执行持续生产负载、公开部署或人工UAT；格式化噪声留最终审查。
+
 ## 运维放行标准
 
 F1：故意破坏版本/用例时部署被阻止。F2：完整备份可在隔离环境恢复并再次发布。F3：公开故障和恢复能产生并送达正确告警。F4：异常站点不能独占队列，超额请求有明确可重试响应。任何一项缺少实测证据均保持未完成。
