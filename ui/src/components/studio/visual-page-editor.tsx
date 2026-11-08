@@ -69,6 +69,7 @@ export const VisualPageEditor = defineComponent({
             }
         };
         const localSelectedNodeId = ref(props.selectedNodeId || props.modelValue.root[0]?.id || '');
+        const previewMounted = ref(false);
         const previewFrame = ref<HTMLIFrameElement>();
         const previewReady = ref(false);
         const previewSiteId = () => typeof props.previewPayload?.siteId === 'string' ? props.previewPayload.siteId : '';
@@ -107,8 +108,16 @@ export const VisualPageEditor = defineComponent({
             if (!props.modelValue.root.some(node => node.id === data.nodeId && node.type === data.nodeType)) return;
             select(data.nodeId, false);
         };
-        onMounted(() => window.addEventListener('message', onPreviewMessage));
-        onBeforeUnmount(() => window.removeEventListener('message', onPreviewMessage));
+        onMounted(() => {
+            // The renderer announces readiness once while mounting. Register the
+            // parent listener before allowing the iframe to start loading.
+            window.addEventListener('message', onPreviewMessage);
+            previewMounted.value = true;
+        });
+        onBeforeUnmount(() => {
+            previewMounted.value = false;
+            window.removeEventListener('message', onPreviewMessage);
+        });
         const update = (root: VisualNode[]) => emit('update:modelValue', { version: 1, mode: 'template', root });
         const selectedNode = () => props.modelValue.root.find(node => node.id === (props.selectedNodeId || localSelectedNodeId.value));
         const move = (id: string, direction: 'before' | 'after') => {
@@ -134,7 +143,7 @@ export const VisualPageEditor = defineComponent({
                 <ul class="studio-visual-tree">{props.modelValue.root.map(node => <li key={node.id} class={{ selected: node.id === (props.selectedNodeId || localSelectedNodeId.value), disabled: !node.enabled }}><button class="studio-visual-node-button" type="button" aria-pressed={node.id === (props.selectedNodeId || localSelectedNodeId.value)} onClick={() => select(node.id)}><span class="studio-visual-node-type">{nodeLabel(node)}</span><small>{node.enabled ? '显示中' : '已隐藏'}</small></button><span class="studio-visual-row-actions"><button type="button" aria-label={`上移 ${nodeLabel(node)}`} disabled={props.disabled} onClick={() => move(node.id, 'before')}>↑</button><button type="button" aria-label={`下移 ${nodeLabel(node)}`} disabled={props.disabled} onClick={() => move(node.id, 'after')}>↓</button><button type="button" aria-label={`${node.enabled ? '隐藏' : '显示'} ${nodeLabel(node)}`} disabled={props.disabled} onClick={() => update(toggleNode(props.modelValue.root, node.id, !node.enabled))}>{node.enabled ? '隐藏' : '显示'}</button></span></li>)}</ul>
                 <div class="studio-visual-panel-heading studio-visual-panel-heading--navigation"><h3>导航</h3><span>{props.navigation.length} 项</span></div><ul class="studio-visual-tree studio-visual-navigation">{props.navigation.map(node => <li key={node.id} class={{ disabled: node.enabled === false }}><span class="studio-visual-navigation-label">{node.label}</span><span class="studio-visual-row-actions"><button type="button" aria-label={`上移 ${node.label}`} disabled={props.disabled} onClick={() => navigationMove(node.id, 'before')}>↑</button><button type="button" aria-label={`下移 ${node.label}`} disabled={props.disabled} onClick={() => navigationMove(node.id, 'after')}>↓</button></span></li>)}</ul>
             </aside>
-            <div class="studio-visual-preview" aria-label="草稿预览">{props.previewUrl ? <iframe key={`${props.previewUrl}:${previewSiteId()}`} ref={previewFrame} title="草稿预览" src={props.previewUrl} onLoad={deliverPreview} sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer" /> : <div class="studio-visual-preview-placeholder"><strong>草稿预览</strong><p>{props.previewNotice || (props.previewPayload ? '当前网站尚未提供预览。' : '保存后可在这里打开网站预览。')}</p></div>}</div>
+            <div class="studio-visual-preview" aria-label="草稿预览">{props.previewUrl && previewMounted.value ? <iframe key={`${props.previewUrl}:${previewSiteId()}`} ref={previewFrame} title="草稿预览" src={props.previewUrl} onLoad={deliverPreview} sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer" /> : <div class="studio-visual-preview-placeholder"><strong>草稿预览</strong><p>{props.previewNotice || (props.previewPayload ? '当前网站尚未提供预览。' : '保存后可在这里打开网站预览。')}</p></div>}</div>
             <aside ref={propertiesPanel} class="studio-visual-sidebar studio-visual-sidebar--right" onFocusout={event => rememberEditingSelection(event.target)}>
                 <div class="studio-editor-tabs" role="tablist" aria-label="页面编辑">{(['content', 'sections', 'page'] as const).filter(key => key === 'sections' || slots[key]).map(key => <button type="button" role="tab" aria-selected={props.panel === key} onClick={() => emit('update:panel', key)}>{({ content: '页面内容', sections: '区块', page: '页面信息' })[key]}</button>)}</div>
                 <div v-show={props.panel === 'content'}>{slots.content?.()}</div>

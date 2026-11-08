@@ -163,6 +163,8 @@ test('switching the whole-site view clears its descriptor and rejects the previo
   const listeners = new Map();
   const messages = [];
   let pendingSite;
+  let checkEditorListenerOrder = false;
+  let editorFrameCreatedBeforeListener = false;
   const runtime = { templateId: 'aeroframe', templateVersion: '1.0.3', protocolVersion: 1,
     digest: `sha256:${'d'.repeat(64)}`, url: 'https://preview.example/preview/aeroframe/1.0.3/' };
   globalThis.window = { addEventListener: (name, listener) => listeners.set(name, listener),
@@ -174,9 +176,13 @@ test('switching the whole-site view clears its descriptor and rejects the previo
         return snapshot();
       },
     } } };
-  const node = type => markRaw({ type, children: [], parent: null, props: {}, style: {}, ...(type === 'iframe' ? {
-    contentWindow: { postMessage: (...args) => messages.push(args) },
-  } : {}) });
+  const node = type => {
+    if (type === 'iframe' && checkEditorListenerOrder && !listeners.has('message'))
+      editorFrameCreatedBeforeListener = true;
+    return markRaw({ type, children: [], parent: null, props: {}, style: {}, ...(type === 'iframe' ? {
+      contentWindow: { postMessage: (...args) => messages.push(args) },
+    } : {}) });
+  };
   const renderer = createRenderer({
     createElement: node, createText: text => ({ ...node('text'), text }), createComment: text => ({ ...node('comment'), text }),
     insert(child, parent, anchor) { child.parent = parent; const i = parent.children.indexOf(anchor); parent.children.splice(i < 0 ? parent.children.length : i, 0, child); },
@@ -210,6 +216,8 @@ test('switching the whole-site view clears its descriptor and rejects the previo
     listeners.get('message')(ready(newFrame.contentWindow)); assert.equal(messages.length, 2);
     assert.equal(messages[1][0].payload.siteId, 'site-b');
     app.unmount();
+    listeners.delete('message');
+    checkEditorListenerOrder = true;
     const { VisualPageEditor } = await server.ssrLoadModule('/src/components/studio/visual-page-editor.tsx');
     const props = reactive({ modelValue: { version: 1, mode: 'template', root: [] }, navigation: [],
       previewPayload: snapshot(), previewUrl: runtime.url, templateId: 'aeroframe', templateVersion: '1.0.3' });
@@ -217,6 +225,7 @@ test('switching the whole-site view clears its descriptor and rejects the previo
     app.provide(ssrContextKey, { modules: new Set() });
     const editorRoot = node('root'); app.mount(editorRoot); await flush();
     const editorFrame = findFrame(editorRoot); assert.ok(editorFrame);
+    assert.equal(editorFrameCreatedBeforeListener, false, 'the parent must listen before loading the private renderer');
     editorFrame.props.onLoad();
     assert.equal(messages.length, 2, 'iframe load alone must not send a private draft');
     listeners.get('message')(ready(editorFrame.contentWindow)); assert.equal(messages.length, 3);
