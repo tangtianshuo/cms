@@ -568,6 +568,7 @@ async function probeControl(config, site, fetcher = fetch) {
             releaseMatches,
             publishFailureCount15m:
                 body?.observability?.publishFailureCount15m ?? 0,
+            publishQueue: body?.observability?.queue,
             releaseId: active?.releaseId ?? null,
             status: body?.status ?? null,
         };
@@ -816,6 +817,9 @@ export async function runMonitor(
                 consecutiveFailures: failures,
                 consecutiveSlowSamples: slowSamples,
                 publishFailureCount15m: control.publishFailureCount15m ?? 0,
+                ...(control.publishQueue
+                    ? { publishQueue: control.publishQueue }
+                    : {}),
                 controlAvailable: control.available,
                 expectedLockedTemplate: backup.lockTemplates.some(
                     (locked) =>

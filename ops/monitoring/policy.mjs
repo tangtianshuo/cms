@@ -53,6 +53,53 @@ function requireHealth(value) {
     ) {
         throw new TypeError('backupMaxAgeHours must be a positive number');
     }
+    if (value.publishQueue !== undefined) {
+        if (
+            !value.publishQueue ||
+            typeof value.publishQueue !== 'object' ||
+            Array.isArray(value.publishQueue) ||
+            !value.publishQueue.limits ||
+            typeof value.publishQueue.limits !== 'object' ||
+            Array.isArray(value.publishQueue.limits)
+        ) {
+            throw new TypeError('publishQueue must contain counts and limits');
+        }
+        for (const field of [
+            'sitePending',
+            'workspacePending',
+            'globalPending',
+            'siteActiveLeases',
+            'workspaceActiveLeases',
+            'globalActiveLeases',
+        ]) {
+            if (
+                !Number.isSafeInteger(value.publishQueue[field]) ||
+                value.publishQueue[field] < 0
+            ) {
+                throw new TypeError(
+                    `publishQueue.${field} must be a non-negative integer`,
+                );
+            }
+        }
+        for (const field of [
+            'sitePending',
+            'workspacePending',
+            'siteActiveLeases',
+            'workspaceActiveLeases',
+            'globalActiveLeases',
+            'siteStartIntervalMs',
+            'retryAfterSeconds',
+        ]) {
+            if (
+                !Number.isSafeInteger(value.publishQueue.limits[field]) ||
+                value.publishQueue.limits[field] < 1
+            ) {
+                throw new TypeError(
+                    `publishQueue.limits.${field} must be a positive integer`,
+                );
+            }
+        }
+    }
 }
 
 function alert(siteId, kind, severity, message) {
@@ -171,6 +218,42 @@ export function assessHealth(value) {
                 'At least three publication operations failed in the last 15 minutes',
             ),
         );
+    }
+    if (value.publishQueue) {
+        const queue = value.publishQueue;
+        if (queue.sitePending >= queue.limits.sitePending) {
+            alerts.push(
+                alert(
+                    site,
+                    'publish-site-backlog',
+                    'warning',
+                    'The site has reached its pending publication limit',
+                ),
+            );
+        }
+        if (queue.workspacePending >= queue.limits.workspacePending) {
+            alerts.push(
+                alert(
+                    site,
+                    'publish-workspace-backlog',
+                    'warning',
+                    'The workspace has reached its pending publication limit',
+                ),
+            );
+        }
+        if (
+            queue.globalActiveLeases >= queue.limits.globalActiveLeases &&
+            queue.globalPending > queue.globalActiveLeases
+        ) {
+            alerts.push(
+                alert(
+                    site,
+                    'publish-global-capacity',
+                    'warning',
+                    'The global publication queue is at active capacity',
+                ),
+            );
+        }
     }
 
     const slowSamples =

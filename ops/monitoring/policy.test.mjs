@@ -97,6 +97,46 @@ test('reports resource, certificate, backup and publish failures separately', ()
     ]);
 });
 
+test('reports bounded publication queue capacity without changing health inputs', () => {
+    const publishQueue = {
+        sitePending: 20,
+        workspacePending: 100,
+        globalPending: 12,
+        siteActiveLeases: 1,
+        workspaceActiveLeases: 2,
+        globalActiveLeases: 4,
+        limits: {
+            sitePending: 20,
+            workspacePending: 100,
+            siteActiveLeases: 1,
+            workspaceActiveLeases: 2,
+            globalActiveLeases: 4,
+            siteStartIntervalMs: 5_000,
+            retryAfterSeconds: 5,
+        },
+    };
+    assert.deepEqual(
+        assessHealth({ ...healthy, publishQueue }).map((alert) => alert.key),
+        [
+            'site-a:publish-site-backlog',
+            'site-a:publish-workspace-backlog',
+            'site-a:publish-global-capacity',
+        ],
+    );
+    assert.deepEqual(
+        assessHealth({
+            ...healthy,
+            publishQueue: {
+                ...publishQueue,
+                sitePending: 4,
+                workspacePending: 9,
+                globalPending: 4,
+            },
+        }),
+        [],
+    );
+});
+
 test('keeps control-plane availability distinct from public availability', () => {
     const alerts = assessHealth({ ...healthy, controlAvailable: false });
     assert.deepEqual(

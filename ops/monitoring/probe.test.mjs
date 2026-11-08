@@ -627,6 +627,88 @@ test('monitor passes the configured backup age threshold into policy', async () 
     }
 });
 
+test('monitor reports bounded publication queue capacity metrics', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'f3-queue-metrics-'));
+    const publishQueue = {
+        sitePending: 20,
+        workspacePending: 100,
+        globalPending: 12,
+        siteActiveLeases: 1,
+        workspaceActiveLeases: 2,
+        globalActiveLeases: 4,
+        limits: {
+            sitePending: 20,
+            workspacePending: 100,
+            siteActiveLeases: 1,
+            workspaceActiveLeases: 2,
+            globalActiveLeases: 4,
+            siteStartIntervalMs: 5_000,
+            retryAfterSeconds: 5,
+        },
+    };
+    try {
+        const result = await runMonitor(
+            {
+                schemaVersion: 1,
+                environment: 'local',
+                statePath: join(directory, 'state.json'),
+                sites: [
+                    {
+                        id: 'site-a',
+                        origin: 'http://127.0.0.1:18080',
+                        path: '/',
+                        marker: 'marker-a',
+                        expectedTemplate,
+                        assets: [],
+                    },
+                ],
+                control: {
+                    url: 'http://127.0.0.1:18081',
+                    tokenEnv: 'F3_QUEUE_TOKEN',
+                },
+                backup: { directory: join(directory, 'backup') },
+                notification: null,
+            },
+            {
+                now: Date.parse('2026-11-07T00:00:00Z'),
+                publicProbe: async () => ({
+                    publicStatus: 200,
+                    latencyMs: 20,
+                    markerPresent: true,
+                    expectedRelease: true,
+                    missingAssets: 0,
+                    assets: [],
+                }),
+                controlProbe: async () => ({
+                    available: true,
+                    releaseMatches: true,
+                    publishFailureCount15m: 0,
+                    publishQueue,
+                }),
+                backupProbe: async () => ({
+                    accepted: true,
+                    valid: true,
+                    ageHours: 1,
+                    reason: null,
+                    lockTemplates: [expectedTemplate],
+                }),
+                certificateProbe: async () => 30,
+            },
+        );
+        assert.deepEqual(result.sites[0].health.publishQueue, publishQueue);
+        assert.deepEqual(
+            result.sites[0].alerts.map((alert) => alert.key),
+            [
+                'site-a:publish-site-backlog',
+                'site-a:publish-workspace-backlog',
+                'site-a:publish-global-capacity',
+            ],
+        );
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
 test(
     'stale-lock contention admits exactly one real process',
     { timeout: 15_000 },

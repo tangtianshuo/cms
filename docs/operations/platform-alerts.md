@@ -55,12 +55,31 @@ If no notification destination is configured, the JSON reports `monitoring-uncon
 {
     "observability": {
         "publishFailureCount15m": 0,
-        "windowMinutes": 15
+        "windowMinutes": 15,
+        "queue": {
+            "sitePending": 0,
+            "workspacePending": 0,
+            "globalPending": 0,
+            "siteActiveLeases": 0,
+            "workspaceActiveLeases": 0,
+            "globalActiveLeases": 0,
+            "limits": {
+                "sitePending": 20,
+                "workspacePending": 100,
+                "siteActiveLeases": 1,
+                "workspaceActiveLeases": 2,
+                "globalActiveLeases": 4,
+                "siteStartIntervalMs": 5000,
+                "retryAfterSeconds": 5
+            }
+        }
     }
 }
 ```
 
-The count is a read-only aggregate over failed `PublishOperation` rows in the last 15 minutes. It does not alter claim order, leases, C4 domain retries, active deployments or publication status.
+The count and queue values are bounded read-only aggregates over `PublishOperation`. They do not alter claim order, leases, C4 domain retries, active deployments or publication status. Monitoring emits `publish-site-backlog`, `publish-workspace-backlog` or `publish-global-capacity` when the corresponding pending or active capacity is reached and additional publication work remains.
+
+The F4 scheduler defaults to one active lease per site, two per workspace and four globally; pending limits are 20 per site and 100 per workspace; a site may start a publication once every five seconds. The control service returns HTTP429 with `Retry-After: 5` when pending quota is exhausted. Temporary registry, Gateway or Docker outages retry after 5, 10, 20, 40, 80, 160 and 300 seconds on attempts 1–7. Attempt 8 and permanent authentication, missing-manifest, digest or identity errors stop. An uncertain route activation is reconciled against Gateway authority before a later attempt. Raise limits only from queue and host-capacity evidence; capacity alerts do not authorize automatically increasing them.
 
 ## Scheduling
 
