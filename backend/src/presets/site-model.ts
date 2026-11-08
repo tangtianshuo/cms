@@ -35,6 +35,7 @@ export interface SiteInstallation extends MongoDBEntry {
     gatewayCurrentReleaseId?: string;
     gatewayPublishedReleaseIds?: string[];
     gatewayActiveRevision?: number;
+    runtimeMode?: 'legacy' | 'artifact';
     status: 'empty' | 'importing' | 'ready' | 'failed';
     importError: string;
     includeDemo: boolean;
@@ -69,7 +70,11 @@ export interface SiteInstallation extends MongoDBEntry {
 
 export interface SitePage {
     /** Internal CAS receipt; omitted from all editable and public page projections. */
-    creationReceipt?: { expectedUpdatedAt: number; siteUpdatedAt: number; entryUpdatedAt?: number };
+    creationReceipt?: {
+        expectedUpdatedAt: number;
+        siteUpdatedAt: number;
+        entryUpdatedAt?: number;
+    };
     key: string;
     title: string;
     path: string;
@@ -96,15 +101,19 @@ export const SiteInstallationSchema: ObjectSchema = {
     templateNamespace: { __type: 'string', __required: false },
     creationRequestKey: { __type: 'string', __required: false },
     creationName: { __type: 'string', __required: false },
-    provisioning: { __type: 'object', __required: false, __child: {
-        requestKey: { __type: 'string', __required: true },
-        status: { __type: 'string', __required: true },
-        attempts: { __type: 'number', __required: true },
-        nextAttemptAt: { __type: 'number', __required: true },
-        leaseToken: { __type: 'string', __required: false },
-        leaseUntil: { __type: 'number', __required: false },
-        lastError: { __type: 'string', __required: false },
-    } },
+    provisioning: {
+        __type: 'object',
+        __required: false,
+        __child: {
+            requestKey: { __type: 'string', __required: true },
+            status: { __type: 'string', __required: true },
+            attempts: { __type: 'number', __required: true },
+            nextAttemptAt: { __type: 'number', __required: true },
+            leaseToken: { __type: 'string', __required: false },
+            leaseUntil: { __type: 'number', __required: false },
+            lastError: { __type: 'string', __required: false },
+        },
+    },
     slot: { __type: 'string', __required: true },
     name: { __type: 'string', __required: true },
     presetId: { __type: 'string', __required: true },
@@ -115,17 +124,36 @@ export const SiteInstallationSchema: ObjectSchema = {
     gatewayPublishIntent: { __type: 'string', __required: false },
     gatewayPinnedTemplateRecord: { __type: 'string', __required: false },
     gatewayCurrentReleaseId: { __type: 'string', __required: false },
-    gatewayPublishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
+    gatewayPublishedReleaseIds: {
+        __type: 'array',
+        __required: false,
+        __child: { __type: 'string' },
+    },
     gatewayActiveRevision: { __type: 'number', __required: false },
+    runtimeMode: { __type: 'string', __required: false },
     status: { __type: 'string', __required: true },
     importError: { __type: 'string', __required: true },
     includeDemo: { __type: 'boolean', __required: true },
     demoSeeded: { __type: 'boolean', __required: true },
-    domainAuditOutbox: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
-        _id: { __type: 'string', __required: true }, createdAt: { __type: 'number', __required: true }, updatedAt: { __type: 'number', __required: true },
-        siteId: { __type: 'string', __required: true }, domainId: { __type: 'string', __required: true }, actorId: { __type: 'string', __required: true },
-        operation: { __type: 'string', __required: true }, outcome: { __type: 'string', __required: true }, error: { __type: 'string', __required: true }, bindingRevision: { __type: 'number', __required: true },
-    } } },
+    domainAuditOutbox: {
+        __type: 'array',
+        __required: false,
+        __child: {
+            __type: 'object',
+            __content: {
+                _id: { __type: 'string', __required: true },
+                createdAt: { __type: 'number', __required: true },
+                updatedAt: { __type: 'number', __required: true },
+                siteId: { __type: 'string', __required: true },
+                domainId: { __type: 'string', __required: true },
+                actorId: { __type: 'string', __required: true },
+                operation: { __type: 'string', __required: true },
+                outcome: { __type: 'string', __required: true },
+                error: { __type: 'string', __required: true },
+                bindingRevision: { __type: 'number', __required: true },
+            },
+        },
+    },
     primaryDomainId: { __type: 'string', __required: false },
     domainRevision: { __type: 'number', __required: false },
     domainMutationToken: { __type: 'string', __required: false },
@@ -135,15 +163,34 @@ export const SiteInstallationSchema: ObjectSchema = {
     migrationState: { __type: 'string', __required: false },
     migrationOperationId: { __type: 'string', __required: false },
     currentReleaseId: { __type: 'string', __required: false },
-    publishedReleaseIds: { __type: 'array', __required: false, __child: { __type: 'string' } },
-    operations: { __type: 'object', __required: false, __child: {
-        seoTitle: { __type: 'string', __required: true }, seoDescription: { __type: 'string', __required: true },
-        socialImage: { __type: 'object', __required: false, __child: { _id: { __type: 'string', __required: true } } },
-        favicon: { __type: 'object', __required: false, __child: { _id: { __type: 'string', __required: true } } },
-        analyticsId: { __type: 'string', __required: false }, contactFormEnabled: { __type: 'boolean', __required: true },
-    } },
+    publishedReleaseIds: {
+        __type: 'array',
+        __required: false,
+        __child: { __type: 'string' },
+    },
+    operations: {
+        __type: 'object',
+        __required: false,
+        __child: {
+            seoTitle: { __type: 'string', __required: true },
+            seoDescription: { __type: 'string', __required: true },
+            socialImage: {
+                __type: 'object',
+                __required: false,
+                __child: { _id: { __type: 'string', __required: true } },
+            },
+            favicon: {
+                __type: 'object',
+                __required: false,
+                __child: { _id: { __type: 'string', __required: true } },
+            },
+            analyticsId: { __type: 'string', __required: false },
+            contactFormEnabled: { __type: 'boolean', __required: true },
+        },
+    },
     theme: {
-        __type: 'object', __required: true,
+        __type: 'object',
+        __required: true,
         __child: {
             background: { __type: 'string', __required: true },
             foreground: { __type: 'string', __required: true },
@@ -153,14 +200,16 @@ export const SiteInstallationSchema: ObjectSchema = {
         },
     },
     models: {
-        __type: 'array', __required: true,
+        __type: 'array',
+        __required: true,
         __child: {
             __type: 'object',
             __content: {
                 key: { __type: 'string', __required: true },
                 templateId: { __type: 'string', __required: true },
                 fields: {
-                    __type: 'array', __required: true,
+                    __type: 'array',
+                    __required: true,
                     __child: {
                         __type: 'object',
                         __content: {
@@ -173,11 +222,23 @@ export const SiteInstallationSchema: ObjectSchema = {
         },
     },
     pages: {
-        __type: 'array', __required: true,
+        __type: 'array',
+        __required: true,
         __child: {
             __type: 'object',
             __content: {
-                creationReceipt: { __type: 'object', __required: false, __child: { expectedUpdatedAt: { __type: 'number', __required: true }, siteUpdatedAt: { __type: 'number', __required: true }, entryUpdatedAt: { __type: 'number', __required: false } } },
+                creationReceipt: {
+                    __type: 'object',
+                    __required: false,
+                    __child: {
+                        expectedUpdatedAt: {
+                            __type: 'number',
+                            __required: true,
+                        },
+                        siteUpdatedAt: { __type: 'number', __required: true },
+                        entryUpdatedAt: { __type: 'number', __required: false },
+                    },
+                },
                 key: { __type: 'string', __required: true },
                 title: { __type: 'string', __required: true },
                 path: { __type: 'string', __required: true },
@@ -186,10 +247,23 @@ export const SiteInstallationSchema: ObjectSchema = {
                 status: { __type: 'string', __required: true },
                 seoTitle: { __type: 'string', __required: false },
                 seoDescription: { __type: 'string', __required: false },
-                sections: { __type: 'array', __required: false, __child: { __type: 'string' } },
-                sectionConfigs: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
-                    type: { __type: 'string', __required: true }, enabled: { __type: 'boolean', __required: true }, data: { __type: 'object', __required: true },
-                } } },
+                sections: {
+                    __type: 'array',
+                    __required: false,
+                    __child: { __type: 'string' },
+                },
+                sectionConfigs: {
+                    __type: 'array',
+                    __required: false,
+                    __child: {
+                        __type: 'object',
+                        __content: {
+                            type: { __type: 'string', __required: true },
+                            enabled: { __type: 'boolean', __required: true },
+                            data: { __type: 'object', __required: true },
+                        },
+                    },
+                },
                 layoutDocument: { __type: 'object', __required: false },
                 entryId: { __type: 'string', __required: false },
                 blueprintKey: { __type: 'string', __required: false },
@@ -198,11 +272,22 @@ export const SiteInstallationSchema: ObjectSchema = {
             },
         },
     },
-    navigation: { __type: 'array', __required: false, __child: { __type: 'object', __content: {
-        id: { __type: 'string', __required: true },
-        label: { __type: 'string', __required: true },
-        href: { __type: 'string', __required: false },
-        enabled: { __type: 'boolean', __required: true },
-        children: { __type: 'array', __required: true, __child: { __type: 'object', __content: {} } },
-    } } },
+    navigation: {
+        __type: 'array',
+        __required: false,
+        __child: {
+            __type: 'object',
+            __content: {
+                id: { __type: 'string', __required: true },
+                label: { __type: 'string', __required: true },
+                href: { __type: 'string', __required: false },
+                enabled: { __type: 'boolean', __required: true },
+                children: {
+                    __type: 'array',
+                    __required: true,
+                    __child: { __type: 'object', __content: {} },
+                },
+            },
+        },
+    },
 };

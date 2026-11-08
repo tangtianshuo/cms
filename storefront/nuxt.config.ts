@@ -4,13 +4,16 @@ export default defineNuxtConfig({
         gatewaySecret: process.env.NUXT_GATEWAY_SECRET || '',
         domainSecret: process.env.NUXT_DOMAIN_SECRET || '',
         domainProduction: process.env.NODE_ENV === 'production',
-        cmsInternalOrigin: process.env.NUXT_CMS_INTERNAL_ORIGIN || 'http://localhost:8080',
+        cmsInternalOrigin:
+            process.env.NUXT_CMS_INTERNAL_ORIGIN || 'http://localhost:8080',
         runtimeArtifactRoot: process.env.NUXT_RUNTIME_ARTIFACT_ROOT || '',
         runtimeReleaseId: process.env.NUXT_RUNTIME_RELEASE_ID || '',
+        runtimeMode: process.env.NUXT_SITE_RUNTIME_MODE || '',
         legacyCmsPublicRead: process.env.NUXT_LEGACY_CMS_PUBLIC_READ === 'true',
         public: {
             siteHost: process.env.NUXT_PUBLIC_SITE_HOST || 'localhost:3000',
-            adminOrigin: process.env.NUXT_PUBLIC_ADMIN_ORIGIN || 'http://localhost:8080',
+            adminOrigin:
+                process.env.NUXT_PUBLIC_ADMIN_ORIGIN || 'http://localhost:8080',
         },
     },
     routeRules: {

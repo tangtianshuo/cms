@@ -380,6 +380,10 @@ function validateDocument(
             issue(issues, 'invalid_page_path', page.path);
         }
         for (const section of page.sections) {
+            // Legacy manifests without editor-section declarations use the
+            // renderer's established layout contract. E4 validates those
+            // section configs separately.
+            if (target.sections.length === 0) continue;
             const sectionDefinition = target.sections.find(
                 (candidate) => candidate.type === section.type,
             );

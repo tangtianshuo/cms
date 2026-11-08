@@ -194,6 +194,9 @@ export interface PrepareMigrationInput {
     targetRecord: PublicTemplateRecord;
     input: ReleaseInput;
     steps?: MigrationStep[];
+    /** Task-specific candidate conversion; source checksum always remains the persisted source. */
+    candidateTransform?: (candidate: SiteInstallation) => SiteInstallation;
+    candidateValidation?: 'target' | 'runtime-layout';
 }
 
 function translatedFields(
@@ -286,7 +289,8 @@ export function prepareMigrationOperation(
         : null;
     if (
         site.presetVersion === targetManifest.version &&
-        installedRecord?.manifestChecksum !== targetRecord.manifestChecksum
+        installedRecord &&
+        installedRecord.manifestChecksum !== targetRecord.manifestChecksum
     ) {
         throw new Error(
             'A published template version cannot change its manifest checksum',
@@ -562,7 +566,7 @@ export function prepareMigrationOperation(
             });
         }
     }
-    const candidateSite: SiteInstallation = {
+    let candidateSite: SiteInstallation = {
         ...structuredClone(site),
         presetId: targetManifest.id,
         presetVersion: targetManifest.version,
@@ -632,6 +636,19 @@ export function prepareMigrationOperation(
             if (!page.entryId && firstEntry) page.entryId = firstEntry._id;
         }
     }
+    if (input.candidateTransform) {
+        candidateSite = input.candidateTransform(
+            structuredClone(candidateSite),
+        );
+        if (
+            candidateSite._id !== site._id ||
+            candidateSite.workspaceId !== site.workspaceId
+        ) {
+            throw new Error(
+                'Migration candidate transform changed immutable site identity',
+            );
+        }
+    }
     const candidateDocument = (language: string): MigrationDocument => ({
         models: Object.fromEntries(
             targetManifest.models.map((model) => [
@@ -695,6 +712,15 @@ export function prepareMigrationOperation(
             })),
         })),
     });
+    const candidateTarget = {
+        ...target,
+        templateIds: Object.fromEntries(
+            targetManifest.models.map((model) => [
+                model.key,
+                stableId(operationId, 'template', model.key),
+            ]),
+        ),
+    };
     const languages = [
         ...new Set(
             candidateEntries.flatMap((entry) =>
@@ -702,19 +728,21 @@ export function prepareMigrationOperation(
             ),
         ),
     ];
-    for (const language of languages) {
-        const targetPreview = previewMigration(
-            candidateDocument(language),
-            [],
-            target,
-        );
-        if (targetPreview.issues.length) {
-            throw new Error(
-                `Candidate validation failed for ${language}: ${targetPreview.issues
-                    .slice(0, 3)
-                    .map((item) => `${item.code}:${item.path}`)
-                    .join(',')}`,
+    if (input.candidateValidation !== 'runtime-layout') {
+        for (const language of languages) {
+            const targetPreview = previewMigration(
+                candidateDocument(language),
+                [],
+                candidateTarget,
             );
+            if (targetPreview.issues.length) {
+                throw new Error(
+                    `Candidate validation failed for ${language}: ${targetPreview.issues
+                        .slice(0, 3)
+                        .map((item) => `${item.code}:${item.path}`)
+                        .join(',')}`,
+                );
+            }
         }
     }
     return {

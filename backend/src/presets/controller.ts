@@ -38,7 +38,7 @@ import {
     pageSectionOptionsForPage,
     updatePageDraft,
 } from './pages';
-import { gatewayBound } from './gateway-publish';
+import { gatewayBound, publicRecord } from './gateway-publish';
 import { buildSiteOperationsStatus } from './operations';
 import { ownerWorkspace } from '../workspaces/context';
 import { validateSectionMediaReferences } from '../storefront/section-schema';
@@ -50,6 +50,10 @@ import {
 } from '../template-contract/migration-service';
 import type { MigrationStep } from '../template-contract/migration-preview';
 import { withSiteMutation } from '../template-contract/site-mutation';
+import {
+    candidateLayoutTransform,
+    planLegacySiteMigration,
+} from '../migrations/site-runtime';
 
 const importBody = z
     .object({
@@ -95,6 +99,20 @@ const pageBody = z
                     .strict(),
             )
             .optional(),
+    })
+    .strict();
+
+const legacyMigrationPlanBody = z
+    .object({
+        siteId: z.string().min(1).max(64),
+        requestKey: z.string().uuid(),
+    })
+    .strict();
+
+const legacyMigrationApplyBody = z
+    .object({
+        siteId: z.string().min(1).max(64),
+        sourceChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     })
     .strict();
 
@@ -755,6 +773,162 @@ export const PresetController = createController({
                     }
                 },
             }),
+            legacyMigrationPlan: createControllerMethod({
+                path: '/migrations/legacy/plan',
+                type: 'post',
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                async handler({ request, token, errorHandler }) {
+                    const parsed = legacyMigrationPlanBody.safeParse(
+                        request.body,
+                    );
+                    if (!parsed.success) {
+                        throw errorHandler(
+                            HttpStatus.BadRequest,
+                            'Invalid legacy migration plan request',
+                        );
+                    }
+                    const site = await Repo.siteInstallation.methods.findFresh(
+                        parsed.data.siteId,
+                    );
+                    if (
+                        !site ||
+                        site.status !== 'ready' ||
+                        ownerWorkspace(site) !== workspaceId()
+                    ) {
+                        throw errorHandler(
+                            HttpStatus.NotFound,
+                            'Site not found',
+                        );
+                    }
+                    try {
+                        const content = await releaseSource().loadContent(site);
+                        const targetManifest = resolveInstalledPreset(site);
+                        const recordSnapshot =
+                            site.publishedTemplateRecord ||
+                            site.gatewayPinnedTemplateRecord;
+                        if (!recordSnapshot) {
+                            throw new Error(
+                                'A verified current renderer artifact is required before legacy migration',
+                            );
+                        }
+                        const targetSite = {
+                            ...site,
+                            publishedTemplateRecord: recordSnapshot,
+                            presetManifestSnapshot:
+                                JSON.stringify(targetManifest),
+                        };
+                        const plan = planLegacySiteMigration(site, {
+                            site,
+                            ...content,
+                        });
+                        if (plan.issues.length) {
+                            throw Object.assign(
+                                new Error('Legacy migration plan is invalid'),
+                                {
+                                    status: HttpStatus.UnprocessableEntity,
+                                    issues: plan.issues,
+                                },
+                            );
+                        }
+                        const operation = await stageMigration({
+                            site,
+                            requestKey: parsed.data.requestKey,
+                            expectedUpdatedAt: site.updatedAt,
+                            actorId: token.payload.userId,
+                            targetManifest,
+                            targetRecord: publicRecord(targetSite),
+                            input: { site, ...content },
+                            steps: [],
+                            candidateTransform:
+                                candidateLayoutTransform(targetManifest),
+                            candidateValidation: 'runtime-layout',
+                        });
+                        return {
+                            operationId: operation.id,
+                            siteId: operation.cmsSiteId,
+                            sourceChecksum: operation.sourceChecksum,
+                            status: operation.status,
+                            candidate: {
+                                runtimeMode:
+                                    operation.candidateSite.runtimeMode,
+                                pages: operation.candidateSite.pages.map(
+                                    (page) => ({
+                                        key: page.key,
+                                        path: page.path,
+                                        layoutVersion:
+                                            page.layoutDocument?.version,
+                                    }),
+                                ),
+                            },
+                        };
+                    } catch (cause) {
+                        throw errorHandler(
+                            (cause as { status?: number }).status ===
+                                HttpStatus.UnprocessableEntity
+                                ? HttpStatus.UnprocessableEntity
+                                : (cause as { status?: number }).status ===
+                                    HttpStatus.Conflict
+                                  ? HttpStatus.Conflict
+                                  : HttpStatus.BadRequest,
+                            cause instanceof Error
+                                ? cause.message
+                                : 'Legacy migration plan failed',
+                        );
+                    }
+                },
+            }),
+            legacyMigrationApply: createControllerMethod({
+                path: '/migrations/:operationId/legacy/apply',
+                type: 'post',
+                preRequestHandler: RP.createWorkspaceAdminCheck(),
+                async handler({ request, token, errorHandler }) {
+                    const { operationId } = request.params as {
+                        operationId: string;
+                    };
+                    const parsed = legacyMigrationApplyBody.safeParse(
+                        request.body,
+                    );
+                    if (!parsed.success) {
+                        throw errorHandler(
+                            HttpStatus.BadRequest,
+                            'Invalid legacy migration apply request',
+                        );
+                    }
+                    const operation =
+                        await Repo.migrationOperation.find(operationId);
+                    const site = await Repo.siteInstallation.methods.findFresh(
+                        parsed.data.siteId,
+                    );
+                    if (
+                        !operation ||
+                        !site ||
+                        operation.cmsSiteId !== site._id ||
+                        operation.cmsWorkspaceId !== workspaceId()
+                    ) {
+                        throw errorHandler(
+                            HttpStatus.NotFound,
+                            'Migration operation not found',
+                        );
+                    }
+                    try {
+                        return await adoptMigration(
+                            operationId,
+                            parsed.data.sourceChecksum,
+                            token.payload.userId,
+                        );
+                    } catch (cause) {
+                        throw errorHandler(
+                            (cause as { status?: number }).status ===
+                                HttpStatus.Conflict
+                                ? HttpStatus.Conflict
+                                : HttpStatus.BadRequest,
+                            cause instanceof Error
+                                ? cause.message
+                                : 'Legacy migration apply failed',
+                        );
+                    }
+                },
+            }),
             migrationStatus: createControllerMethod({
                 path: '/migrations/:operationId',
                 type: 'get',
@@ -765,8 +939,11 @@ export const PresetController = createController({
                     };
                     const operation =
                         await Repo.migrationOperation.find(operationId);
-                    const site =
-                        await Repo.siteInstallation.methods.findSelected();
+                    const site = operation
+                        ? await Repo.siteInstallation.methods.findFresh(
+                              operation.cmsSiteId,
+                          )
+                        : null;
                     if (
                         !operation ||
                         !site ||
@@ -788,6 +965,23 @@ export const PresetController = createController({
                     const { operationId } = request.params as {
                         operationId: string;
                     };
+                    const operation =
+                        await Repo.migrationOperation.find(operationId);
+                    const site = operation
+                        ? await Repo.siteInstallation.methods.findFresh(
+                              operation.cmsSiteId,
+                          )
+                        : null;
+                    if (
+                        !operation ||
+                        !site ||
+                        operation.cmsWorkspaceId !== workspaceId()
+                    ) {
+                        throw errorHandler(
+                            HttpStatus.NotFound,
+                            'Migration operation not found',
+                        );
+                    }
                     try {
                         return await rollbackMigration(
                             operationId,

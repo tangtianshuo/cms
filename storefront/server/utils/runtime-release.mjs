@@ -16,7 +16,10 @@ function fail(code, message, options) {
 
 function isInside(root, target) {
     const result = relative(root, target);
-    return result === '' || (result !== '..' && !result.startsWith('../') && !isAbsolute(result));
+    return (
+        result === '' ||
+        (result !== '..' && !result.startsWith('../') && !isAbsolute(result))
+    );
 }
 
 async function readJson(pathname, missingCode) {
@@ -24,13 +27,20 @@ async function readJson(pathname, missingCode) {
     try {
         raw = await readFile(pathname, 'utf8');
     } catch (error) {
-        if (error?.code === 'ENOENT') fail(missingCode, `Runtime artifact file is missing: ${pathname}`, { cause: error });
+        if (error?.code === 'ENOENT')
+            fail(missingCode, `Runtime artifact file is missing: ${pathname}`, {
+                cause: error,
+            });
         throw error;
     }
     try {
         return JSON.parse(raw);
     } catch (error) {
-        fail('artifact_invalid', `Runtime artifact JSON is invalid: ${pathname}`, { cause: error });
+        fail(
+            'artifact_invalid',
+            `Runtime artifact JSON is invalid: ${pathname}`,
+            { cause: error },
+        );
     }
 }
 
@@ -39,17 +49,30 @@ function sha256Json(value) {
 }
 
 function requiredString(value, field) {
-    if (typeof value !== 'string' || !value) fail('artifact_invalid', `Runtime artifact field ${field} is required`);
+    if (typeof value !== 'string' || !value)
+        fail('artifact_invalid', `Runtime artifact field ${field} is required`);
     return value;
 }
 
-export async function readRuntimeRelease({ artifactRoot, siteHost, releaseId, manifestPath = 'release.json' }) {
+export async function readRuntimeRelease({
+    artifactRoot,
+    siteHost,
+    releaseId,
+    manifestPath = 'release.json',
+}) {
     if (typeof artifactRoot !== 'string' || !isAbsolute(artifactRoot)) {
-        fail('artifact_invalid', 'Runtime artifact root must be an absolute path');
+        fail(
+            'artifact_invalid',
+            'Runtime artifact root must be an absolute path',
+        );
     }
     const root = resolve(artifactRoot);
     const manifest = resolve(root, manifestPath);
-    if (!isInside(root, manifest)) fail('artifact_invalid', 'Runtime manifest path escapes the artifact root');
+    if (!isInside(root, manifest))
+        fail(
+            'artifact_invalid',
+            'Runtime manifest path escapes the artifact root',
+        );
     const value = await readJson(manifest, 'artifact_missing');
     const actualReleaseId = requiredString(value?.releaseId, 'releaseId');
     const actualSiteHost = requiredString(value?.siteHost, 'siteHost');
@@ -57,37 +80,93 @@ export async function readRuntimeRelease({ artifactRoot, siteHost, releaseId, ma
     requiredString(value?.templateVersion, 'templateVersion');
     requiredString(value?.rendererDigest, 'rendererDigest');
     if (actualSiteHost.toLowerCase() !== String(siteHost || '').toLowerCase()) {
-        fail('site_mismatch', `Runtime artifact belongs to ${actualSiteHost}, not ${siteHost}`);
+        fail(
+            'site_mismatch',
+            `Runtime artifact belongs to ${actualSiteHost}, not ${siteHost}`,
+        );
     }
     if (releaseId && actualReleaseId !== releaseId) {
-        fail('release_mismatch', `Runtime artifact is ${actualReleaseId}, not ${releaseId}`);
+        fail(
+            'release_mismatch',
+            `Runtime artifact is ${actualReleaseId}, not ${releaseId}`,
+        );
     }
-    if (!value.snapshot || typeof value.snapshot !== 'object' || Array.isArray(value.snapshot)) {
+    if (
+        !value.snapshot ||
+        typeof value.snapshot !== 'object' ||
+        Array.isArray(value.snapshot)
+    ) {
         fail('artifact_invalid', 'Runtime artifact snapshot is required');
     }
     if (value.snapshotChecksum !== sha256Json(value.snapshot)) {
-        fail('snapshot_checksum_mismatch', 'Runtime artifact snapshot checksum does not match');
+        fail(
+            'snapshot_checksum_mismatch',
+            'Runtime artifact snapshot checksum does not match',
+        );
     }
-    const configuredAssetRoot = typeof value.assetRoot === 'string' && value.assetRoot ? value.assetRoot : 'assets';
+    const configuredAssetRoot =
+        typeof value.assetRoot === 'string' && value.assetRoot
+            ? value.assetRoot
+            : 'assets';
     const assetRoot = resolve(root, configuredAssetRoot);
-    if (!isInside(root, assetRoot)) fail('artifact_invalid', 'Runtime asset root escapes the artifact root');
+    if (!isInside(root, assetRoot))
+        fail(
+            'artifact_invalid',
+            'Runtime asset root escapes the artifact root',
+        );
     return { ...value, artifactRoot: root, manifestPath: manifest, assetRoot };
 }
 
+export async function readRuntimeReleaseForMode({ runtimeMode, ...options }) {
+    if (runtimeMode === 'artifact') {
+        if (!options.artifactRoot) {
+            fail(
+                'runtime_unconfigured',
+                'Artifact runtime mode has no artifact root',
+            );
+        }
+        return readRuntimeRelease(options);
+    }
+    if (runtimeMode === 'legacy') {
+        fail(
+            'legacy_runtime_selected',
+            'Legacy runtime mode does not use artifact storage',
+        );
+    }
+    fail('runtime_mode_invalid', 'Site runtime mode is invalid');
+}
+
 export async function readRuntimeAsset(release, requestPath) {
-    if (!release || typeof release.assetRoot !== 'string' || typeof requestPath !== 'string' || !requestPath.startsWith('/_assets/')) {
+    if (
+        !release ||
+        typeof release.assetRoot !== 'string' ||
+        typeof requestPath !== 'string' ||
+        !requestPath.startsWith('/_assets/')
+    ) {
         fail('asset_path_invalid', 'Published asset path is invalid');
     }
     const assetRoot = resolve(release.assetRoot);
     const relativePath = requestPath.slice('/_assets/'.length);
     const target = resolve(assetRoot, relativePath);
-    if (!isInside(assetRoot, target) || !relativePath || relativePath.split('/').includes('..')) {
-        fail('asset_path_invalid', 'Published asset path escapes the asset root');
+    if (
+        !isInside(assetRoot, target) ||
+        !relativePath ||
+        relativePath.split('/').includes('..')
+    ) {
+        fail(
+            'asset_path_invalid',
+            'Published asset path escapes the asset root',
+        );
     }
     try {
         return await readFile(target);
     } catch (error) {
-        if (error?.code === 'ENOENT') fail('asset_missing', `Published asset is missing: ${requestPath}`, { cause: error });
+        if (error?.code === 'ENOENT')
+            fail(
+                'asset_missing',
+                `Published asset is missing: ${requestPath}`,
+                { cause: error },
+            );
         throw error;
     }
 }
