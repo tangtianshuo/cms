@@ -78,7 +78,27 @@ Preview HTML 返回 `no-store`、`noindex`、严格 CSP，并仅允许被 `https
 
 两个站的 `/api/v4/storefront/preview-runtime` 均返回 `status: ready`、`configured: true`，精确绑定本次 bundle 摘要。管理员浏览器登录、工作区加载、首页内容编辑工作区和 iframe 元素均成功加载，无页面脚本错误。
 
+Gateway 准备阶段首次因 control 缺少 `CMS_INSTANCE_ID` 返回 `gateway_unauthorized`。修复为固定实例标识 `novaintelligent-cms` 并通过官方 retry API 重试后，两站均在第一次重试后进入 ready，默认绑定和 domain 记录已持久化。
+
+用户选择使用短域名。已添加并接入以下自定义域名：
+
+| 测试站 | 自定义域名 | Domain ID | 状态 |
+| --- | --- | --- | --- |
+| AeroFrame `1.0.4` | `aero-uat.novaintelligent.cn` | `e0183fcb-eb16-44c0-8542-df8410e70ca9` | 等待 DNS/TXT 和环境验证 |
+| FireGuard `1.0.1` | `fire-uat.novaintelligent.cn` | `a93473ef-6821-4cf2-ab3b-4c1080d040bf` | 等待 DNS/TXT 和环境验证 |
+
+短域名的所有权 TXT 记录由 CMS 域名页面或 API 返回。必须先完成 TXT 归属验证和 HTTPS 连接验证，再把短域名切换为主域名；不能绕过验证直接修改数据库。
+
 现有 AeroFrame `1.0.3` 和 FireGuard `1.0.0` UAT 站的升级预检均显示结构不兼容且没有可安全采用的迁移，必须新建安装。这是阻止静默覆盖内容的预期行为，不能通过强制修改 Mongo 文档绕过。
+
+### 已完成的内容与隔离测试
+
+- 两个模板的首页标题都完成了“未保存预览不落库、保存后刷新可见、恢复原文成功”的测试。
+- 两个模板都完成了 SEO 标题的未保存预览、保存、重新读取和恢复原文测试。
+- 两站均通过 stale `expectedUpdatedAt` 写入测试，返回 409，服务器保留先写入版本；随后均成功恢复原值。
+- 两站均通过唯一内容页创建；新页面路径和导航关联进入完整站点预览 payload，每站由 4 页增至 5 页。
+- AeroFrame 上传的独占媒体只出现在 AeroFrame 素材列表，FireGuard 不可见。
+- 新内容页创建和测试写入均使用 UAT 工作区，没有修改现有公开站。
 
 ## UAT 执行清单
 
@@ -91,11 +111,11 @@ Preview HTML 返回 `no-store`、`noindex`、严格 CSP，并仅允许被 `https
 | UAT-03 | Preview 精确版本路由 | 通过 | 两个 descriptor、artifact、bundle 摘要与发布记录一致 |
 | UAT-04 | 不兼容模板升级保护 | 通过 | 两旧站均要求新安装，未修改旧内容 |
 | UAT-05 | 唯一内容工作区入口 | 部分通过 | 新 AeroFrame 首页进入 `/d/studio` 同一工作区；人工需确认所有旧深链 |
-| UAT-06 | 未保存文本、图片和富文本实时预览 | 待人工 | 在 AeroFrame/FireGuard 首页分别修改，不保存，观察画布与标题 |
+| UAT-06 | 未保存文本和页面资料预览 | 自动通过，视觉待人工 | 两站标题/SEO 均出现在预览 payload 且未落库；人工仍需确认画布视觉 |
 | UAT-07 | 桌面与 390px 移动预览 | 待人工 | 切换两种视口，检查导航、表单、图片和文字溢出 |
-| UAT-08 | 草稿保存、刷新和离开保护 | 待人工 | 保存后刷新；再次修改后离开，确认提示 |
-| UAT-09 | 新内容页、导航和 SEO | 待人工 | 创建唯一路径页面，加入导航并检查搜索资料 |
-| UAT-10 | 图片上传与跨站隔离 | 待人工 | 上传一张独占 UAT 图片，确认其他站不可选 |
+| UAT-08 | 草稿保存、刷新和冲突保护 | 自动通过，UI 待人工 | 保存/读取/恢复和 409 冲突均通过；人工验证离开提示 |
+| UAT-09 | 新内容页、导航和 SEO | 自动通过，视觉待人工 | 两站各创建一个 UAT 内容页并加入导航；SEO 保存/恢复通过 |
+| UAT-10 | 图片上传与跨站隔离 | 自动通过 | AeroFrame 独占媒体可见，FireGuard 不可见 |
 | UAT-11 | 首次发布到 Gateway | 阻塞 | UAT 站 `gateway.status=unconfigured`，需先完成默认域名或自定义域名绑定 |
 | UAT-12 | 二次更新与回滚 | 阻塞 | 依赖 UAT-11 的不可变 Release |
 | UAT-13 | 询盘提交与后台处理 | 待人工 | CORS 预检已通过；提交后核对重复键、处理状态和导出 |
@@ -122,8 +142,8 @@ Preview HTML 返回 `no-store`、`noindex`、严格 CSP，并仅允许被 `https
 
 ## 当前阻塞项
 
-1. 两个新 UAT 站尚未绑定 Gateway，也没有已验证默认域名；`domain.configured=false`、`gateway.status=unconfigured`。
-2. `sites.novaintelligent.cn` 的平台域名已写入 control 配置，但外部 wildcard DNS/TLS 未完成授权验证。不得把未验证的地址写入成功证据。
+1. 两个新 UAT 站已绑定 Gateway；短域名的 DNS、TXT 归属和 HTTPS 连接仍待用户完成与平台复核。
+2. 默认长域名为不可变平台身份，当前仍为 primary；短域名验证通过后才能显式提升为 primary。
 3. 中央 Platform release gate 未运行成功，原因是缺少专用集成 runner 和正式隔离输入；本次人工切换有候选摘要、备份和运行探针，但不替代正式门禁。
 4. 外部告警接收方、off-host 备份副本和生产恢复演练尚未配置。
 5. 真实用户 10 分钟 UAT 尚未开始。
