@@ -4,7 +4,9 @@ export class Config {
     static readonly storefrontEntryHost = process.env.STOREFRONT_ENTRY_HOST || '';
     static readonly storefrontEntryIp = process.env.STOREFRONT_ENTRY_IP || '';
     static readonly storefrontProduction = process.env.NODE_ENV === 'production';
-    static readonly storefrontEnabled = process.env.STOREFRONT_ENABLED === 'true';
+    static get storefrontEnabled(): boolean {
+        return process.env.STOREFRONT_ENABLED === 'true';
+    }
     static readonly storefrontHost = process.env.STOREFRONT_HOST || 'localhost:3000';
     static readonly storefrontSiteName = process.env.STOREFRONT_SITE_NAME || 'Example Store';
     static readonly storefrontLanguage = process.env.STOREFRONT_LANGUAGE || 'en';

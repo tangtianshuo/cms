@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Fastify from 'fastify';
+
 import { createSiteProvisioningJob } from './jobs';
 
 test('job attempts every five seconds, prevents overlap, and clears its timer on close', async context => {
+    const previous = process.env.STOREFRONT_ENABLED;
+    process.env.STOREFRONT_ENABLED = 'true';
+    context.after(() => {
+        if (previous === undefined) delete process.env.STOREFRONT_ENABLED;
+        else process.env.STOREFRONT_ENABLED = previous;
+    });
     context.mock.timers.enable({ apis: ['setInterval'] });
     const app = Fastify();
     let claims = 0;
