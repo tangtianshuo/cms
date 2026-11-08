@@ -334,6 +334,38 @@ test('reconciliation recovers a legacy publication with CMS identities and refus
     assert.equal(h.site.gatewayCurrentReleaseId, 'newer-release');
 });
 
+test('reconciliation preserves an equivalent stored editor contract source marker', async () => {
+    const h = harness();
+    const result = await publishGatewayRelease(
+        h.state,
+        'publisher',
+        '',
+        requestKey,
+        config,
+        h.fetcher,
+        () => snapshot,
+    );
+    const saved = h.releases.get(result.releaseId)!;
+    saved.templateRecord = JSON.stringify({
+        ...JSON.parse(saved.templateRecord!),
+        editorContractSource: 'manifest',
+    });
+    h.site.gatewayPublishIntent = JSON.stringify({
+        ...JSON.parse(h.site.gatewayPublishIntent!),
+        status: 'ready',
+    });
+    const active = activeResponse(h);
+    await reconcileGatewayState(h.state, h.site, config, async () =>
+        Response.json(active),
+    );
+    assert.equal(
+        JSON.parse(h.releases.get(result.releaseId)!.templateRecord!)
+            .editorContractSource,
+        'manifest',
+    );
+    assert.equal(h.site.gatewayCurrentReleaseId, result.releaseId);
+});
+
 test('checked content cannot silently change before Gateway publication', async () => {
     const h = harness();
     const checked = snapshotFingerprint(

@@ -79,10 +79,31 @@ export async function reconcileGatewayState(source: GatewayReleaseSource, site: 
         if (site.gatewayCurrentReleaseId) throw new Error('Gateway active deployment is missing; publication state requires reconciliation');
         return value;
     }
-    const record = gatewayStateTemplateRecord(active.metadata, active.imageDigest);
+    const existing = await source.findRelease(active.releaseId);
+    let record = gatewayStateTemplateRecord(active.metadata, active.imageDigest);
+    if (existing) {
+        try {
+            const stored = JSON.parse(
+                existing.templateRecord || '',
+            ) as PublicTemplateRecord & {
+                editorContractSource?:
+                    | 'manifest'
+                    | 'legacy-model-fields';
+            };
+            const { editorContractSource, ...identity } = stored;
+            if (
+                (editorContractSource === undefined ||
+                    editorContractSource === 'manifest' ||
+                    editorContractSource === 'legacy-model-fields') &&
+                canonicalJson(identity) === canonicalJson(record)
+            )
+                record = stored;
+        } catch {
+            /* A malformed stored record remains an identity conflict below. */
+        }
+    }
     let intent: { releaseId?: string; actorId?: string; operation?: 'publish' | 'rollback'; expectedReleaseId?: string } = {};
     try { intent = JSON.parse(site.gatewayPublishIntent || '{}'); } catch { /* active state can recover a damaged legacy intent */ }
-    const existing = await source.findRelease(active.releaseId);
     const now = Date.now();
     await retainGatewaySnapshot(source, { _id: active.releaseId, siteId: site._id, workspaceId: ownerWorkspace(site),
         createdAt: Date.parse(active.createdAt), updatedAt: now,
