@@ -116,6 +116,27 @@ const legacyMigrationApplyBody = z
     })
     .strict();
 
+export function safeLegacyMigrationIssues(
+    cause: unknown,
+): Array<{ code: string; path: string }> | null {
+    const issues = (
+        cause as {
+            issues?: Array<{ code?: unknown; path?: unknown }>;
+        }
+    )?.issues;
+    if (!Array.isArray(issues)) return null;
+    return issues
+        .filter(
+            (issue) =>
+                typeof issue.code === 'string' &&
+                typeof issue.path === 'string',
+        )
+        .map((issue) => ({
+            code: issue.code as string,
+            path: issue.path as string,
+        }));
+}
+
 export function importSource(): ImportSource {
     return {
         findSite: () => Repo.siteInstallation.methods.findSelected(),
@@ -825,14 +846,41 @@ export const PresetController = createController({
                         );
                     }
                     try {
+                        let targetManifest;
+                        try {
+                            targetManifest = resolveInstalledPreset(site);
+                        } catch {
+                            throw Object.assign(
+                                new Error('Legacy migration plan is invalid'),
+                                {
+                                    status: HttpStatus.UnprocessableEntity,
+                                    issues: [
+                                        {
+                                            code: 'template_snapshot_incompatible',
+                                            path: 'template',
+                                        },
+                                    ],
+                                },
+                            );
+                        }
                         const content = await releaseSource().loadContent(site);
-                        const targetManifest = resolveInstalledPreset(site);
                         const recordSnapshot =
                             site.publishedTemplateRecord ||
                             site.gatewayPinnedTemplateRecord;
                         if (!recordSnapshot) {
-                            throw new Error(
-                                'A verified current renderer artifact is required before legacy migration',
+                            throw Object.assign(
+                                new Error(
+                                    'A verified current renderer artifact is required before legacy migration',
+                                ),
+                                {
+                                    status: HttpStatus.UnprocessableEntity,
+                                    issues: [
+                                        {
+                                            code: 'renderer_artifact_required',
+                                            path: 'template',
+                                        },
+                                    ],
+                                },
                             );
                         }
                         const targetSite = {
@@ -886,18 +934,23 @@ export const PresetController = createController({
                             },
                         };
                     } catch (cause) {
-                        throw errorHandler(
+                        const status =
                             (cause as { status?: number }).status ===
-                                HttpStatus.UnprocessableEntity
+                            HttpStatus.UnprocessableEntity
                                 ? HttpStatus.UnprocessableEntity
                                 : (cause as { status?: number }).status ===
                                     HttpStatus.Conflict
                                   ? HttpStatus.Conflict
-                                  : HttpStatus.BadRequest,
+                                  : HttpStatus.BadRequest;
+                        const message =
                             cause instanceof Error
                                 ? cause.message
-                                : 'Legacy migration plan failed',
-                        );
+                                : 'Legacy migration plan failed';
+                        const issues = safeLegacyMigrationIssues(cause);
+                        if (issues) {
+                            throw errorHandler(status, { message, issues });
+                        }
+                        throw errorHandler(status, message);
                     }
                 },
             }),

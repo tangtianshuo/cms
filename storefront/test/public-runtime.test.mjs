@@ -117,6 +117,31 @@ test('a legacy site requires its site-level compatibility adapter', async () => 
     );
 });
 
+test('explicit legacy mode ignores a configured artifact root and reads legacy CMS', async () => {
+    const { root } = await artifact();
+    let called = 0;
+    try {
+        const result = await loadPublicSite({
+            runtimeMode: 'legacy',
+            artifactRoot: root,
+            releaseId: 'release-1',
+            legacyCmsPublicRead: true,
+            host: 'shop.test',
+            expectedHost: 'shop.test',
+            cmsOrigin: 'http://cms.test',
+            path: '/',
+            fetcher: async () => {
+                called += 1;
+                return { releaseId: 'legacy' };
+            },
+        });
+        assert.equal(result.releaseId, 'legacy');
+        assert.equal(called, 1);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 test('rejects an unknown site runtime mode instead of selecting a fallback', async () => {
     await assert.rejects(
         () =>

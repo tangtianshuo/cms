@@ -414,6 +414,7 @@ export async function publishGatewayRelease(
               ) as ReleaseSnapshot)
             : build({ ...content!, site, previous: prior });
         if (
+            !restoring &&
             site.runtimeMode === 'artifact' &&
             (!canProjectContractSnapshot(built) ||
                 built.pages.some(

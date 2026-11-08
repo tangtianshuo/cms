@@ -40,11 +40,21 @@ export async function loadPublicSite({
             return { ...release.snapshot, releaseId: release.releaseId };
         return resolveRuntimePublishedPage(release, path);
     }
-    if (runtimeMode === 'legacy' && !legacyCmsPublicRead) {
-        throw new RuntimeReleaseError(
-            'legacy_runtime_disabled',
-            'Legacy CMS runtime is explicitly disabled',
-        );
+    if (runtimeMode === 'legacy') {
+        if (!legacyCmsPublicRead) {
+            throw new RuntimeReleaseError(
+                'legacy_runtime_disabled',
+                'Legacy CMS runtime is explicitly disabled',
+            );
+        }
+        return fetchPublishedSite({
+            host,
+            expectedHost,
+            gatewaySecret,
+            cmsOrigin,
+            path,
+            fetcher,
+        });
     }
     if (artifactRoot) {
         const release = await readRuntimeRelease({
