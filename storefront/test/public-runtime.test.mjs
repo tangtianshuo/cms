@@ -116,3 +116,16 @@ test('a legacy site requires its site-level compatibility adapter', async () => 
         (error) => error.code === 'legacy_runtime_disabled',
     );
 });
+
+test('rejects an unknown site runtime mode instead of selecting a fallback', async () => {
+    await assert.rejects(
+        () =>
+            loadPublicSite({
+                runtimeMode: 'automatic',
+                artifactRoot: '/tmp/artifact',
+                host: 'shop.test',
+                path: '/',
+            }),
+        (error) => error.code === 'runtime_mode_invalid',
+    );
+});

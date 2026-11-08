@@ -18,6 +18,17 @@ export async function loadPublicSite({
     cmsOrigin,
     fetcher,
 }) {
+    if (
+        runtimeMode !== undefined &&
+        runtimeMode !== '' &&
+        runtimeMode !== 'artifact' &&
+        runtimeMode !== 'legacy'
+    ) {
+        throw new RuntimeReleaseError(
+            'runtime_mode_invalid',
+            'Site runtime mode is invalid',
+        );
+    }
     if (runtimeMode === 'artifact') {
         const release = await readRuntimeReleaseForMode({
             runtimeMode,
