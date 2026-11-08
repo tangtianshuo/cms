@@ -73,6 +73,7 @@ test(
                 createdAt: 1,
                 updatedAt: 1,
             } as never);
+        const ownSiteId = 'own-site';
         const scope = (workspaceId: string): WorkspaceContext => ({
             workspaceId,
             actorId: 'link-admin',
@@ -106,6 +107,30 @@ test(
             ['foreign', ['foreign']],
         ] as const)
             await runWithWorkspace(scope(workspace), async () => {
+                if (workspace === 'own')
+                    await Repo.siteInstallation.add({
+                        _id: ownSiteId,
+                        workspaceId: 'own',
+                        slot: 'default',
+                        createdAt: 1,
+                        updatedAt: 1,
+                        name: 'Own site',
+                        presetId: 'rich-link-test',
+                        presetVersion: '1.0.0',
+                        status: 'ready',
+                        importError: '',
+                        includeDemo: false,
+                        demoSeeded: false,
+                        theme: {
+                            background: '#ffffff',
+                            foreground: '#111111',
+                            accent: '#123456',
+                            muted: '#888888',
+                            font: 'Arial, sans-serif',
+                        },
+                        models: [],
+                        pages: [],
+                    } as never);
                 await Repo.language.add({
                     _id: workspace + '-en',
                     code: 'en',
@@ -268,6 +293,7 @@ test(
                     headers: {
                         authorization: bearer(actor),
                         'x-bcms-workspace': 'own',
+                        'x-bcms-site': ownSiteId,
                     },
                     payload,
                 });
@@ -311,6 +337,7 @@ test(
                     headers: {
                         authorization: bearer(actor),
                         'x-bcms-workspace': 'own',
+                        'x-bcms-site': ownSiteId,
                     },
                     payload,
                 });

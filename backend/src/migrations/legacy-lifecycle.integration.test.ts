@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, resolve as resolvePath } from 'node:path';
 import { promisify } from 'node:util';
 import test from 'node:test';
 import Fastify, {
@@ -40,6 +40,10 @@ import { setSiteMutationStore } from '../template-contract/site-mutation';
 import { mediaAuthorizedForSite } from '../storefront/section-schema';
 
 const runFile = promisify(execFile);
+const repositoryRoot =
+    basename(process.cwd()) === 'backend'
+        ? resolvePath(process.cwd(), '..')
+        : process.cwd();
 const sha = (value: Buffer | string) =>
     `sha256:${createHash('sha256').update(value).digest('hex')}`;
 
@@ -540,7 +544,7 @@ test(
                 process.execPath,
                 ['ops/migrate-site.mjs', ...args],
                 {
-                    cwd: process.cwd(),
+                    cwd: repositoryRoot,
                     encoding: 'utf8',
                     env: {
                         ...process.env,
