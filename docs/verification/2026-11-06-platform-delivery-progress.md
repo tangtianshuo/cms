@@ -317,6 +317,20 @@ Independent review found permanent errors treated as transient, ignored configur
 
 Final evidence: Gateway focused42/42; isolated Linux PostgreSQL claim6/6, operations10/10 and control14/14; CMS fairness/monitoring31/31; cross-repository10/10; all builds, Prisma validation and types passed. All32 final-file hashes match committed bytes and protected-source audit remains154/0. Existing production Compose was untouched and all `platform-f4-*` resources were removed. Sustained production load, public deployment and human UAT remain unperformed; formatter-only diff noise is a deferred Minor.
 
+## Final whole-branch review and fix wave
+
+The complete four-repository branch review found no Critical issues and four Important integration gaps. The scoped fix wave:
+
+- redirects all legacy template/Entry edit bookmarks into the unified content workspace;
+- hides Gateway, Revision, raw IDs, operation/release IDs and technical failure codes from ordinary managers while retaining an explicit instance-operator diagnostics view;
+- accepts required NUMBER values `0` and negatives while rejecting null/blank/NaN;
+- validates the provisioning Gateway URL before adding bearer authorization, rejects redirects, and bounds the complete response body to15seconds;
+- adds a real Mongo/controller/CLI lifecycle with CMS shutdown, artifact page/image/redirect/sitemap reads, per-site rollback and reapply.
+
+The mounted UI and focused backend tests pass; Linux controller/Mongo lifecycle2/2 and PostgreSQL artifact conflict2/2 pass. Final source files are clean and all task `platform-e4-*`/`platform-f4-*` resources are absent; existing production Compose was never modified.
+
+The final scoped review accepts the three UI/security/validation fixes. One Important acceptance gap remains: E4 has component-level real Mongo/CLI and PostgreSQL/runtime evidence, but still needs one single isolated sequence with two sites, real Mongo plus PostgreSQL, E3 publication/CAS and the actual Gateway worker boundary. The final branch should not be described as merge-ready or production-ready until that combined drill passes. Public artifacts/lock, remote CI/protection, Internet DNS/TLS, off-host backup, external alerts, production cutover and human UAT remain external gates.
+
 ## F3 — Release-aware monitoring and durable alerts accepted locally
 
 Final implementation heads: CMS `bd12cd3fb6e6001c8a765ab6d60b929235197288`, Gateway `c5389615772977db5cd1131d3fc312f8b56d1b47`. Public probes bind a page marker and optional release header to the expected F1 template and verified F2 completion; representative assets, strict TLS, certificate age, backup age, public availability, control-plane availability and the authoritative 15-minute publish-failure count are reported separately. The Gateway database helper is read-only and does not participate in publish decisions.
