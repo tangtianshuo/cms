@@ -2,14 +2,15 @@
   "schemaVersion": 1,
   "name": "platform-delivery-1.1.0",
   "environment": "production-trial",
-  "status": "deployed",
-  "deployedAt": "2026-11-08T10:23:36Z",
+  "status": "deployed-and-uat-verified",
+  "deployedAt": "2026-11-09T00:00:28Z",
+  "verifiedAt": "2026-11-09T00:24:03Z",
   "repositories": {
     "cms": {
       "repository": "tangtianshuo/cms",
-      "commit": "48d7a84e1403c69024dcf84301045f5e16e511ab",
+      "commit": "ffc7fbd171ec330eb8dcbb3a54e4a6d6c6abc3a1",
       "branch": "release/v1.1.0",
-      "ciRun": 42468843912
+      "ciRun": 42537141419
     },
     "gateway": {
       "repository": "tangtianshuo/Independent-Website-Gateway",
@@ -19,7 +20,7 @@
     },
     "templates": {
       "repository": "tangtianshuo/Independent-Website-Templates",
-      "commit": "31636b963c1cf59c639de64f4db94998b04220c0",
+      "commit": "129431e3e86064a4a2f84b554083c8125840340c",
       "branch": "codex/platform-delivery-2026-11-08"
     },
     "preview": {
@@ -30,51 +31,78 @@
     }
   },
   "images": {
-    "cms": "ghcr.io/tangtianshuo/cms@sha256:275b6b78d542f3b96772351ada013e20ca86304a512a1a47e23048630324c4db",
+    "cms": "ghcr.io/tangtianshuo/cms@sha256:8ae04b46484488ae8bfa7ac1011cd0b2ef8b4883d14d24ce33d8cec5419cc0ee",
     "gateway": "ghcr.io/tangtianshuo/independent-website-gateway@sha256:2bccbc3d9bcb8a8ae9b3edcca20e7793b42f3fb49321c693ec5dc60808170587",
     "preview": "ghcr.io/tangtianshuo/independent-website-preview@sha256:fe181b6422554484d6e196219da1eca4c8aa1dee41839d2ed8aa889d5708bb28"
   },
   "templates": [
     {
       "id": "aeroframe",
-      "version": "1.0.4",
-      "sourceCommit": "d099baeb62e7dfab836d58d00fc117a5f192a141",
-      "ciRun": 42468851648,
-      "manifestChecksum": "sha256:acc012bb1318c8493388105bba19f704f785e27ec73db869c0b8396bddb52765",
-      "imageDigest": "sha256:258b384fa20df852b4b262d3bba759472ae52b4f5cb31986c8a4b44cbf8cb03e",
-      "previewArtifactDigest": "sha256:3735a7f0dbd2d0466fa27101b463b111e5ce0c24b303372ecc5d34d9ad95ea31",
-      "previewBundleDigest": "sha256:100e1a6c1ebacbd2c6def7a4ea3149c1ec2327faed9025838b8dcf001726dd49"
+      "version": "1.0.5",
+      "releaseBranch": "release/v1.0.5",
+      "sourceCommit": "f714d5050ccee8f48b2738db5ada0f82f9528848",
+      "ciRun": 42492873317,
+      "manifestChecksum": "sha256:7c872378f8a0c0d100345b2600d81905172156f824815fdd09c06f59a365ea18",
+      "imageDigest": "sha256:c67ed87851c6eb6aea9c8c74a0d851acac3fdc4aba66bdf3a2c82cf3973c9d07",
+      "previewArtifactDigest": "sha256:8b1fe3017bb4313381bf7109e9706e417e378d1760c607344b41deca69df0df5",
+      "previewBundleDigest": "sha256:d4145cf70fb0466497dd75172fb9dc6f1aff1ba9d297a9f36dd5d8b33e1237df"
     },
     {
       "id": "fireguard",
-      "version": "1.0.1",
-      "sourceCommit": "f286c2ddf9cb1b31f076860c5449f251b07886c9",
-      "ciRun": 42468931678,
-      "manifestChecksum": "sha256:0a3564e19fa0d5b64fa395866c90691bc9c2f0c4a28a27a761f105d38e301e37",
-      "imageDigest": "sha256:3295711ccea13b1087aa4e70cc7a6b41344697bf3a4958a0a4f0b81f7730907a",
-      "previewArtifactDigest": "sha256:544e46d748426ad89511e54f770d193f3a1acc57a7d65e0284b6f213e43c720f",
-      "previewBundleDigest": "sha256:745d22f90bce6b2376ab44fc659ca84ed7ae2e51055e90a75e544ac5290b3277"
+      "version": "1.0.2",
+      "releaseBranch": "release/v1.0.2",
+      "sourceCommit": "ec06c8d577a551de4c600058c142e371ea9a771b",
+      "ciRun": 42492897501,
+      "manifestChecksum": "sha256:b91e617c87afc965287d9d4efc0758cb9feb05f74acdf625746b6919dcce403b",
+      "imageDigest": "sha256:b2b1cfd36cd6aa8a68422f9d9f501eef05e9e058263de47f02879e15b1460dce",
+      "previewArtifactDigest": "sha256:a80e35afaad94d434e6a36bf3788cea6187ee520495e2390303f89817b1c3b02",
+      "previewBundleDigest": "sha256:48c9cc77657b28443047147ca10ee803eb228b878e272cbda11e7a7204c57900"
     }
   ],
   "publicEndpoints": {
     "cms": "https://cms.novaintelligent.cn/",
     "shop": "https://shop.novaintelligent.cn/",
     "fire": "https://fire.novaintelligent.cn/",
+    "aeroframeUat": "https://aero-uat.novaintelligent.cn/",
+    "fireguardUat": "https://fire-uat.novaintelligent.cn/",
     "preview": "https://cms.novaintelligent.cn/api/v1/renderers",
     "intake": "https://cms.novaintelligent.cn/api/v1/sites/"
   },
+  "uat": {
+    "aeroframe": {
+      "siteId": "7146bed0-9bfe-4478-ae8d-949ee8f3a3c3",
+      "workspaceId": "4944bfad-b6d2-451e-bec9-9780efe4651c",
+      "installedVersion": "1.0.5",
+      "currentReleaseId": "72906f5e-e6b3-44b2-b529-9aada1eedb39",
+      "domain": "aero-uat.novaintelligent.cn"
+    },
+    "fireguard": {
+      "siteId": "858bc30b-89b8-4d35-8bcd-ef8aef10b78c",
+      "workspaceId": "df25b9f3-0129-4604-ba7e-0bd9b4206249",
+      "installedVersion": "1.0.2",
+      "currentReleaseId": "c6871479-3641-46cc-9fbb-cf59964e0fb9",
+      "domain": "fire-uat.novaintelligent.cn"
+    },
+    "browserEvidence": "docs/verification/evidence/2026-11-08-production-uat/browser-verification.json"
+  },
   "backup": {
     "integrityCheckedAt": "2026-11-08T10:09:06Z",
-    "postgresDump": "/opt/novaintelligent/backups/platform-release-20261108T100734Z/postgres.dump",
-    "mongoArchive": "/opt/novaintelligent/backups/platform-release-20261108T100734Z/mongo.archive",
-    "uploadsArchive": "/opt/novaintelligent/backups/platform-release-20261108T100734Z/uploads.tar.gz",
-    "stateArchive": "/opt/novaintelligent/backups/platform-release-20261108T100734Z/deploy-state.tar.gz",
+    "initialRelease": "/opt/novaintelligent/backups/platform-release-20261108T100734Z",
+    "finalCmsCompose": "/opt/novaintelligent/backups/cms-compatible-adoption-20261109T000028Z",
+    "finalTrafficCompose": "/opt/novaintelligent/backups/compose-traffic-health-20261109T000028Z.yaml",
     "sha256SumsVerified": true,
     "postgresRestoreListed": true,
-    "mongoDryRunCompleted": true
+    "mongoDryRunCompleted": true,
+    "offHostCopyVerified": false
   },
   "formalPlatformGate": {
     "status": "not-satisfied",
-    "reason": "The central gate needs its dedicated platform-integration runner, approved isolated DNS/TLS inputs and complete formal acceptance evidence. This manual authorized production trial deployment does not claim that receipt."
-  }
+    "reason": "The central gate still requires its dedicated platform-integration runner and complete formal acceptance evidence. This authorized manual production-trial deployment does not claim that receipt."
+  },
+  "residualRisks": [
+    "The ten-minute real new-user UAT has not been performed.",
+    "The backup has not been copied to and restored at an independent off-host target.",
+    "The external alert receiver has not been configured or delivery-tested.",
+    "Some demonstration product media remain blank placeholders in the templates."
+  ]
 }

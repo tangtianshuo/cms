@@ -1,0 +1,39 @@
+{
+  "verifiedAt": "2026-11-09T00:20:00Z",
+  "browser": "headless Chromium via Playwright",
+  "publicOrigin": "https://cms.novaintelligent.cn",
+  "results": [
+    {
+      "template": "aeroframe",
+      "version": "1.0.5",
+      "iframeAttached": true,
+      "initialMarkerVisible": true,
+      "unsavedLiveVisible": true,
+      "unsavedNotPersistedAfterReload": true,
+      "waitingMessageVisible": false,
+      "mobileWidth": 390,
+      "outerHorizontalOverflow": false,
+      "iframeHorizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "template": "fireguard",
+      "version": "1.0.2",
+      "iframeAttached": true,
+      "initialMarkerVisible": true,
+      "unsavedLiveVisible": true,
+      "unsavedNotPersistedAfterReload": true,
+      "waitingMessageVisible": false,
+      "mobileWidth": 390,
+      "outerHorizontalOverflow": false,
+      "iframeHorizontalOverflow": false,
+      "pageErrors": []
+    }
+  ],
+  "screenshots": [
+    "aeroframe-desktop-live-preview.png",
+    "aeroframe-mobile-preview.png",
+    "fireguard-desktop-live-preview.png",
+    "fireguard-mobile-preview.png"
+  ]
+}
