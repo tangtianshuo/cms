@@ -61,6 +61,8 @@ jobs:
       - name: Prepare storefront Nuxt configuration
         working-directory: storefront
         run: npx nuxt prepare
+      - name: Install UI browser test
+        run: node node_modules/@playwright/test/cli.js install --with-deps chromium
       - name: Run backend tests
         working-directory: backend
         run: |
@@ -134,6 +136,9 @@ jobs:
       - name: Run UI test template-upgrade
         working-directory: ui
         run: node --test test/template-upgrade.test.mjs
+      - name: Run UI visual workspace layout
+        working-directory: ui
+        run: node --test test/studio-visual-editor.e2e.mjs
       - name: Run UI test user-message
         working-directory: ui
         run: node --test test/user-message.test.mjs

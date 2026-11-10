@@ -1051,7 +1051,7 @@ export const ContentWorkspace = defineComponent({
                 <form
                     id="studio-page-form"
                     inert={pendingLocation.value ? true : undefined}
-                    class="studio-card studio-editor"
+                    class="studio-card studio-editor studio-page-workspace"
                     novalidate
                     onSubmit={submitPage}
                 >
