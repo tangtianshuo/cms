@@ -1,10 +1,26 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import postcss from 'postcss';
 import { resolvePreviewTarget, sendRendererPreview } from '../src/util/template-preview.ts';
 
 const visualEditor = fs.readFileSync(new URL('../src/components/studio/visual-page-editor.tsx', import.meta.url), 'utf8');
 const draftPreview = fs.readFileSync(new URL('../../storefront/app/pages/preview.vue', import.meta.url), 'utf8');
+const studioCss = postcss.parse(fs.readFileSync(new URL('../src/components/studio/studio.css', import.meta.url), 'utf8'));
+
+function declarations(selector, media = '') {
+    const values = {};
+    studioCss.walkRules(rule => {
+        if (rule.selector !== selector) return;
+        const parent = rule.parent;
+        const inRequestedMedia = media
+            ? parent?.type === 'atrule' && parent.name === 'media' && parent.params === media
+            : !(parent?.type === 'atrule' && parent.name === 'media');
+        if (!inRequestedMedia) return;
+        rule.walkDecls(declaration => { values[declaration.prop] = declaration.value; });
+    });
+    return values;
+}
 
 test('visual editor and storefront preview share the guarded node selection protocol', () => {
     for (const token of ['studio:select-node', 'studio:node-selected', 'event.origin', 'event.source', 'templateId', 'templateVersion']) {
@@ -22,4 +38,18 @@ test('preview delivery preserves the selected path and exact renderer origin', (
     const messages = [];
     sendRendererPreview({ contentWindow: { postMessage: (...args) => messages.push(args) } }, target.origin, payload, '/about');
     assert.deepEqual(messages, [[{ type: 'storefront:preview', payload, path: '/about' }, 'https://renderer.example.com']]);
+});
+
+test('content workspace gives the canvas priority over side panels', () => {
+    const editor = declarations('.studio-visual-page-editor');
+    assert.equal(editor['grid-template-columns'], 'minmax(200px, 220px) minmax(440px, 1fr) minmax(220px, 260px)');
+    assert.match(editor['--studio-visual-editor-height'], /max\(640px, calc\(100dvh - 260px\)\)/);
+    assert.equal(editor['min-height'], 'var(--studio-visual-editor-height)');
+    assert.equal(declarations('.studio-content-workspace .studio-visual-page-editor')['grid-template-columns'],
+        'minmax(200px, 220px) minmax(440px, 1fr) minmax(220px, 260px)');
+});
+
+test('mobile visual editor places the canvas before both side panels', () => {
+    const editor = declarations('.studio-content-workspace .studio-visual-page-editor', '(max-width: 767px)');
+    assert.equal(editor['grid-template-areas'], '"preview" "blocks" "properties"');
 });
