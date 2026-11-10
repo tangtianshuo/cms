@@ -6,6 +6,11 @@ export interface PreviewRuntime {
     url: string;
 }
 
+interface PreviewRuntimeOptions {
+    publicOrigin?: string;
+    fetcher?: typeof fetch;
+}
+
 function origin(value: string): URL {
     let parsed: URL;
     try { parsed = new URL(value); }
@@ -34,13 +39,14 @@ export async function resolvePreviewRuntime(
     serviceUrl: string,
     templateId: string,
     templateVersion: string,
-    fetcher: typeof fetch = fetch,
+    options: PreviewRuntimeOptions = {},
 ): Promise<PreviewRuntime | null> {
     if (!serviceUrl) return null;
     const service = origin(serviceUrl);
+    const publicService = origin(options.publicOrigin || service.origin);
     let response: Response;
     try {
-        response = await fetcher(`${service.origin}/api/v1/renderers/${encodeURIComponent(templateId)}/${encodeURIComponent(templateVersion)}`, {
+        response = await (options.fetcher || fetch)(`${service.origin}/api/v1/renderers/${encodeURIComponent(templateId)}/${encodeURIComponent(templateVersion)}`, {
             headers: { accept: 'application/json' },
             redirect: 'error',
             signal: AbortSignal.timeout(10000),
@@ -51,7 +57,7 @@ export async function resolvePreviewRuntime(
     let value: unknown;
     try { value = await response.json(); }
     catch { throw new Error('Preview service returned an invalid renderer descriptor'); }
-    if (!validRuntime(value, templateId, templateVersion, service)) {
+    if (!validRuntime(value, templateId, templateVersion, publicService)) {
         throw new Error('Preview service returned an invalid renderer descriptor');
     }
     return value;

@@ -108,7 +108,9 @@ test('preview runtime endpoint uses the authorized installation and keeps unavai
         return installation as never;
     } } });
     const previousService = Config.storefrontPreviewServiceUrl;
-    Object.defineProperty(Config, 'storefrontPreviewServiceUrl', { value: 'https://private.preview.invalid', configurable: true });
+    const previousPublic = Object.getOwnPropertyDescriptor(Config, 'storefrontPreviewPublicOrigin');
+    Object.defineProperty(Config, 'storefrontPreviewServiceUrl', { value: 'http://preview:4300', configurable: true });
+    Object.defineProperty(Config, 'storefrontPreviewPublicOrigin', { value: 'https://cms.example.com', configurable: true });
     const controller = await StorefrontController({} as never);
     const runtime = (await controller.methods(controller)).find(method => method.name === 'previewRuntime')!;
     const headers: Record<string, string> = {};
@@ -124,7 +126,7 @@ test('preview runtime endpoint uses the authorized installation and keeps unavai
         assert.deepEqual(JSON.parse(await request()), { status: 'unavailable', configured: true, runtime: null,
             templateId: 'aeroframe', templateVersion: '1.0.4' });
         assert.equal(headers['Cache-Control'], 'no-store');
-        fetchMock.mock.mockImplementation(async () => { throw new Error('https://private.preview.invalid?secret=credential'); });
+        fetchMock.mock.mockImplementation(async () => { throw new Error('http://preview:4300?secret=credential'); });
         await assert.rejects(request(), (error: unknown) => {
             const details = error as { status: number; message: { message: string } };
             assert.equal(details.status, 503);
@@ -132,7 +134,7 @@ test('preview runtime endpoint uses the authorized installation and keeps unavai
             return true;
         });
         const descriptor = { templateId: 'aeroframe', templateVersion: '1.0.4', protocolVersion: 1,
-            digest: `sha256:${'e'.repeat(64)}`, url: 'https://private.preview.invalid/preview/aeroframe/1.0.4/' };
+            digest: `sha256:${'e'.repeat(64)}`, url: 'https://cms.example.com/preview/aeroframe/1.0.4/' };
         fetchMock.mock.mockImplementation(async () => Response.json(descriptor));
         assert.deepEqual(JSON.parse(await request()), { status: 'ready', configured: true, runtime: descriptor });
         Object.defineProperty(Config, 'storefrontPreviewServiceUrl', { value: '', configurable: true });
@@ -140,5 +142,10 @@ test('preview runtime endpoint uses the authorized installation and keeps unavai
     } finally {
         Object.defineProperty(Repo.siteInstallation, 'methods', previousMethods);
         Object.defineProperty(Config, 'storefrontPreviewServiceUrl', { value: previousService, configurable: true });
+        if (previousPublic) {
+            Object.defineProperty(Config, 'storefrontPreviewPublicOrigin', previousPublic);
+        } else {
+            delete (Config as unknown as { storefrontPreviewPublicOrigin?: string }).storefrontPreviewPublicOrigin;
+        }
     }
 });

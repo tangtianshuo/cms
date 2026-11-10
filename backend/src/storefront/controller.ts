@@ -252,6 +252,7 @@ export const StorefrontController = createController({
                     try {
                         const runtime = await resolvePreviewRuntime(
                             Config.storefrontPreviewServiceUrl, site.presetId, site.presetVersion,
+                            { publicOrigin: Config.storefrontPreviewPublicOrigin || Config.storefrontPreviewServiceUrl },
                         );
                         if (!runtime) return { status: 'unavailable', configured: true, runtime: null,
                             templateId: site.presetId, templateVersion: site.presetVersion };

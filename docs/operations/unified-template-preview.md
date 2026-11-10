@@ -21,12 +21,18 @@ host.
 
 ## CMS configuration
 
-Configure the resolver and the exact public iframe origin together:
+Configure the resolver used by the CMS backend and the exact public iframe origin:
 
 ```dotenv
-STOREFRONT_PREVIEW_SERVICE_URL=https://preview.novaintelligent.com
-STOREFRONT_PREVIEW_PUBLIC_ORIGIN=https://preview.novaintelligent.com
+STOREFRONT_PREVIEW_SERVICE_URL=http://preview:4300
+STOREFRONT_PREVIEW_PUBLIC_ORIGIN=https://cms.novaintelligent.cn
 ```
+
+The two values may differ. The service URL is the internal address from which CMS
+requests renderer descriptors, while the public origin is the browser-facing origin
+that every descriptor URL must use. The backend uses the public origin for validation
+and the service URL only for transport. If the public origin is unset, it defaults to
+the service URL for compatibility with deployments where both addresses are identical.
 
 The legacy build-time variables remain during migration:
 
@@ -35,10 +41,10 @@ VITE_TEMPLATE_PREVIEW_ORIGIN=
 VITE_TEMPLATE_PREVIEW_RENDERERS=
 ```
 
-`STOREFRONT_PREVIEW_SERVICE_URL` is read by the CMS backend at startup. After changing
-it, redeploy or recreate the CMS backend service with the new environment; rebuilding
-only the UI does not apply this setting. The production Compose file forwards this
-variable to the backend. Use a canonical HTTP(S) origin without a trailing slash,
+Both CMS preview origins are read by the backend at startup. After changing either,
+redeploy or recreate the CMS backend service with the new environment; rebuilding only
+the UI does not apply these settings. The production Compose file forwards both
+variables to the backend. Use canonical HTTP(S) origins without a trailing slash,
 credentials, path, query or fragment.
 
 The authenticated `GET /api/v4/storefront/preview-runtime` endpoint derives the template
