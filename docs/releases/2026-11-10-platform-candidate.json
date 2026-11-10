@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "name": "platform-delivery-1.2.0",
+  "name": "platform-delivery-1.2.1",
   "environment": "candidate",
   "status": "candidates-published",
-  "publishedAt": "2026-11-10T05:19:07Z",
+  "publishedAt": "2026-11-10T05:55:46Z",
   "repositories": {
     "cms": {
       "repository": "tangtianshuo/cms",
-      "commit": "074c9ed67e9e2ab01c00bbe4464f7f45d252eef5",
-      "masterCommit": "ed484ad5fb1d91b11a19e1a2e103d1545d6b03e0",
-      "branch": "release/v1.2.0",
-      "ciRun": 42760615709
+      "commit": "5c1aafbd7ba393c7420fe5e8fd5577b2375c3494",
+      "masterCommit": "5c1aafbd7ba393c7420fe5e8fd5577b2375c3494",
+      "branch": "release/v1.2.1",
+      "ciRun": 42764482593
     },
     "gateway": {
       "repository": "tangtianshuo/Independent-Website-Gateway",
@@ -32,7 +32,7 @@
     }
   },
   "images": {
-    "cms": "ghcr.io/tangtianshuo/cms@sha256:849cce721601eb1284212e4a16ecc66bb7b30f297a472a8aaaec4ef8daa19103",
+    "cms": "ghcr.io/tangtianshuo/cms@sha256:93d9a2e315c891ab32618c6184446757e0411cdd33a259267de2e11206d963a4",
     "gateway": "ghcr.io/tangtianshuo/independent-website-gateway@sha256:67419a30db407ba5840d3bca3be6b0681e62eb6b49005ecf1c9092db42058fa4",
     "preview": "ghcr.io/tangtianshuo/independent-website-preview@sha256:fe181b6422554484d6e196219da1eca4c8aa1dee41839d2ed8aa889d5708bb28"
   },
