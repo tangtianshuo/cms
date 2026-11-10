@@ -40,6 +40,24 @@ test('a valid page update saves SEO and selected sections while preserving its d
     assert.equal(installed.pages[1].path, '/collections');
 });
 
+test('explicit section configs supersede a stale legacy layout document', () => {
+    const installed = site();
+    const collections = installed.pages.find(page => page.key === 'collections')!;
+    collections.sectionConfigs = [{ type: 'info-grid', enabled: true, data: { items: [] } }];
+    collections.layoutDocument = {
+        version: 1, mode: 'template',
+        root: [{ id: 'stale', kind: 'section', type: 'home', enabled: true, props: {}, children: [] }],
+    };
+    const updated = updatePageDraft(installed, 'collections', {
+        title: 'Collections', path: '/collections', seoTitle: '', seoDescription: '',
+        sections: ['info-grid'], entryId: '',
+        sectionConfigs: [{ type: 'info-grid', enabled: true, data: { items: [] } }],
+        layoutDocument: collections.layoutDocument,
+    });
+    assert.deepEqual(pageDraft(updated, 'collections')?.sectionConfigs?.map(section => section.type), ['info-grid']);
+    assert.equal(updated.pages.find(page => page.key === 'collections')?.layoutDocument, undefined);
+});
+
 test('page updates reject unsupported sections and routes that collide with another blueprint', () => {
     const installed = site();
     const base = { title: 'Collections', path: '/collections', seoTitle: '',
