@@ -1,10 +1,19 @@
 interface PreviewConfig { templateOrigin?: string; legacyOrigin?: string; renderers?: string }
+export interface PreviewRuntime {
+    templateId: string;
+    templateVersion: string;
+    protocolVersion: 1;
+    digest: string;
+    url: string;
+}
 export interface PreviewTarget {
     mode: 'template' | 'legacy' | 'unsupported' | 'config-error';
     origin?: string;
     notice: string;
     templateId?: string;
     templateVersion?: string;
+    digest?: string;
+    url?: string;
 }
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 function canonicalOrigin(value?: string): string | undefined {
@@ -42,12 +51,51 @@ function templateTarget(id: string, version: string, origin: string): PreviewTar
         notice: `${id} ${version} · 同版本模板预览。` };
 }
 
-export function resolvePreviewTarget(payload: unknown, config: PreviewConfig): PreviewTarget {
+function validRuntime(value: unknown): value is PreviewRuntime {
+    if (!object(value) || typeof value.templateId !== 'string' || typeof value.templateVersion !== 'string' ||
+        value.protocolVersion !== 1 || typeof value.digest !== 'string' ||
+        !/^sha256:[a-f0-9]{64}$/.test(value.digest) || typeof value.url !== 'string') return false;
+    try {
+        const url = new URL(value.url);
+        return url.pathname === `/preview/${value.templateId}/${value.templateVersion}/` &&
+            ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash;
+    } catch { return false; }
+}
+
+export async function loadPreviewRuntime(
+    payload: unknown,
+    request: (url: string) => Promise<unknown>,
+): Promise<PreviewRuntime | null> {
+    const expected = identity(payload);
+    if (!expected) return null;
+    const response = await request(`/api/v4/storefront/preview-runtime?${new URLSearchParams({
+        templateId: expected.id,
+        templateVersion: expected.version,
+    })}`);
+    if (!object(response) || !('runtime' in response)) throw new Error('Invalid preview runtime response');
+    if (response.runtime === null) return null;
+    if (!validRuntime(response.runtime) || response.runtime.templateId !== expected.id ||
+        response.runtime.templateVersion !== expected.version) {
+        throw new Error('Preview service returned a mismatched renderer');
+    }
+    return response.runtime;
+}
+
+export function resolvePreviewTarget(payload: unknown, config: PreviewConfig, runtime?: PreviewRuntime | null): PreviewTarget {
     const pages = object(payload) && payload.kind === 'preset-site' && Array.isArray(payload.pages)
         ? payload.pages.map(page => object(page) ? identity(page.content) : undefined) : [identity(payload)];
     const first = pages[0];
     if (!first || pages.some(page => !page || page.id !== first.id || page.version !== first.version)) {
         return { mode: 'unsupported', notice: '预览数据的模板身份不一致，请刷新草稿后重试。' };
+    }
+    if (runtime) {
+        if (!validRuntime(runtime) || runtime.templateId !== first.id || runtime.templateVersion !== first.version) {
+            return { mode: 'config-error', notice: '统一预览服务返回了不匹配的模板版本，草稿未发送。' };
+        }
+        const url = new URL(runtime.url);
+        return { mode: 'template', origin: url.origin, url: url.href,
+            templateId: runtime.templateId, templateVersion: runtime.templateVersion,
+            digest: runtime.digest, notice: `${runtime.templateId} ${runtime.templateVersion} · 统一预览服务。` };
     }
     const mapping = rendererMap(config.renderers);
     if (mapping.error) return { mode: 'config-error', notice: mapping.error };

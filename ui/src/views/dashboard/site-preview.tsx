@@ -2,7 +2,7 @@ import { userErrorMessage } from '@bcms/selfhosted-ui/util/user-message';
 import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { isPreviewReady, resolvePreviewTarget, sendRendererPreview } from '@bcms/selfhosted-ui/util/template-preview';
+import { isPreviewReady, loadPreviewRuntime, resolvePreviewTarget, sendRendererPreview, type PreviewRuntime } from '@bcms/selfhosted-ui/util/template-preview';
 
 export const SitePreviewView = defineComponent({
     setup() {
@@ -11,6 +11,7 @@ export const SitePreviewView = defineComponent({
         const sdk = window.bcms.sdk;
         const frame = ref<HTMLIFrameElement>();
         const payload = ref<unknown>();
+        const runtime = ref<PreviewRuntime | null>(null);
         const loading = ref(true);
         const ready = ref(false);
         const error = ref('');
@@ -20,7 +21,7 @@ export const SitePreviewView = defineComponent({
             templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
             legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
             renderers: import.meta.env.VITE_TEMPLATE_PREVIEW_RENDERERS,
-        }));
+        }, runtime.value));
         const siteName = computed(() => sdk.context?.site?.name || sdk.context?.workspace.name || '');
         let connectionTimer: ReturnType<typeof setTimeout> | undefined;
         let requestSequence = 0;
@@ -71,7 +72,12 @@ export const SitePreviewView = defineComponent({
                 const result = await sdk.send({
                     url: '/api/v4/storefront/site-preview', method: 'GET', selectorOverride,
                 });
-                if (sequence === requestSequence) payload.value = result;
+                const serviceRuntime = await loadPreviewRuntime(result,
+                    url => sdk.send({ url, method: 'GET', selectorOverride }));
+                if (sequence === requestSequence) {
+                    payload.value = result;
+                    runtime.value = serviceRuntime;
+                }
             } catch (cause) {
                 if (sequence === requestSequence) error.value = userErrorMessage(cause);
             } finally {
@@ -113,8 +119,10 @@ export const SitePreviewView = defineComponent({
                 {(loading.value || (target.value.origin && !ready.value && !connectionError.value)) && <div class="absolute inset-0 z-10 grid place-items-center bg-dark/80 text-sm">
                     <span role="status">{loading.value ? t('presets.sitePreviewLoading') : '正在连接并核对预览服务版本…'}</span>
                 </div>}
-                {target.value.origin && payload.value && <iframe key={`${target.value.templateId || target.value.mode}@${target.value.templateVersion || ''}:${target.value.origin}`} ref={frame} title={t('presets.sitePreviewTitle')} src={`${target.value.origin}/preview`}
+                {target.value.origin && payload.value && <iframe key={`${target.value.templateId || target.value.mode}@${target.value.templateVersion || ''}:${target.value.digest || target.value.origin}`} ref={frame} title={t('presets.sitePreviewTitle')} src={target.value.url || `${target.value.origin}/preview`}
                     onLoad={onFrameLoad}
+                    sandbox="allow-scripts allow-same-origin"
+                    referrerpolicy="no-referrer"
                     class="h-full border-0 bg-white shadow-2xl transition-[width] duration-200"
                     style={{ width: viewport.value === 'mobile' ? '390px' : '100%', maxWidth: '100%' }} />}
             </div>

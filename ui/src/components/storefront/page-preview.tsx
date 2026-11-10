@@ -9,7 +9,7 @@ import { Button } from '@bcms/selfhosted-ui/components/button';
 import { availablePreviewPages, buildPagePreviewRequest,
     type PreviewSiteContext } from '@bcms/selfhosted-ui/util/page-preview';
 import { createPreviewGate } from './preview-state';
-import { isPreviewReady, overlayPagePreview, resolvePreviewTarget, sendRendererPreview } from '@bcms/selfhosted-ui/util/template-preview';
+import { isPreviewReady, loadPreviewRuntime, overlayPagePreview, resolvePreviewTarget, sendRendererPreview, type PreviewRuntime } from '@bcms/selfhosted-ui/util/template-preview';
 
 export const PagePreview = defineComponent({
     props: {
@@ -33,9 +33,10 @@ export const PagePreview = defineComponent({
         const loading = ref(false);
         const error = ref('');
         const payload = ref<unknown>();
+        const runtime = ref<PreviewRuntime | null>(null);
         const selectedPath = ref<string>();
         const connectionError = ref('');
-        const target = computed(() => resolvePreviewTarget(payload.value, config));
+        const target = computed(() => resolvePreviewTarget(payload.value, config, runtime.value));
         let connectionTimer: ReturnType<typeof setTimeout> | undefined;
         const gate = createPreviewGate();
         const refreshTick = ref(0);
@@ -69,14 +70,16 @@ export const PagePreview = defineComponent({
                 connectionError.value = '预览服务未完成版本握手。请关闭后重试；若持续失败，请管理员检查渲染器版本和嵌入策略。';
             }, 10000);
         }
-        function installPayload(value: unknown, path?: string) {
-            const next = resolvePreviewTarget(value, config);
+        function installPayload(value: unknown, path?: string, serviceRuntime: PreviewRuntime | null = null) {
+            const next = resolvePreviewTarget(value, config, serviceRuntime);
             if (next.origin !== target.value.origin || next.mode !== target.value.mode ||
-                next.templateId !== target.value.templateId || next.templateVersion !== target.value.templateVersion) {
+                next.templateId !== target.value.templateId || next.templateVersion !== target.value.templateVersion ||
+                next.digest !== target.value.digest) {
                 frameReady.value = false;
                 connectionError.value = '';
                 clearTimeout(connectionTimer);
             }
+            runtime.value = serviceRuntime;
             selectedPath.value = path;
             payload.value = value;
             deliver();
@@ -91,6 +94,7 @@ export const PagePreview = defineComponent({
             selectedPath.value = undefined;
             frameReady.value = false;
             payload.value = undefined;
+            runtime.value = null;
             loading.value = false;
             error.value = '';
         }
@@ -116,9 +120,11 @@ export const PagePreview = defineComponent({
                         url: '/api/v4/storefront/page-preview', method: 'POST',
                         data: buildPagePreviewRequest(props.site, props.entry, selectedPage.value, props.language),
                     });
+                    const serviceRuntime = await loadPreviewRuntime(result,
+                        url => window.bcms.sdk.send({ url, method: 'GET' }));
                     let nextPayload: unknown = result;
                     let path: string | undefined;
-                    if (resolvePreviewTarget(result, config).mode === 'template') {
+                    if (resolvePreviewTarget(result, config, serviceRuntime).mode === 'template') {
                         const saved = await window.bcms.sdk.send<unknown>({ url: '/api/v4/storefront/site-preview', method: 'GET' });
                         const overlay = overlayPagePreview(saved, result, { pageKey: selectedPage.value,
                             entryId: props.entry._id, language: props.language,
@@ -127,12 +133,12 @@ export const PagePreview = defineComponent({
                         path = overlay.path;
                     }
                     if (gate.isCurrent(sequence)) {
-                        installPayload(nextPayload, path);
+                        installPayload(nextPayload, path, serviceRuntime);
                         error.value = '';
                     }
                 } catch (cause) {
                     if (gate.isCurrent(sequence)) {
-                        installPayload(undefined);
+                        installPayload(undefined, undefined, null);
                         error.value = userErrorMessage(cause);
                     }
                 } finally {
@@ -187,7 +193,9 @@ export const PagePreview = defineComponent({
                     {connectionError.value && <p role="alert" class="m-0 border-b border-red bg-error px-4 py-3 text-sm text-dark">{connectionError.value}</p>}
                     <div class="relative flex min-h-0 flex-1 justify-center overflow-auto bg-gray/30 p-3 sm:p-6">
                         {target.value.origin && !frameReady.value && !connectionError.value && <p role="status" class="absolute left-0 right-0 top-0 z-10 bg-dark/90 p-3 text-center text-sm">正在连接并核对预览服务版本…</p>}
-                        {target.value.origin && payload.value && <iframe key={`${target.value.templateId || target.value.mode}@${target.value.templateVersion || ''}:${target.value.origin}`} ref={frame} title={t('storefrontPreview.title')} src={`${target.value.origin}/preview`}
+                        {target.value.origin && payload.value && <iframe key={`${target.value.templateId || target.value.mode}@${target.value.templateVersion || ''}:${target.value.digest || target.value.origin}`} ref={frame} title={t('storefrontPreview.title')} src={target.value.url || `${target.value.origin}/preview`}
+                            sandbox="allow-scripts allow-same-origin"
+                            referrerpolicy="no-referrer"
                             class="h-full min-h-[480px] max-w-full border-0 bg-white shadow-lg"
                             style={{ width: viewport.value === 'mobile' ? '390px' : '1100px' }}
                             onLoad={onFrameLoad} />}

@@ -33,6 +33,35 @@ test('exact renderer map supports FireGuard and invalid mappings fail closed', (
   assert.equal(preview.resolvePreviewTarget(fireguard, { renderers: JSON.stringify({ 'fireguard': 'https://preview.example.com' }) }).mode, 'config-error');
 });
 
+test('unified preview runtime selects a versioned service URL and rejects identity drift', () => {
+  const fireguard = { kind: 'preset-page', preset: { id: 'fireguard', version: '1.0.0' }, view: 'home', sections: [], seo: { title: '', description: '' } };
+  const runtime = {
+    templateId: 'fireguard', templateVersion: '1.0.0', protocolVersion: 1,
+    digest: `sha256:${'a'.repeat(64)}`,
+    url: 'https://preview.example.com/preview/fireguard/1.0.0/',
+  };
+  const target = preview.resolvePreviewTarget(fireguard, config, runtime);
+  assert.equal(target.mode, 'template');
+  assert.equal(target.url, runtime.url);
+  assert.equal(target.origin, 'https://preview.example.com');
+  assert.equal(target.digest, runtime.digest);
+  assert.equal(preview.resolvePreviewTarget(fireguard, config, { ...runtime, templateVersion: '1.0.1' }).mode, 'config-error');
+});
+
+test('loads the unified renderer descriptor through the authenticated CMS endpoint', async () => {
+  const payload = content('1.0.0', 'fireguard');
+  const runtime = {
+    templateId: 'fireguard', templateVersion: '1.0.0', protocolVersion: 1,
+    digest: `sha256:${'b'.repeat(64)}`,
+    url: 'https://preview.example.com/preview/fireguard/1.0.0/',
+  };
+  const result = await preview.loadPreviewRuntime(payload, async url => {
+    assert.equal(url, '/api/v4/storefront/preview-runtime?templateId=fireguard&templateVersion=1.0.0');
+    return { configured: true, runtime };
+  });
+  assert.deepEqual(result, runtime);
+});
+
 test('legacy built-in templates retain their existing display preview with honest capability notice', () => {
   assert.equal(typeof preview.resolvePreviewTarget, 'function');
   for (const id of ['aeroframe', 'market', 'atelier']) {

@@ -29,6 +29,9 @@ npm run type-check
 
 ## 同版本草稿预览服务
 
+生产环境优先使用[统一模板预览服务](./unified-template-preview.md)。下面的逐模板
+origin 映射仅作为迁移期回退；统一服务解析成功后不再要求 CMS 为每个模板重新构建。
+
 CMS 使用精确的正向映射选择草稿渲染器。构建变量
 `VITE_TEMPLATE_PREVIEW_RENDERERS` 必须是 JSON 对象，键为
 `templateId@version`，值为不含路径、凭据、查询和片段的规范 HTTP(S)
@@ -37,6 +40,9 @@ origin：
 ```dotenv
 VITE_TEMPLATE_PREVIEW_RENDERERS='{"aeroframe@1.0.3":"https://aeroframe-preview.example.com","fireguard@1.0.0":"https://fireguard-preview.example.com"}'
 ```
+
+使用统一预览服务时，无需配置逐模板映射；只需在后端设置
+`STOREFRONT_PREVIEW_SERVICE_URL`，见[统一预览服务配置](./unified-template-preview.md)。
 
 映射项缺失、JSON 无效、键缺少精确版本或 origin 带路径时，预览会失败关闭并显示配置错误，不会借用其他版本或其他行业的渲染器。`VITE_TEMPLATE_PREVIEW_ORIGIN`
 仅保留为 AeroFrame 1.0.3 的旧配置兼容项；新模板和新版本应登记到映射中。

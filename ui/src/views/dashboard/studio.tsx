@@ -19,7 +19,7 @@ import type { NavigationNode } from '../../components/studio/navigation-editor';
 import { SiteOperations } from '../../components/studio/site-operations';
 import { VisualPageEditor } from '../../components/studio/visual-page-editor';
 import { PageCreateWizard, type PageBlueprintOption } from '../../components/studio/page-create-wizard';
-import { resolvePreviewTarget } from '../../util/template-preview';
+import { loadPreviewRuntime, resolvePreviewTarget, type PreviewRuntime } from '../../util/template-preview';
 import { canUseSectionEditor, sectionTypesForEditor } from '../../components/studio/page-options';
 
 type Section = 'overview' | 'operations' | 'products' | 'pages' | 'media' | 'settings' | 'release';
@@ -44,6 +44,7 @@ export const StudioView = defineComponent({
         const pageEditor = ref<PageDraft>();
         const pageWizardOpen = ref(false);
         const previewPayload = ref<unknown>();
+        const previewRuntime = ref<PreviewRuntime | null>(null);
         const previewLoading = ref(false);
         const editorTab = ref<'content' | 'page'>('content');
         const pageTitle = ref('');
@@ -69,8 +70,8 @@ export const StudioView = defineComponent({
             templateOrigin: import.meta.env.VITE_TEMPLATE_PREVIEW_ORIGIN,
             legacyOrigin: import.meta.env.VITE_STOREFRONT_ORIGIN,
             renderers: import.meta.env.VITE_TEMPLATE_PREVIEW_RENDERERS,
-        }));
-        const pagePreviewUrl = computed(() => pagePreviewTarget.value.origin ? `${pagePreviewTarget.value.origin}/preview` : '');
+        }, previewRuntime.value));
+        const pagePreviewUrl = computed(() => pagePreviewTarget.value.url || (pagePreviewTarget.value.origin ? `${pagePreviewTarget.value.origin}/preview` : ''));
         const canUpload = computed(() => sdk.context?.context.role !== 'viewer' && Boolean(sdk.context?.context.instanceAdmin || sdk.context?.context.mediaPermissions?.post));
         function canLeave() { return !busy.value && (!dirty.value || window.confirm('有尚未保存的修改。确定放弃这些修改吗？')); }
         function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || busy.value) { event.preventDefault(); event.returnValue = ''; } }
@@ -90,8 +91,13 @@ export const StudioView = defineComponent({
         }
         async function loadPreview() {
             previewLoading.value = true;
-            try { previewPayload.value = await sdk.send({ url: '/api/v4/storefront/site-preview', method: 'GET' }); }
-            catch { previewPayload.value = undefined; }
+            try {
+                const payload = await sdk.send({ url: '/api/v4/storefront/site-preview', method: 'GET' });
+                previewPayload.value = payload;
+                previewRuntime.value = await loadPreviewRuntime(payload,
+                    url => sdk.send({ url, method: 'GET' }));
+            }
+            catch { previewPayload.value = undefined; previewRuntime.value = null; }
             finally { previewLoading.value = false; }
         }
         function overlayPagePreview(page: PageDraft) {
@@ -267,7 +273,7 @@ export const StudioView = defineComponent({
             const editorConfigs = page.sectionConfigs || page.sections.map(legacyConfig);
             const useSectionEditor = canUseSectionEditor(effectiveOptions);
             const visualLayout = page.layoutDocument || { version: 1 as const, mode: 'template' as const, root: editorConfigs.map((section: any, index: number) => ({ id: `section-${section.type}-${index + 1}`, kind: 'section' as const, type: section.type, enabled: section.enabled, props: section.data, children: [] })) };
-            return <form id="studio-page-form" class="studio-card studio-editor" onSubmit={savePage}><div class="studio-card-heading"><h2>页面资料</h2><span class="studio-badge muted">页面草稿</span></div><fieldset disabled={busy.value || !site.value?.canManage}>
+            return <form id="studio-page-form" class={`studio-card studio-editor${useSectionEditor ? '' : ' studio-page-workspace'}`} onSubmit={savePage}><div class="studio-card-heading"><h2>页面资料</h2><span class="studio-badge muted">页面草稿</span></div><fieldset disabled={busy.value || !site.value?.canManage}>
                 <div class="studio-fields"><label>页面名称<input required maxlength={120} v-model={page.title} /></label><label>访问路径<input required v-model={page.path} readonly={page.layout === 'home' || (!page.blueprintKey && page.path.includes(':'))} /><span class="studio-help">{page.layout === 'home' ? '首页路径固定为 /。' : !page.blueprintKey && page.path.includes(':') ? '动态详情页路径由模板固定。' : '使用小写字母、数字、连字符组成的唯一路径，例如 /about-us。'}</span></label><label>SEO 标题<input maxlength={120} v-model={page.seoTitle} /></label><label>SEO 描述<textarea maxlength={320} rows={3} v-model={page.seoDescription} /></label>
                     {canBind && <label>绑定内容<select disabled={entryDirty.value} v-model={page.entryId}><option value="">{page.blueprintKey ? '请选择内容' : '使用默认主页内容'}</option>{state.value.models.find(model => model.key === page.modelKey)?.entries.map(entry => <option value={entry.id}>{entryTitle(entry)}</option>)}</select>{entryDirty.value && <span class="studio-help">保存页面内容后可更换绑定。</span>}</label>}
                     {useSectionEditor ? <SectionEditor modelValue={editorConfigs as any} allowed={sectionAllowed as any} required={requiredSections as any} labels={effectiveOptions.labels} media={siteImages.value} onUpload={canUpload.value ? uploadMedia : undefined} disabled={busy.value || !site.value?.canManage} onUpdate:modelValue={(value: any) => { page.sectionConfigs = value; page.sections = value.map((section: any) => section.type); overlayPagePreview(page); }} /> :

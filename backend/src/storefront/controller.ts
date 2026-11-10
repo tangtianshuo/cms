@@ -16,6 +16,7 @@ import { buildRelease } from '../presets/releases';
 import { publishedSite, publishedDomainSite } from './published';
 import { trustedStorefrontHost } from '../site-domains/trust';
 import { domainService } from '../site-domains/source';
+import { resolvePreviewRuntime } from './preview-service';
 
 const previewBodySchema = z.object({
     entry: z.object({
@@ -229,6 +230,36 @@ export const StorefrontController = createController({
                     } catch (cause) {
                         throw errorHandler(HttpStatus.BadRequest,
                             cause instanceof Error ? cause.message : 'Invalid site preview');
+                    }
+                },
+            }),
+            previewRuntime: createControllerMethod({
+                type: 'get',
+                path: '/preview-runtime',
+                preRequestHandler: RP.createSiteCapabilityCheck('content.read'),
+                async handler({ request, reply, errorHandler }) {
+                    reply.header('Cache-Control', 'no-store');
+                    const query = request.query as { templateId?: unknown; templateVersion?: unknown };
+                    if (typeof query.templateId !== 'string' || typeof query.templateVersion !== 'string') {
+                        throw errorHandler(HttpStatus.BadRequest, 'Invalid preview runtime query');
+                    }
+                    const site = await Repo.siteInstallation.methods.findSelected();
+                    if (!site || site.status !== 'ready') throw errorHandler(HttpStatus.NotFound, 'No installed site');
+                    if (site.presetId !== query.templateId || site.presetVersion !== query.templateVersion) {
+                        throw errorHandler(HttpStatus.BadRequest, 'Preview template does not match the selected site');
+                    }
+                    try {
+                        return {
+                            configured: Boolean(Config.storefrontPreviewServiceUrl),
+                            runtime: await resolvePreviewRuntime(
+                                Config.storefrontPreviewServiceUrl,
+                                query.templateId,
+                                query.templateVersion,
+                            ),
+                        };
+                    } catch (cause) {
+                        throw errorHandler(HttpStatus.BadGateway,
+                            cause instanceof Error ? cause.message : 'Preview service unavailable');
                     }
                 },
             }),

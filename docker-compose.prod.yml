@@ -13,6 +13,7 @@
 #   STOREFRONT_ENTRY_HOST                  Optional. Public entry hostname shown in domain guidance.
 #   STOREFRONT_ENTRY_IP                    Optional. Public root-domain A target.
 #   STOREFRONT_PORT                        Optional. Loopback port for the private gateway. Default 3000.
+#   STOREFRONT_PREVIEW_SERVICE_URL         Optional. Unified private-preview resolver origin.
 #   HTTP_PORT                              Optional. Host port for the CMS proxy. Default 80.
 #
 # Build and start:
@@ -44,6 +45,7 @@ services:
             - NODE_ENV=production
             - STOREFRONT_GATEWAY_SECRET=${STOREFRONT_GATEWAY_SECRET:?Set a random gateway secret}
             - STOREFRONT_DOMAIN_SECRET=${STOREFRONT_DOMAIN_SECRET:?Set a different random challenge secret}
+            - STOREFRONT_PREVIEW_SERVICE_URL=${STOREFRONT_PREVIEW_SERVICE_URL:-}
         volumes:
             - uploads:/app/backend/uploads
             - backups:/app/backend/backups
