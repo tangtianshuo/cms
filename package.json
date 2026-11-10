@@ -29,6 +29,7 @@
         "build:sdk": "ts-node -r tsconfig-paths/register _scripts/main.ts --build-sdk",
         "pack:sdk": "ts-node -r tsconfig-paths/register _scripts/main.ts --pack-sdk",
         "publish:sdk": "ts-node -r tsconfig-paths/register _scripts/main.ts --publish-sdk",
+        "release:publish": "node ops/release/publish.mjs",
         "build:docker:image": "ts-node -r tsconfig-paths/register _scripts/main.ts --build-docker-image"
     },
     "repository": {

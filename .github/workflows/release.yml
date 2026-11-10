@@ -47,6 +47,8 @@ jobs:
         run: python3 -m pip install PyYAML==6.0.3
       - name: Test release metadata and deploy client
         run: python3 -m unittest discover -s ops/test -v
+      - name: Test unified release coordinator
+        run: node --test ops/release/publish.test.mjs
       - name: Install root dependencies
         run: npm ci --ignore-scripts
       - name: Install backend dependencies

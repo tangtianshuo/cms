@@ -4,6 +4,34 @@ The four repository release workflows produce candidates. CMS and Gateway no lon
 
 The CMS **Platform release gate** workflow is the sole automated production deployment entry. Its `platform-gate` job checks out all four complete locked Git commits, installs existing dependencies, builds the locked sources and both template runtimes, verifies signed candidate provenance and real OCI identities, and runs A4, D1 and the complete B3 subset. `deploy` explicitly needs `platform-gate`. No failure or skipped mandatory case can produce deployment outputs. The deployment job does not rebuild or resolve a tag; it verifies the current-run receipt hash/attestation and uses the exact digest, source SHA and version from that receipt.
 
+## Unified publish command
+
+Use `ops/release/publish.mjs` from the CMS repository to inspect and publish
+CMS, Gateway, Templates, and Preview together. The command fetches each remote,
+compares the default branch with the newest release branch, and skips projects
+without updates.
+
+```sh
+# Check all projects without changing remote branches.
+node ops/release/publish.mjs
+
+# Create and push release branches for every project with updates.
+node ops/release/publish.mjs --execute
+
+# Check or publish only named projects.
+node ops/release/publish.mjs cms gateway --execute
+node ops/release/publish.mjs template
+```
+
+`cms`, `gateway`, `template`/`templates`, and `preview` are accepted. The
+default bump is `patch`; use `--bump minor`, `--bump major`, or `--version
+X.Y.Z` when explicitly required. A focused release must be on its clean,
+synchronized default branch. Templates automatically create the next immutable
+template directory when the selected template version has already been
+released. A successful branch push triggers the existing repository workflow.
+The command never activates production itself; the Platform release gate
+remains the production deployment boundary.
+
 ## Inputs and identity
 
 `workflow_dispatch.lock` is the unchanged schemaVersion 1 / contractVersion 1 PlatformLock. Its repository names must be `tangtianshuo/cms`, `tangtianshuo/Independent-Website-Gateway`, `tangtianshuo/Independent-Website-Templates`, and `tangtianshuo/Independent-Website-Preview`, each with a full commit. Required template versions are AeroFrame 1.0.4 and FireGuard 1.0.1. Each locked template retains its manifest checksum, image digest, Preview archive digest and bundle digest.

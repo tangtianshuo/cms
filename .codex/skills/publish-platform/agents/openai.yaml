@@ -1,0 +1,4 @@
+interface:
+    display_name: 'Platform Release'
+    short_description: 'Publish changed platform release branches'
+    default_prompt: 'Use $publish-platform to publish every platform project that has updates.'
